@@ -1,4 +1,4 @@
-.PHONY: deps
+.PHONY: deps doc
 
 all: deps compile
 
@@ -18,6 +18,8 @@ test:
 	./rebar eunit
 
 dialyzer: compile
-	@dialyzer -Wno_return -c apps/riak/ebin
+	@dialyzer -Wno_return -c ebin
 
+doc :
+	erl -noshell -run edoc_run application riakc '"."' '[]'
 
