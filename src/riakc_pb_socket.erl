@@ -20,8 +20,8 @@
 %%
 %% -------------------------------------------------------------------
 
-
 -module(riakc_pb_socket).
+-include_lib("kernel/include/inet.hrl").
 -include("riakclient_pb.hrl").
 
 -behaviour(gen_server).
@@ -40,49 +40,78 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {ip, port, sock, hello, req, ctx, from, queue}).
+-record(state, {address, port, sock, hello, req, ctx, from, queue}).
 
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
 -define(DEFAULT_TIMEOUT, 60000).
 
+-type address() :: string() | atom() | ip_address().
+-type portnum() :: non_neg_integer().
+-type client_id() :: binary().
 -type bucket() :: binary().
 -type key() :: binary().
--type errstr() :: {error, binary()}.
 -type riakc_obj() :: tuple().
 -type riak_pbc_options() :: list().
 -type riak_pbc_props() :: [{binary(),term()}].
+-type req_id() :: non_neg_integer().
+-type rpb_req() :: tuple().
+-type ctx() :: any().
+-type rpb_resp() :: tuple().
 
-start_link(Ip, Port) ->
-    gen_server:start_link(?MODULE, [Ip, Port], []).
+%% @doc Create a linked process to talk with the riak server on Address:Port
+%%      Client id will be assigned by the server.
+-spec start_link(address(), portnum()) -> {ok, pid()} | {error, term()}.
+start_link(Address, Port) ->
+    gen_server:start_link(?MODULE, [Address, Port], []).
 
-start_link(Ip, Port, ClientId) ->
-    gen_server:start_link(?MODULE, [Ip, Port, ClientId], []).
+%% @doc Create a linked process to talk with the riak server on Address:Port
+%%      with the specified client id
+-spec start_link(address(), portnum(), client_id()) -> {ok, pid()} | {error, term()}.
+start_link(Address, Port, ClientId) ->
+    gen_server:start_link(?MODULE, [Address, Port, ClientId], []).
 
-start(Ip, Port) ->
-    gen_server:start(?MODULE, [Ip, Port], []).
+%% @doc Create a process to talk with the riak server on Address:Port
+%%      Client id will be assigned by the server.
+-spec start(address(), portnum()) -> {ok, pid()} | {error, term()}.
+start(Address, Port) ->
+    gen_server:start(?MODULE, [Address, Port], []).
 
-start(Ip, Port, ClientId) ->
-    gen_server:start(?MODULE, [Ip, Port, ClientId], []).
+%% @doc Create a process to talk with the riak server on Address:Port
+%%      with the specified client id
+-spec start(address(), portnum(), client_id()) -> {ok, pid()} | {error, term()}.
+start(Address, Port, ClientId) ->
+    gen_server:start(?MODULE, [Address, Port, ClientId], []).
 
+%% @doc Ping the server
+-spec ping(pid()) -> ok | {error, term()}.
 ping(Pid) ->
     gen_server:call(Pid, {req, rpbpingreq}).
 
--spec get(pid(), bucket() | string(), key() | string()) -> {ok, riakc_obj()} | errstr().
+%% @doc Get bucket/key from the server 
+%%      Will return {error, notfound} if the key is not on the server
+-spec get(pid(), bucket() | string(), key() | string()) -> {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key) ->
     get(Pid, Bucket, Key, []).
 
+%% @doc Get bucket/key from the server supplying options
+%%      [{r, 1}] would set r=1 for the request
 -spec get(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> 
-                 {ok, riakc_obj()} | errstr().
+                 {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key, Options) ->
     Req = #rpbgetreq{bucket = Bucket, key = Key, options = riakc_pb:pbify_rpboptions(Options)},
     gen_server:call(Pid, {req, Req}).
 
--spec put(pid(), riakc_obj()) -> ok | {ok, riakc_obj()} | errstr().
+%% @doc Put the metadata/value in the object under bucket/key
+-spec put(pid(), riakc_obj()) -> ok | {ok, riakc_obj()} | {error, term()}.
 put(Pid, Obj) ->
     put(Pid, Obj, []).
 
--spec put(pid(), riakc_obj(), riak_pbc_options()) -> ok | {ok, riakc_obj()} | errstr().
+%% @doc Put the metadata/value in the object under bucket/key with options
+%%      [{w,2}] sets w=2,
+%%      [{dw,1}] set dw=1,
+%%      [{return_body, true}] returns the updated metadata/value
+-spec put(pid(), riakc_obj(), riak_pbc_options()) -> ok | {ok, riakc_obj()} | {error, term()}.
 put(Pid, Obj, Options) ->
     Req = #rpbputreq{bucket = riakc_obj:bucket(Obj), 
                      key = riakc_obj:key(Obj),
@@ -92,38 +121,57 @@ put(Pid, Obj, Options) ->
                      options = riakc_pb:pbify_rpboptions(Options)},
     gen_server:call(Pid, {req, Req}).
  
--spec delete(pid(), bucket() | string(), key() | string()) -> ok | errstr().
+%% @doc Delete the key/value
+-spec delete(pid(), bucket() | string(), key() | string()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key) ->
     delete(Pid, Bucket, Key, []).
 
--spec delete(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> ok | errstr().
+%% @doc Delete the key/value with options
+%%      [{rw,2}] sets rw=2
+-spec delete(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key, Options) ->
     Req = #rpbdelreq{bucket = Bucket, key = Key, options = riakc_pb:pbify_rpboptions(Options)},
     gen_server:call(Pid, {req, Req}).
 
--spec get_bucket_props(pid(), bucket() | string()) -> {ok, riak_pbc_props()} | errstr(). 
+%% @doc Retrieve properties for bucket
+-spec get_bucket_props(pid(), bucket() | string()) -> {ok, riak_pbc_props()} | {error, term()}. 
 get_bucket_props(Pid, Bucket) ->
     Req = #rpbgetbucketpropsreq{bucket = Bucket},
     gen_server:call(Pid, {req, Req}).
 
--spec set_bucket_props(pid(), bucket() | string(), riak_pbc_props()) -> ok | errstr(). 
+%% @doc Set properties for bucket
+-spec set_bucket_props(pid(), bucket() | string(), riak_pbc_props()) -> ok | {error, term()}. 
 set_bucket_props(Pid, Bucket, Props) ->
     Req = #rpbsetbucketpropsreq{bucket = Bucket, properties = riakc_pb:pbify_bucket_props(Props)},
     gen_server:call(Pid, {req, Req}).
 
+%% @doc List all buckets on the server
+-spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}. 
 list_buckets(Pid) ->
     {ok, ReqId} = stream_list_buckets(Pid),
     wait_for_listbuckets(ReqId, ?DEFAULT_TIMEOUT).
 
+%% @doc Stream list of buckets on the server to the calling process.  The
+%%      process receives these messages.
+%%        {ReqId, {buckets, [bucket()]}}
+%%        {ReqId, done} 
+-spec stream_list_buckets(pid()) -> {ok, req_id()} | {error, term()}.
 stream_list_buckets(Pid) ->
     ReqMsg = rpblistbucketsreq,
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, ReqMsg, {ReqId, self()}}).
 
+%% @doc List all keys in a bucket
+-spec list_keys(pid(), bucket()) -> {ok, [key()]}.
 list_keys(Pid, Bucket) ->
     {ok, ReqId} = stream_list_keys(Pid, Bucket),
     wait_for_listkeys(ReqId, ?DEFAULT_TIMEOUT).
 
+%% @doc Stream list of keys in the bucket to the calling process.  The
+%%      process receives these messages.
+%%        {ReqId, {keys, [key()]}}
+%%        {ReqId, done} 
+-spec stream_list_keys(pid(), bucket()) -> {ok, req_id()} | {error, term()}.
 stream_list_keys(Pid, Bucket) ->
     ReqMsg = #rpblistkeysreq{bucket = Bucket},
     ReqId = mk_reqid(),
@@ -134,20 +182,22 @@ stream_list_keys(Pid, Bucket) ->
 %% gen_server callbacks
 %% ====================================================================
 
-init([Ip, Port]) ->
-    init([Ip, Port, undefined]);
-init([Ip, Port, ClientId]) ->
-    case gen_tcp:connect(Ip, Port,
+%% @private
+init([Address, Port]) ->
+    init([Address, Port, undefined]);
+init([Address, Port, ClientId]) ->
+    case gen_tcp:connect(Address, Port,
                          [binary, {active, once}, {packet, 4}, {header, 1}]) of
         {ok, Sock} ->
             Req = #rpbhelloreq{proto_major = 1, client_id = ClientId},
             {ok, send_request(Req, undefined, undefined,
-                              #state{ip = Ip, port = Port,
+                              #state{address = Address, port = Port,
                                      sock = Sock, queue = queue:new()})};
         {error, Reason} ->
             {stop, Reason}
     end.
 
+%% @private
 handle_call({req, Req}, From, State) when State#state.req =/= undefined ->
     {noreply, queue_request(Req, undefined, From, State)};
 handle_call({req, Req, Ctx}, From, State) when State#state.req =/= undefined ->
@@ -157,6 +207,7 @@ handle_call({req, Req}, From, State) ->
 handle_call({req, Req, Ctx}, From, State) ->
     {noreply, send_request(Req, Ctx, From, State)}.
  
+%% @private
 handle_info({tcp_closed, _Socket}, State) ->
     {stop, normal, State};
 handle_info({tcp, _Socket, Data}, State=#state{sock=Sock, req = Req, ctx = Ctx, from = From}) ->
@@ -188,25 +239,30 @@ handle_info({tcp, _Socket, Data}, State=#state{sock=Sock, req = Req, ctx = Ctx, 
 handle_info(_, State) ->
     {noreply, State}.
 
+%% @private
 handle_cast(_Msg, State) -> 
     {noreply, State}.
 
+%% @private
 terminate(_Reason, _State) -> ok.
 
+%% @private
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ====================================================================
 %% internal functions
 %% ====================================================================
-
--type rpb_req() :: tuple().
--type ctx() :: any().
--type rpb_resp() :: tuple().
+ 
+%% Process response from the server - passes back in the request and 
+%% context the request was issued with.
+%% Return noreply if the request is completed, but no reply needed
+%%        reply if the request is completed with a reply to the caller
+%%        pending if the request has not completed yet (streaming op)
+%% @private
 -spec process_response(rpb_req(), ctx(), rpb_resp(), #state{}) ->
                               {noreply, #state{}} | 
                               {reply, term(), #state{}} | 
                               {pending, #state{}}.
-
 process_response(#rpbhelloreq{}, undefined, #rpbhelloresp{} = Resp, State) ->
     {noreply, State#state{hello = Resp}};
 process_response(rpbpingreq, _Ctx, rpbpingresp, State) ->
@@ -271,6 +327,10 @@ process_response(#rpblistkeysreq{}, {ReqId, Client},
             {pending, State}
     end.
 
+%%
+%% Called after sending a message - supports returning a
+%% request id for streaming calls
+%% @private
 after_send(#rpblistkeysreq{}, {ReqId, _Client}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(rpblistbucketsreq, {ReqId, _Client}, State) ->
@@ -278,6 +338,10 @@ after_send(rpblistbucketsreq, {ReqId, _Client}, State) ->
 after_send(_Req, _Ctx, State) ->
     {noreply, State}.
 
+%%
+%% Called after receiving an error message - supports retruning
+%% an error for streamign calls 
+%% @private
 on_error(#rpblistkeysreq{}, ErrMsg, {ReqId, Client}, undefined) ->
     Client ! { ReqId, {error, ErrMsg}};
 on_error(rpblistbucketsreq, ErrMsg, {ReqId, Client}, undefined) ->
@@ -287,6 +351,8 @@ on_error(_Req, ErrMsg, _Ctx, From) when From =/= undefined ->
 %% deliberately crash if the handling an error response after
 %% the client has been replied to
 
+%% Send a request to the server and prepare the state for the response
+%% @private
 send_request(Req, Ctx, From, State) ->
     Pkt = riakc_pb:encode(Req),
     ok = gen_tcp:send(State#state.sock, Pkt),
@@ -300,9 +366,13 @@ send_request(Req, Ctx, From, State) ->
             NewState#state{req = Req, ctx = Ctx, from = From}
     end.
 
+%% Queue up a request if one is pending
+%% @private
 queue_request(Req, Ctx, From, State) ->
     State#state{queue = queue:in({Req, Ctx, From}, State#state.queue)}.
 
+%% Try and dequeue request and send onto the server if one is waiting
+%% @private
 dequeue_request(State) ->
     case queue:out(State#state.queue) of
         {empty, _} ->
@@ -323,7 +393,7 @@ wait_for_listbuckets(ReqId,Timeout,Acc) ->
         {ReqId, done} -> {ok, lists:flatten(Acc)};
         {ReqId, {buckets, Res}} -> wait_for_listbuckets(ReqId,Timeout,[Res|Acc])
     after Timeout ->
-            {error, timeout, Acc}
+            {error, {timeout, Acc}}
     end.
 
 %% @private
@@ -335,7 +405,7 @@ wait_for_listkeys(ReqId,Timeout,Acc) ->
         {ReqId, done} -> {ok, lists:flatten(Acc)};
         {ReqId,{keys,Res}} -> wait_for_listkeys(ReqId,Timeout,[Res|Acc])
     after Timeout ->
-            {error, timeout, Acc}
+            {error, {timeout, Acc}}
     end.
 
 %% ====================================================================

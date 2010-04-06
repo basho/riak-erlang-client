@@ -115,16 +115,6 @@ msg_code(rpbmapredresp)          -> 20.
 %% Encoding/Decoding
 %% ===================================================================
     
-%% Convert a vector clock to erlang
-erlify_rpbvc(undefined) ->
-    vclock:fresh();
-erlify_rpbvc(PbVc) ->
-    binary_to_term(zlib:unzip(PbVc)).
-
-%% Convert a vector clock to protocol buffers
-pbify_rpbvc(Vc) ->
-    zlib:zip(term_to_binary(Vc)).
-
 %% Convert options to protocol buffers
 pbify_rpboptions(undefined) ->
     undefined;
