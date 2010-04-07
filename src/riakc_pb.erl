@@ -270,6 +270,8 @@ pbify_bucket_prop({linkfun, {jsanon, Source}}) ->
 pbify_bucket_prop({chash_keyfun, {Module, Function}}) ->
     {?PB_CHASH, {struct, [{?PB_MOD, to_binary(Module)},
                           {?PB_FUN, to_binary(Function)}]}};
+pbify_bucket_prop({allow_mult, AllowMult}) ->
+    {?PB_ALLOW_MULT, {bool, AllowMult}};
 pbify_bucket_prop({Prop, Value}) ->
     {list_to_binary(atom_to_list(Prop)), Value}.
 
@@ -324,7 +326,7 @@ erlify_bucket_prop({Prop, Value}) ->
 erlify_mapred_input(#rpbmapredinput{bucket = Bucket, key = Key, data = undefined}) ->
     {Bucket, Key};
 erlify_mapred_input(#rpbmapredinput{bucket = Bucket, key = Key, data = PbData}) ->
-    {Bucket, Key, erlify_rpbterm(PbData)}.
+    {{Bucket, Key}, erlify_rpbterm(PbData)}.
 
 %% Convert list of RpbMapRedPhase to list of erlang phase tuples
 erlify_mapred_query(PbQuery) ->
@@ -332,7 +334,8 @@ erlify_mapred_query(PbQuery) ->
 
 erlify_mapred_phases([], ErlPhases) ->
     {ok, lists:reverse(ErlPhases)};
-erlify_mapred_phases([#rpbmapredphase{type = <<"link">>, bucket = B, tag = T} | Rest], 
+erlify_mapred_phases([#rpbmapredphase{type = <<"link">>, keep = PbKeep, 
+                                      bucket = B, tag = T} | Rest], 
                      ErlPhases) ->
     case {B, T} of
         {undefined, _} ->
@@ -340,7 +343,9 @@ erlify_mapred_phases([#rpbmapredphase{type = <<"link">>, bucket = B, tag = T} | 
         {_, undefined} ->
             {error, "link missing tag"};
         _ ->
-            erlify_mapred_phases(Rest, [{link, B, T} | ErlPhases])
+            erlify_mapred_phases(Rest, [{link, maybe_underscore_atom(B), 
+                                         maybe_underscore_atom(T),
+                                         any_to_bool(PbKeep)} | ErlPhases])
     end;
 erlify_mapred_phases([#rpbmapredphase{type = <<"map">>, keep = PbKeep, arg = PbArg}=PbPhase | Rest],
                      ErlPhases) ->
@@ -428,8 +433,11 @@ pbify_rpbterm({array, L}) when is_list(L) ->
 pbify_rpbterm({struct, L}) ->
     E = [#rpbobjectentry{name = to_binary(Name), value = pbify_rpbterm(Value)} ||
             {Name, Value} <- L],
-    #rpbterm{type = ?RPB_TERM_OBJECT, object_entries = E}.
-
+    #rpbterm{type = ?RPB_TERM_OBJECT, object_entries = E};
+pbify_rpbterm({bool, B}) ->
+    V = case B of true -> 1; false -> 0 end,
+    #rpbterm{type = ?RPB_TERM_BOOLEAN, int_value = V}.
+    
 %% Convert RpbTerm message to a term()
 erlify_rpbterm(#rpbterm{type = ?RPB_TERM_INTEGER, int_value = Int}) when Int =/= undefined ->
     Int;
@@ -470,6 +478,11 @@ any_to_bool(V) when is_integer(V) ->
 any_to_bool(V) when is_boolean(V) ->
     V.
 
+%% Convert <<"_">> to '_', otherwise leaves binary alone
+maybe_underscore_atom(<<"_">>) ->
+    '_';
+maybe_underscore_atom(Bin) ->
+    Bin.
 
 %% ===================================================================
 %% Unit Tests
