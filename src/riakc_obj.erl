@@ -22,6 +22,7 @@
 
 %% @doc container for Riak data and metadata required to use protocol buffer interface
 
+
 -module(riakc_obj).
 -export([new/2, new/4,
          bucket/1,
@@ -35,13 +36,17 @@
          get_values/1,
          update_metadata/2,
          update_value/2,
+         update_value/3,
+         update_content_type/2,
          get_update_metadata/1,
          get_update_value/1]).
+-include("riakc_obj.hrl").
 
 -type bucket() :: binary().
 -type key() :: binary().
 -type vclock() :: binary().
 -type metadata() :: dict().
+-type content_type() :: binary().
 -type value() :: term().
 -type contents() :: [{metadata(), value()}].
 
@@ -51,7 +56,7 @@
           key :: key(),
           vclock :: vclock(),
           contents :: contents(),
-          updatemetadata=dict:store(clean, true, dict:new()) :: dict(),
+          updatemetadata=dict:new() :: dict(),
           updatevalue :: value()
          }).
 
@@ -129,16 +134,45 @@ get_values(#riakc_obj{contents=Contents}) ->
 %% @doc  Set the updated metadata of an object to M.
 -spec update_metadata(#riakc_obj{}, metadata()) -> #riakc_obj{}.
 update_metadata(Object=#riakc_obj{}, M) ->
-    Object#riakc_obj{updatemetadata=dict:erase(clean, M)}.
+    Object#riakc_obj{updatemetadata=M}.
+
+%% @doc  Set the updated content-type of an object to CT.
+-spec update_content_type(#riakc_obj{}, metadata()) -> #riakc_obj{}.
+update_content_type(Object=#riakc_obj{}, CT) ->
+    M1 = get_update_metadata(Object),
+    Object#riakc_obj{updatemetadata=dict:store(?MD_CTYPE, to_binary(CT), M1)}.
 
 %% @doc  Set the updated value of an object to V
 -spec update_value(#riakc_obj{}, value()) -> #riakc_obj{}.
 update_value(Object=#riakc_obj{}, V) -> Object#riakc_obj{updatevalue=V}.
 
+%% @doc  Set the updated value of an object to V
+-spec update_value(#riakc_obj{}, value(), content_type()) -> #riakc_obj{}.
+update_value(Object=#riakc_obj{}, V, CT) -> 
+    O1 = update_content_type(Object, CT),
+    O1#riakc_obj{updatevalue=V}.
+
 %% @doc  Return the updated metadata of this riakc_obj.
 -spec get_update_metadata(#riakc_obj{}) -> metadata().
-get_update_metadata(#riakc_obj{updatemetadata=UM}) -> UM.
+get_update_metadata(#riakc_obj{updatemetadata=UM}) -> 
+    case UM of 
+        undefined ->
+            dict:new();
+        UM ->
+            UM
+    end.
+           
 
 %% @doc  Return the updated value of this riakc_obj.
 -spec get_update_value(#riakc_obj{}) -> value().
 get_update_value(#riakc_obj{updatevalue=UV}) -> UV.
+
+
+%% @private
+%% Make sure an atom/string/binary is definitely a binary
+to_binary(A) when is_atom(A) ->
+    list_to_binary(atom_to_list(A));
+to_binary(L) when is_list(L) ->
+    list_to_binary(L);
+to_binary(B) when is_binary(B) ->
+    B.

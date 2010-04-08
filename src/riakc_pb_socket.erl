@@ -35,8 +35,12 @@
          get_bucket_props/2,
          set_bucket_props/3,
          list_buckets/1,
+         stream_list_buckets/1,
          list_keys/2,
-         stream_list_keys/2]).
+         stream_list_keys/2,
+         mapred/3,
+         mapred/4,
+         mapred_stream/5]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
@@ -176,6 +180,85 @@ stream_list_keys(Pid, Bucket) ->
     ReqMsg = #rpblistkeysreq{bucket = Bucket},
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, ReqMsg, {ReqId, self()}}).
+
+%% @spec mapred(Inputs :: list(),
+%%              Query :: [riak_kv_mapred_query:mapred_queryterm()]) ->
+%%       {ok, riak_kv_mapred_query:mapred_result()} |
+%%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
+%%       {error, timeout} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+%% @equiv mapred(Inputs, Query, default_timeout())
+mapred(Pid, Inputs, Query) -> 
+    mapred(Pid, Inputs, Query, ?DEFAULT_TIMEOUT).
+
+%% @spec mapred(Inputs :: list(),
+%%              Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%              TimeoutMillisecs :: integer()  | 'infinity') ->
+%%       {ok, riak_kv_mapred_query:mapred_result()} |
+%%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
+%%       {error, timeout} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred(Pid, Inputs, Query, Timeout) ->
+    {ok, ReqId} = mapred_stream(Pid, Inputs, Query, self(), Timeout),
+    wait_for_mapred(ReqId, Timeout).
+
+mapred_stream(Pid, Inputs, Query, ClientPid, _Timeout) ->
+    ReqMsg = #rpbmapredreq{input_keys = [riakc_pb:pbify_mapred_input(I) || I <- Inputs],
+                           phases = riakc_pb:pbify_mapred_query(Query)},
+    ReqId = mk_reqid(),
+    gen_server:call(Pid, {req, ReqMsg, {ReqId, ClientPid}}).
+    
+
+%% %% @spec mapred_stream(Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%% %%                     ClientPid :: pid()) ->
+%% %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%% %%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
+%% %%       {error, Err :: term()}
+%% %% @doc Perform a streaming map/reduce job across the cluster.
+%% %%      See the map/reduce documentation for explanation of behavior.
+%% mapred_stream(Pid, Query, ClientPid) ->
+%%     mapred_stream(Pid, Query, ClientPid,?DEFAULT_TIMEOUT).
+
+%% %% @spec mapred_stream(Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%% %%                     ClientPid :: pid(),
+%% %%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%% %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%% %%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
+%% %%       {error, Err :: term()}
+%% %% @doc Perform a streaming map/reduce job across the cluster.
+%% %%      See the map/reduce documentation for explanation of behavior.
+%% mapred_stream(Pid, Query, ClientPid, Timeout) ->
+%%     ReqMsg = #rpblistkeysreq{bucket = Bucket},
+%%     ReqId = mk_reqid(),
+%%     gen_server:call(Pid, {req, ReqMsg, {ReqId, self()}}).
+
+%% mapred_bucket_stream(Pid, Bucket, Query, ClientPid) ->
+%%     mapred_bucket_stream(Bucket, Query, ClientPid, ?DEFAULT_TIMEOUT).
+
+%% mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
+%%     mapred_bucket_stream(Bucket, Query, ClientPid, Timeout, ?DEFAULT_ERRTOL).
+
+%% mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, ErrorTolerance) ->
+%%     {ok,{MR_ReqId,MR_FSM}} = mapred_stream(Query,ClientPid,Timeout),
+%%     {ok,_Stream_ReqID} = stream_list_keys(Bucket, Timeout, ErrorTolerance,
+%%                                   MR_FSM, mapred),
+%%     {ok,MR_ReqId}.
+
+%% mapred_bucket(Pid, Bucket, Query) ->
+%%     mapred_bucket(Bucket, Query, ?DEFAULT_TIMEOUT).
+
+%% mapred_bucket(Pid, Bucket, Query, Timeout) ->
+%%     mapred_bucket(Bucket, Query, Timeout, ?DEFAULT_ERRTOL).
+
+%% mapred_bucket(Pid, Bucket, Query, Timeout, ErrorTolerance) ->
+%%     Me = self(),
+%%     {ok,MR_ReqId} = mapred_bucket_stream(Bucket, Query, Me,
+%%                                          Timeout, ErrorTolerance),
+%%     luke_flow:collect_output(MR_ReqId, Timeout).
 
 
 %% ====================================================================
@@ -325,6 +408,22 @@ process_response(#rpblistkeysreq{}, {ReqId, Client},
             {noreply, State};
         _ ->
             {pending, State}
+    end;
+
+process_response(#rpbmapredreq{}, {ReqId, Client},
+                 #rpbmapredresp{done = Done, phase=PhaseId, data=Data}, State) ->
+    case Data of
+        undefined ->
+            ok;
+        _ ->
+            Client ! {ReqId, {mapred, PhaseId, riakc_pb:strip_rpbterm(Data)}}
+    end,
+    case Done of
+        1 ->
+            Client ! {ReqId, done},
+            {noreply, State};
+        _ ->
+            {pending, State}
     end.
 
 %%
@@ -335,6 +434,8 @@ after_send(#rpblistkeysreq{}, {ReqId, _Client}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(rpblistbucketsreq, {ReqId, _Client}, State) ->
     {reply, {ok, ReqId}, State};
+after_send(#rpbmapredreq{}, {ReqId, _Client}, State) ->
+    {reply, {ok, ReqId}, State};
 after_send(_Req, _Ctx, State) ->
     {noreply, State}.
 
@@ -342,11 +443,13 @@ after_send(_Req, _Ctx, State) ->
 %% Called after receiving an error message - supports retruning
 %% an error for streamign calls 
 %% @private
-on_error(#rpblistkeysreq{}, ErrMsg, {ReqId, Client}, undefined) ->
+on_error(#rpblistkeysreq{}, {ReqId, Client},  ErrMsg, undefined) ->
     Client ! { ReqId, {error, ErrMsg}};
-on_error(rpblistbucketsreq, ErrMsg, {ReqId, Client}, undefined) ->
+on_error(rpblistbucketsreq, {ReqId, Client}, ErrMsg, undefined) ->
     Client ! { ReqId, {error, ErrMsg}};
-on_error(_Req, ErrMsg, _Ctx, From) when From =/= undefined ->
+on_error(#rpbmapredreq{}, {ReqId, Client}, ErrMsg, undefined) ->
+    Client ! { ReqId, {error, ErrMsg}};
+on_error(_Req, _Ctx, ErrMsg, From) when From =/= undefined ->
     gen_server:reply(From, {error, ErrMsg}).
 %% deliberately crash if the handling an error response after
 %% the client has been replied to
@@ -391,7 +494,8 @@ wait_for_listbuckets(ReqId, Timeout) ->
 wait_for_listbuckets(ReqId,Timeout,Acc) ->
     receive
         {ReqId, done} -> {ok, lists:flatten(Acc)};
-        {ReqId, {buckets, Res}} -> wait_for_listbuckets(ReqId,Timeout,[Res|Acc])
+        {ReqId, {buckets, Res}} -> wait_for_listbuckets(ReqId,Timeout,[Res|Acc]);
+        {ReqId, {error, Reason}} -> {error, Reason}
     after Timeout ->
             {error, {timeout, Acc}}
     end.
@@ -403,7 +507,21 @@ wait_for_listkeys(ReqId, Timeout) ->
 wait_for_listkeys(ReqId,Timeout,Acc) ->
     receive
         {ReqId, done} -> {ok, lists:flatten(Acc)};
-        {ReqId,{keys,Res}} -> wait_for_listkeys(ReqId,Timeout,[Res|Acc])
+        {ReqId, {keys,Res}} -> wait_for_listkeys(ReqId,Timeout,[Res|Acc]);
+        {ReqId, {error, Reason}} -> {error, Reason}
+    after Timeout ->
+            {error, {timeout, Acc}}
+    end.
+
+%% @private
+wait_for_mapred(ReqId, Timeout) ->
+    wait_for_mapred(ReqId,Timeout,[]).
+%% @private
+wait_for_mapred(ReqId, Timeout, Acc) ->
+    receive
+        {ReqId, done} -> {ok, lists:flatten(Acc)};
+        {ReqId, {mapred,Phase,Res}} -> wait_for_listkeys(ReqId,Timeout,[{Phase,Res}|Acc]);
+        {ReqId, {error, Reason}} -> {error, Reason}
     after Timeout ->
             {error, {timeout, Acc}}
     end.
@@ -415,116 +533,215 @@ wait_for_listkeys(ReqId,Timeout,Acc) ->
 %% Tests disabled until they can be prevented from running when included
 %% as a dependency.
 %%
-%% -ifdef(TEST).
-%% -include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
-%% -define(TEST_IP, {127,0,0,1}).
-%% -define(TEST_PORT, 8087).
-%% -define(TEST_RIAK_NODE, 'riak@127.0.0.1').
-%% -define(TEST_EUNIT_NODE, 'eunit@127.0.0.1').
-%% -define(TEST_COOKIE, 'riak').
+-define(TEST_IP, {127,0,0,1}).
+-define(TEST_PORT, 8087).
+-define(TEST_RIAK_NODE, 'riak@127.0.0.1').
+-define(TEST_EUNIT_NODE, 'eunit@127.0.0.1').
+-define(TEST_COOKIE, 'riak').
 
-%% reset_riak() ->
-%%     ?assertEqual(ok, maybe_start_network()), 
-%%     %% Until there is a good way to empty the vnodes, require the 
-%%     %% test to run with ETS and kill the vnode sup to empty all the ETS tables
-%%     ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
-%%     ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
-%%     {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup).
+reset_riak() ->
+    ?assertEqual(ok, maybe_start_network()), 
+    %% Until there is a good way to empty the vnodes, require the 
+    %% test to run with ETS and kill the vnode sup to empty all the ETS tables
+    ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
+    ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
+    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup).
 
-%% maybe_start_network() ->
-%%     %% Try to spin up net_kernel
-%%     case net_kernel:start([?TEST_EUNIT_NODE]) of
-%%         {ok, _} ->
-%%             erlang:set_cookie(?TEST_RIAK_NODE, ?TEST_COOKIE),
-%%             ok;
-%%         {error, {already_started, _}} ->
-%%             ok;
-%%         X ->
-%%             X
-%%     end.
+maybe_start_network() ->
+    %% Try to spin up net_kernel
+    case net_kernel:start([?TEST_EUNIT_NODE]) of
+        {ok, _} ->
+            erlang:set_cookie(?TEST_RIAK_NODE, ?TEST_COOKIE),
+            ok;
+        {error, {already_started, _}} ->
+            ok;
+        X ->
+            X
+    end.
 
-%% get_should_read_put_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     O0 = riakc_obj:new(<<"b">>, <<"k">>),
-%%     O = riakc_obj:update_value(O0, <<"v">>),
-%%     {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
-%%     {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
-%%     ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO)).
+get_should_read_put_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    O0 = riakc_obj:new(<<"b">>, <<"k">>),
+    O = riakc_obj:update_value(O0, <<"v">>),
+    {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
+    {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+    ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO)).
 
-%% update_should_change_value_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     O0 = riakc_obj:new(<<"b">>, <<"k">>),
-%%     O = riakc_obj:update_value(O0, <<"v">>),
-%%     {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
-%%     PO2 = riakc_obj:update_value(PO, <<"v2">>),
-%%     ok = ?MODULE:put(Pid, PO2),
-%%     {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
-%%     ?assertEqual(<<"v2">>, riakc_obj:get_value(GO)).
+update_should_change_value_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    O0 = riakc_obj:new(<<"b">>, <<"k">>),
+    O = riakc_obj:update_value(O0, <<"v">>),
+    {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
+    PO2 = riakc_obj:update_value(PO, <<"v2">>),
+    ok = ?MODULE:put(Pid, PO2),
+    {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+    ?assertEqual(<<"v2">>, riakc_obj:get_value(GO)).
 
-%% key_should_be_missing_after_delete_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     %% Put key/value
-%%     O0 = riakc_obj:new(<<"b">>, <<"k">>),
-%%     O = riakc_obj:update_value(O0, <<"v">>),
-%%     {ok, _PO} = ?MODULE:put(Pid, O, [return_body]),
-%%     %% Prove it really got stored
-%%     {ok, GO1} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
-%%     ?assertEqual(<<"v">>, riakc_obj:get_value(GO1)),
-%%     %% Delete and check no longer found
-%%     ok = ?MODULE:delete(Pid, <<"b">>, <<"k">>),
-%%     {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"k">>).
+key_should_be_missing_after_delete_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    %% Put key/value
+    O0 = riakc_obj:new(<<"b">>, <<"k">>),
+    O = riakc_obj:update_value(O0, <<"v">>),
+    {ok, _PO} = ?MODULE:put(Pid, O, [return_body]),
+    %% Prove it really got stored
+    {ok, GO1} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+    ?assertEqual(<<"v">>, riakc_obj:get_value(GO1)),
+    %% Delete and check no longer found
+    ok = ?MODULE:delete(Pid, <<"b">>, <<"k">>),
+    {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"k">>).
 
-%% allow_mult_should_allow_dupes_test() ->
-%%     reset_riak(),
-%%     {ok, Pid1} = start_link(?TEST_IP, ?TEST_PORT),
-%%     {ok, Pid2} = start_link(?TEST_IP, ?TEST_PORT),
-%%     ok = set_bucket_props(Pid1, <<"multibucket">>, [{allow_mult, true}]),
-%%     ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>),
-%%     {error, notfound} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
-%%     O = riakc_obj:new(<<"multibucket">>, <<"foo">>),
-%%     O1 = riakc_obj:update_value(O, <<"pid1">>),
-%%     O2 = riakc_obj:update_value(O, <<"pid2">>),
-%%     ok = ?MODULE:put(Pid1, O1),
-%%     ok = ?MODULE:put(Pid2, O2),
-%%     {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
-%%     ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
-%%     O4 = riakc_obj:update_value(O3, <<"resolved">>),
-%%     ok = ?MODULE:put(Pid1, O4),
-%%     {ok, GO} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
-%%     ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
-%%     ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>).
+allow_mult_should_allow_dupes_test() ->
+    reset_riak(),
+    {ok, Pid1} = start_link(?TEST_IP, ?TEST_PORT),
+    {ok, Pid2} = start_link(?TEST_IP, ?TEST_PORT),
+    ok = set_bucket_props(Pid1, <<"multibucket">>, [{allow_mult, true}]),
+    ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>),
+    {error, notfound} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+    O = riakc_obj:new(<<"multibucket">>, <<"foo">>),
+    O1 = riakc_obj:update_value(O, <<"pid1">>),
+    O2 = riakc_obj:update_value(O, <<"pid2">>),
+    ok = ?MODULE:put(Pid1, O1),
+    ok = ?MODULE:put(Pid2, O2),
+    {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+    ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
+    O4 = riakc_obj:update_value(O3, <<"resolved">>),
+    ok = ?MODULE:put(Pid1, O4),
+    {ok, GO} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+    ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
+    ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>).
 
-%% list_buckets_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Bs = lists:sort([list_to_binary(["b"] ++ integer_to_list(N)) || N <- lists:seq(1, 10)]),
-%%     F = fun(B) ->
-%%                 O=riakc_obj:new(B, <<"key">>),
-%%                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
-%%         end,
-%%     [F(B) || B <- Bs],
-%%     {ok, LBs} = ?MODULE:list_buckets(Pid),
-%%     ?assertEqual(Bs, lists:sort(LBs)).
+list_buckets_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    Bs = lists:sort([list_to_binary(["b"] ++ integer_to_list(N)) || N <- lists:seq(1, 10)]),
+    F = fun(B) ->
+                O=riakc_obj:new(B, <<"key">>),
+                ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
+        end,
+    [F(B) || B <- Bs],
+    {ok, LBs} = ?MODULE:list_buckets(Pid),
+    ?assertEqual(Bs, lists:sort(LBs)).
 
     
-%% list_keys_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Bucket = <<"listkeys">>,
-%%     Ks = lists:sort([list_to_binary(integer_to_list(N)) || N <- lists:seq(1, 10)]),
-%%     F = fun(K) ->
-%%                 O=riakc_obj:new(Bucket, K),
-%%                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
-%%         end,
-%%     [F(K) || K <- Ks],
-%%     {ok, LKs} = ?MODULE:list_keys(Pid, Bucket),
-%%     ?assertEqual(Ks, lists:sort(LKs)).
+list_keys_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    Bucket = <<"listkeys">>,
+    Ks = lists:sort([list_to_binary(integer_to_list(N)) || N <- lists:seq(1, 10)]),
+    F = fun(K) ->
+                O=riakc_obj:new(Bucket, K),
+                ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
+        end,
+    [F(K) || K <- Ks],
+    {ok, LKs} = ?MODULE:list_keys(Pid, Bucket),
+    ?assertEqual(Ks, lists:sort(LKs)).
                          
-       
-                               
-%% -endif.
+javascript_source_map_test() ->       
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    B = <<"bucket">>,
+    K = <<"foo">>,
+    O=riakc_obj:new(B, K),
+    ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
+
+    ?assertEqual({ok, [{0, [2]}]},
+                 ?MODULE:mapred(Pid, 
+                                [{B, K}],
+                                [{map, {jsanon, "function (v) { return [JSON.parse(v.values[0].data)]; }"},
+                                  undefined, true}])).
+
+javascript_named_map_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    B = <<"bucket">>,
+    K = <<"foo">>,
+    O=riakc_obj:new(B, K),
+    ?MODULE:put(Pid, riakc_obj:update_value(O, <<"99">>, "application/json")),
+
+    ?assertEqual({ok, [{0, [99]}]},
+                 ?MODULE:mapred(Pid, 
+                                [{B, K}],
+                                [{map, {jsfun, "Riak.mapValuesJson"},
+                                  undefined, true}])).
+ 
+javascript_source_map_reduce_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    Store = fun({K,V}) ->
+                    O=riakc_obj:new(<<"bucket">>, K),
+                    ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+            end,
+    [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
+    
+    ?assertEqual({ok, [{1, 3}]},
+                 ?MODULE:mapred(Pid, 
+                                [{<<"bucket">>, <<"foo">>},
+                                 {<<"bucket">>, <<"bar">>},
+                                 {<<"bucket">>, <<"baz">>}],
+                                [{map, {jsanon, "function (v) { return [1]; }"}, 
+                                  undefined, false},
+                                 {reduce, {jsanon, "function(v) { return v.length; } "}, 
+                                  undefined, true}])).
+
+javascript_named_map_reduce_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    Store = fun({K,V}) ->
+                    O=riakc_obj:new(<<"bucket">>, K),
+                    ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+            end,
+    [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
+    
+    ?assertEqual({ok, [{1, [9]}]},
+                 ?MODULE:mapred(Pid, 
+                                [{<<"bucket">>, <<"foo">>},
+                                 {<<"bucket">>, <<"bar">>},
+                                 {<<"bucket">>, <<"baz">>}],
+                                [{map, {jsfun, "Riak.mapValuesJson"}, undefined, false},
+                                 {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}])).
+
+%% Add testJavascriptBucketMapReduce
+
+javascript_arg_map_reduce_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    O=riakc_obj:new(<<"bucket">>, <<"foo">>),
+    ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
+    ?assertEqual({ok, [{1, [10]}]},
+                 ?MODULE:mapred(Pid, 
+                                [{{<<"bucket">>, <<"foo">>}, 5},
+                                 {{<<"bucket">>, <<"foo">>}, 10},
+                                 {{<<"bucket">>, <<"foo">>}, 15},
+                                 {{<<"bucket">>, <<"foo">>}, -15},
+                                 {{<<"bucket">>, <<"foo">>}, -5}],
+                                [{map, {jsanon, "function(v, arg) { return [arg]; }"},
+                                  undefined, false},
+                                 {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}])).
+
+erlang_map_reduce_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+    Store = fun({K,V}) ->
+                    O=riakc_obj:new(<<"bucket">>, K),
+                    ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+            end,
+    [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
+    
+    {ok, [{1, Results}]} = ?MODULE:mapred(Pid, 
+                                     [{<<"bucket">>, <<"foo">>},
+                                      {<<"bucket">>, <<"bar">>},
+                                      {<<"bucket">>, <<"baz">>}],
+                                     [{map, {modfun, riak_kv_mapreduce, map_object_value}, 
+                                       undefined, false},
+                                      {reduce, {modfun, riak_kv_mapreduce, reduce_set_union}, 
+                                       undefined, true}]),
+    ?assertEqual(lists:sort(Results), ["2", "3", "4"]).
+
+-endif.
 
