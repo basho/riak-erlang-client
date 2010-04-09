@@ -38,9 +38,11 @@
          stream_list_buckets/1,
          list_keys/2,
          stream_list_keys/2,
-         mapred/3,
-         mapred/4,
-         mapred_stream/5]).
+         mapred/3, mapred/4,
+         mapred_stream/5,
+         mapred_bucket/3, mapred_bucket/4,
+         mapred_bucket_stream/5]).
+
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
@@ -197,7 +199,6 @@ mapred(Pid, Inputs, Query) ->
 %%              Query :: [riak_kv_mapred_query:mapred_queryterm()],
 %%              TimeoutMillisecs :: integer()  | 'infinity') ->
 %%       {ok, riak_kv_mapred_query:mapred_result()} |
-%%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
 %%       {error, timeout} |
 %%       {error, Err :: term()}
 %% @doc Perform a map/reduce job across the cluster.
@@ -206,60 +207,69 @@ mapred(Pid, Inputs, Query, Timeout) ->
     {ok, ReqId} = mapred_stream(Pid, Inputs, Query, self(), Timeout),
     wait_for_mapred(ReqId, Timeout).
 
+%% @spec mapred_stream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid()) ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a streaming map/reduce job across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+%% mapred_stream(Pid, Query, ClientPid) ->
+%%     mapred_stream(Pid, Query, ClientPid,?DEFAULT_TIMEOUT).
+
+%% @spec mapred_stream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a streaming map/reduce job with a timeout across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
 mapred_stream(Pid, Inputs, Query, ClientPid, _Timeout) ->
     ReqMsg = #rpbmapredreq{input_keys = [riakc_pb:pbify_mapred_input(I) || I <- Inputs],
                            phases = riakc_pb:pbify_mapred_query(Query)},
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, ReqMsg, {ReqId, ClientPid}}).
     
+%% @spec mapred_bucket(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job against a bucket with a timeout 
+%%      across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred_bucket(Pid, Bucket, Query) ->
+    mapred_bucket(Pid, Bucket, Query, ?DEFAULT_TIMEOUT).
 
-%% %% @spec mapred_stream(Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%% %%                     ClientPid :: pid()) ->
-%% %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%% %%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
-%% %%       {error, Err :: term()}
-%% %% @doc Perform a streaming map/reduce job across the cluster.
-%% %%      See the map/reduce documentation for explanation of behavior.
-%% mapred_stream(Pid, Query, ClientPid) ->
-%%     mapred_stream(Pid, Query, ClientPid,?DEFAULT_TIMEOUT).
+%% @spec mapred_bucket_tream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job against a bucket with a timeout 
+%%      across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred_bucket(Pid, Bucket, Query, Timeout) ->
+    {ok, ReqId} = mapred_bucket_stream(Pid, Bucket, Query, self(), Timeout),
+    wait_for_mapred(ReqId, Timeout).
 
-%% %% @spec mapred_stream(Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%% %%                     ClientPid :: pid(),
-%% %%                     TimeoutMillisecs :: integer() | 'infinity') ->
-%% %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%% %%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
-%% %%       {error, Err :: term()}
-%% %% @doc Perform a streaming map/reduce job across the cluster.
-%% %%      See the map/reduce documentation for explanation of behavior.
-%% mapred_stream(Pid, Query, ClientPid, Timeout) ->
-%%     ReqMsg = #rpblistkeysreq{bucket = Bucket},
-%%     ReqId = mk_reqid(),
-%%     gen_server:call(Pid, {req, ReqMsg, {ReqId, self()}}).
-
-%% mapred_bucket_stream(Pid, Bucket, Query, ClientPid) ->
-%%     mapred_bucket_stream(Bucket, Query, ClientPid, ?DEFAULT_TIMEOUT).
-
-%% mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
-%%     mapred_bucket_stream(Bucket, Query, ClientPid, Timeout, ?DEFAULT_ERRTOL).
-
-%% mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, ErrorTolerance) ->
-%%     {ok,{MR_ReqId,MR_FSM}} = mapred_stream(Query,ClientPid,Timeout),
-%%     {ok,_Stream_ReqID} = stream_list_keys(Bucket, Timeout, ErrorTolerance,
-%%                                   MR_FSM, mapred),
-%%     {ok,MR_ReqId}.
-
-%% mapred_bucket(Pid, Bucket, Query) ->
-%%     mapred_bucket(Bucket, Query, ?DEFAULT_TIMEOUT).
-
-%% mapred_bucket(Pid, Bucket, Query, Timeout) ->
-%%     mapred_bucket(Bucket, Query, Timeout, ?DEFAULT_ERRTOL).
-
-%% mapred_bucket(Pid, Bucket, Query, Timeout, ErrorTolerance) ->
-%%     Me = self(),
-%%     {ok,MR_ReqId} = mapred_bucket_stream(Bucket, Query, Me,
-%%                                          Timeout, ErrorTolerance),
-%%     luke_flow:collect_output(MR_ReqId, Timeout).
-
+%% @spec mapred_bucket_stream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a streaming map/reduce job against a bucket with a timeout 
+%%      across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred_bucket_stream(Pid, Bucket, Query, ClientPid, _Timeout) ->
+    ReqMsg = #rpbmapredreq{input_bucket = Bucket,
+                           phases = riakc_pb:pbify_mapred_query(Query)},
+    ReqId = mk_reqid(),
+    gen_server:call(Pid, {req, ReqMsg, {ReqId, ClientPid}}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -533,14 +543,14 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
 %% Tests disabled until they can be prevented from running when included
 %% as a dependency.
 %%
-%% -ifdef(TEST).
-%% -include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
-%% -define(TEST_IP, {127,0,0,1}).
-%% -define(TEST_PORT, 8087).
-%% -define(TEST_RIAK_NODE, 'riak@127.0.0.1').
-%% -define(TEST_EUNIT_NODE, 'eunit@127.0.0.1').
-%% -define(TEST_COOKIE, 'riak').
+-define(TEST_IP, {127,0,0,1}).
+-define(TEST_PORT, 8087).
+-define(TEST_RIAK_NODE, 'riak@127.0.0.1').
+-define(TEST_EUNIT_NODE, 'eunit@127.0.0.1').
+-define(TEST_COOKIE, 'riak').
 
 %% reset_riak() ->
 %%     ?assertEqual(ok, maybe_start_network()), 
@@ -706,7 +716,19 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
 %%                                 [{map, {jsfun, "Riak.mapValuesJson"}, undefined, false},
 %%                                  {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}])).
 
-%% %% Add testJavascriptBucketMapReduce
+%% javascript_bucket_map_reduce_test() ->
+%%     reset_riak(),
+%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+%%     Store = fun({K,V}) ->
+%%                     O=riakc_obj:new(<<"bucket">>, K),
+%%                     ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+%%             end,
+%%     [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
+    
+%%     ?assertEqual({ok, [{1, [9]}]},
+%%                  ?MODULE:mapred_bucket(Pid, <<"bucket">>,
+%%                                 [{map, {jsfun, "Riak.mapValuesJson"}, undefined, false},
+%%                                  {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}])).
 
 %% javascript_arg_map_reduce_test() ->
 %%     reset_riak(),
@@ -743,5 +765,5 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
 %%                                        undefined, true}]),
 %%     ?assertEqual(lists:sort(Results), ["2", "3", "4"]).
 
-%% -endif.
+-endif.
 
