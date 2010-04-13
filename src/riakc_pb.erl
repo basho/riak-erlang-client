@@ -584,7 +584,6 @@ maybe_underscore_atom(Bin) ->
 %% ===================================================================
 -ifdef(TEST).
 
-
 bin_to_fun_name_test() ->
     ?assertEqual({ok, bin_to_fun_name_test}, bin_to_fun_name(<<"bin_to_fun_name_test">>)),
     ?assertEqual({error, "nonexistant function name not_a_function_name"}, 
@@ -597,48 +596,52 @@ bin_to_mod_test() ->
     ?assertEqual({error, "module never_a_module not found in code path"},
                   bin_to_mod(<<"never_a_module">>)).
 
-content_encode_decode_test() ->
-    MetaData = dict:from_list(
-                 [{?MD_CTYPE, "ctype"},
-                  {?MD_CHARSET, "charset"},
-                  {?MD_ENCODING, "encoding"},
-                  {?MD_VTAG, "vtag"},
-                  {?MD_LINKS, [{{<<"b1">>, <<"k1">>}, <<"v1">>},
-                               {{<<"b2">>, <<"k2">>}, <<"v2">>}
-                              ]},
-                  {?MD_LASTMOD, {1, 2, 3}},
-                  {?MD_USERMETA, [{"X-Riak-Meta-MyMetaData1","here it is"},
-                                  {"X-Riak-Meta-MoreMd", "have some more"}
-                                 ]}
-                 ]),
-    Value = <<"test value">>,
-    {MetaData2, Value2} = erlify_rpbcontent(
-                          riakclient_pb:decode_rpbcontent(
-                            riakclient_pb:encode_rpbcontent(
-                              pbify_rpbcontent({MetaData, Value})))),
-    MdSame = (dict:to_list(MetaData) =:= dict:to_list(MetaData2)),
-    MdSame = true,
-    Value = Value2.
+pb_test_() ->
+    {setup, fun() ->
+                    code:add_pathz("../ebin")
+            end,
 
+     [{"content encode decode", 
+       ?_test(begin
+                  MetaData = dict:from_list(
+                               [{?MD_CTYPE, "ctype"},
+                                {?MD_CHARSET, "charset"},
+                                {?MD_ENCODING, "encoding"},
+                                {?MD_VTAG, "vtag"},
+                                {?MD_LINKS, [{{<<"b1">>, <<"k1">>}, <<"v1">>},
+                                             {{<<"b2">>, <<"k2">>}, <<"v2">>}
+                                            ]},
+                                {?MD_LASTMOD, {1, 2, 3}},
+                                {?MD_USERMETA, [{"X-Riak-Meta-MyMetaData1","here it is"},
+                                                {"X-Riak-Meta-MoreMd", "have some more"}
+                                               ]}
+                               ]),
+                  Value = <<"test value">>,
+                  {MetaData2, Value2} = erlify_rpbcontent(
+                                          riakclient_pb:decode_rpbcontent(
+                                            riakclient_pb:encode_rpbcontent(
+                                              pbify_rpbcontent({MetaData, Value})))),
+                  MdSame = (dict:to_list(MetaData) =:= dict:to_list(MetaData2)),
+                  MdSame = true,
+                  Value = Value2
+              end)},
+      {"mapred phase encode decode",
+       ?_test(begin
 
-mapred_phase_encode_decode_test() ->
-    Query = [{map, {jsanon, {<<"bucket">>, <<"key">>}}, undefined, true},
-             {map, {jsanon, <<"source">>}, undefined, true},
-             {map, {jsfun, <<"name">>}, undefined, true},
-             {map, {modfun, ?MODULE, mapred_phase_encode_decode_test}, undefined, true},
-             {map, {qfun, fun(_Arg) -> on end}, undefined, true},
-             {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test}, 1, true},
-             {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test},
-              {array, [1,2,3]}, true},
-             {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test}, 
-              {struct, [{<<"k">>,1}]}, false},
-             {link, <<"bucket">>, <<"tag">>, true}],
-    {ok, Query2} = erlify_mapred_query(pbify_mapred_query(Query)),
-    file:write_file("/tmp/q.txt", io_lib:format("~p", [Query])),
-    file:write_file("/tmp/q2.txt",  io_lib:format("~p", [Query2])),
-    ?assertEqual(Query, Query2).
-
-
+                  Query = [{map, {jsanon, {<<"bucket">>, <<"key">>}}, undefined, true},
+                           {map, {jsanon, <<"source">>}, undefined, true},
+                           {map, {jsfun, <<"name">>}, undefined, true},
+                           {map, {modfun, ?MODULE, mapred_phase_encode_decode_test}, undefined, true},
+                           {map, {qfun, fun(_Arg) -> on end}, undefined, true},
+                           {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test}, 1, true},
+                           {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test},
+                            {array, [1,2,3]}, true},
+                           {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test}, 
+                            {struct, [{<<"k">>,1}]}, false},
+                           {link, <<"bucket">>, <<"tag">>, true}],
+                  {ok, Query2} = erlify_mapred_query(pbify_mapred_query(Query)),
+                  ?assertEqual(Query, Query2)
+              end)}]}.
 
 -endif.
   
