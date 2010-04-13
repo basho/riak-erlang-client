@@ -552,218 +552,272 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
 -define(TEST_EUNIT_NODE, 'eunit@127.0.0.1').
 -define(TEST_COOKIE, 'riak').
 
-%% reset_riak() ->
-%%     ?assertEqual(ok, maybe_start_network()), 
-%%     %% Until there is a good way to empty the vnodes, require the 
-%%     %% test to run with ETS and kill the vnode sup to empty all the ETS tables
-%%     ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
-%%     ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
-%%     {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup).
+reset_riak() ->
+    ?assertEqual(ok, maybe_start_network()), 
+    %% Until there is a good way to empty the vnodes, require the 
+    %% test to run with ETS and kill the vnode sup to empty all the ETS tables
+    ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
+    ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
+    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup).
 
-%% maybe_start_network() ->
-%%     %% Try to spin up net_kernel
-%%     case net_kernel:start([?TEST_EUNIT_NODE]) of
-%%         {ok, _} ->
-%%             erlang:set_cookie(?TEST_RIAK_NODE, ?TEST_COOKIE),
-%%             ok;
-%%         {error, {already_started, _}} ->
-%%             ok;
-%%         X ->
-%%             X
-%%     end.
+maybe_start_network() ->
+    %% Try to spin up net_kernel
+    case net_kernel:start([?TEST_EUNIT_NODE]) of
+        {ok, _} ->
+            erlang:set_cookie(?TEST_RIAK_NODE, ?TEST_COOKIE),
+            ok;
+        {error, {already_started, _}} ->
+            ok;
+        X ->
+            X
+    end.
 
-%% get_should_read_put_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     O0 = riakc_obj:new(<<"b">>, <<"k">>),
-%%     O = riakc_obj:update_value(O0, <<"v">>),
-%%     {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
-%%     {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
-%%     ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO)).
+pb_socket_test_() ->
+    {setup,
+     fun() ->
+             %% Grab the riakclient_pb.proto file
+             code:add_pathz("../ebin"),
+             ok = maybe_start_network()
+     end,
+     {generator, 
+     fun() ->
+             case net_adm:ping(?TEST_RIAK_NODE) of
+                 pang ->
+                     []; %% {skipped, need_live_server};
+                 pong ->
+                     live_node_tests()
+             end
+     end}}.
 
-%% update_should_change_value_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     O0 = riakc_obj:new(<<"b">>, <<"k">>),
-%%     O = riakc_obj:update_value(O0, <<"v">>),
-%%     {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
-%%     PO2 = riakc_obj:update_value(PO, <<"v2">>),
-%%     ok = ?MODULE:put(Pid, PO2),
-%%     {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
-%%     ?assertEqual(<<"v2">>, riakc_obj:get_value(GO)).
+live_node_tests() ->
+    [{"get_should_read_put_test()", 
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 O0 = riakc_obj:new(<<"b">>, <<"k">>),
+                 O = riakc_obj:update_value(O0, <<"v">>),
+                 {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
+                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+                 ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
+             end)},
 
-%% key_should_be_missing_after_delete_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     %% Put key/value
-%%     O0 = riakc_obj:new(<<"b">>, <<"k">>),
-%%     O = riakc_obj:update_value(O0, <<"v">>),
-%%     {ok, _PO} = ?MODULE:put(Pid, O, [return_body]),
-%%     %% Prove it really got stored
-%%     {ok, GO1} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
-%%     ?assertEqual(<<"v">>, riakc_obj:get_value(GO1)),
-%%     %% Delete and check no longer found
-%%     ok = ?MODULE:delete(Pid, <<"b">>, <<"k">>),
-%%     {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"k">>).
+     {"update_should_change_value_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 O0 = riakc_obj:new(<<"b">>, <<"k">>),
+                 O = riakc_obj:update_value(O0, <<"v">>),
+                 {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
+                 PO2 = riakc_obj:update_value(PO, <<"v2">>),
+                 ok = ?MODULE:put(Pid, PO2),
+                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+                 ?assertEqual(<<"v2">>, riakc_obj:get_value(GO))
+             end)},
 
-%% allow_mult_should_allow_dupes_test() ->
-%%     reset_riak(),
-%%     {ok, Pid1} = start_link(?TEST_IP, ?TEST_PORT),
-%%     {ok, Pid2} = start_link(?TEST_IP, ?TEST_PORT),
-%%     ok = set_bucket_props(Pid1, <<"multibucket">>, [{allow_mult, true}]),
-%%     ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>),
-%%     {error, notfound} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
-%%     O = riakc_obj:new(<<"multibucket">>, <<"foo">>),
-%%     O1 = riakc_obj:update_value(O, <<"pid1">>),
-%%     O2 = riakc_obj:update_value(O, <<"pid2">>),
-%%     ok = ?MODULE:put(Pid1, O1),
-%%     ok = ?MODULE:put(Pid2, O2),
-%%     {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
-%%     ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
-%%     O4 = riakc_obj:update_value(O3, <<"resolved">>),
-%%     ok = ?MODULE:put(Pid1, O4),
-%%     {ok, GO} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
-%%     ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
-%%     ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>).
+     {"key_should_be_missing_after_delete_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 %% Put key/value
+                 O0 = riakc_obj:new(<<"b">>, <<"k">>),
+                 O = riakc_obj:update_value(O0, <<"v">>),
+                 {ok, _PO} = ?MODULE:put(Pid, O, [return_body]),
+                 %% Prove it really got stored
+                 {ok, GO1} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+                 ?assertEqual(<<"v">>, riakc_obj:get_value(GO1)),
+                 %% Delete and check no longer found
+                 ok = ?MODULE:delete(Pid, <<"b">>, <<"k">>),
+                 {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"k">>)
+             end)},
 
-%% list_buckets_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Bs = lists:sort([list_to_binary(["b"] ++ integer_to_list(N)) || N <- lists:seq(1, 10)]),
-%%     F = fun(B) ->
-%%                 O=riakc_obj:new(B, <<"key">>),
-%%                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
-%%         end,
-%%     [F(B) || B <- Bs],
-%%     {ok, LBs} = ?MODULE:list_buckets(Pid),
-%%     ?assertEqual(Bs, lists:sort(LBs)).
+     {"allow_mult_should_allow_dupes_test()", 
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid1} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid2} = start_link(?TEST_IP, ?TEST_PORT),
+                 ok = set_bucket_props(Pid1, <<"multibucket">>, [{allow_mult, true}]),
+                 ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>),
+                 {error, notfound} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 O = riakc_obj:new(<<"multibucket">>, <<"foo">>),
+                 O1 = riakc_obj:update_value(O, <<"pid1">>),
+                 O2 = riakc_obj:update_value(O, <<"pid2">>),
+                 ok = ?MODULE:put(Pid1, O1),
+                 ok = ?MODULE:put(Pid2, O2),
+                 {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
+                 O4 = riakc_obj:update_value(O3, <<"resolved">>),
+                 ok = ?MODULE:put(Pid1, O4),
+                 {ok, GO} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
+                 ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>)
+             end)},
 
-    
-%% list_keys_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Bucket = <<"listkeys">>,
-%%     Ks = lists:sort([list_to_binary(integer_to_list(N)) || N <- lists:seq(1, 10)]),
-%%     F = fun(K) ->
-%%                 O=riakc_obj:new(Bucket, K),
-%%                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
-%%         end,
-%%     [F(K) || K <- Ks],
-%%     {ok, LKs} = ?MODULE:list_keys(Pid, Bucket),
-%%     ?assertEqual(Ks, lists:sort(LKs)).
+     {"list_buckets_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Bs = lists:sort([list_to_binary(["b"] ++ integer_to_list(N)) || N <- lists:seq(1, 10)]),
+                 F = fun(B) ->
+                             O=riakc_obj:new(B, <<"key">>),
+                             ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
+                     end,
+                 [F(B) || B <- Bs],
+                 {ok, LBs} = ?MODULE:list_buckets(Pid),
+                 ?assertEqual(Bs, lists:sort(LBs))
+             end)},
+
+     {"list_keys_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Bucket = <<"listkeys">>,
+                 Ks = lists:sort([list_to_binary(integer_to_list(N)) || N <- lists:seq(1, 10)]),
+                 F = fun(K) ->
+                             O=riakc_obj:new(Bucket, K),
+                             ?MODULE:put(Pid, riakc_obj:update_value(O, <<"val">>))
+                     end,
+                 [F(K) || K <- Ks],
+                 {ok, LKs} = ?MODULE:list_keys(Pid, Bucket),
+                 ?assertEqual(Ks, lists:sort(LKs))
+             end)},
                          
-%% javascript_source_map_test() ->       
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     B = <<"bucket">>,
-%%     K = <<"foo">>,
-%%     O=riakc_obj:new(B, K),
-%%     ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
+     {"javascript_source_map_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 B = <<"bucket">>,
+                 K = <<"foo">>,
+                 O=riakc_obj:new(B, K),
+                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
 
-%%     ?assertEqual({ok, [{0, [2]}]},
-%%                  ?MODULE:mapred(Pid, 
-%%                                 [{B, K}],
-%%                                 [{map, {jsanon, "function (v) { return [JSON.parse(v.values[0].data)]; }"},
-%%                                   undefined, true}])).
+                 ?assertEqual({ok, [{0, [2]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{B, K}],
+                                             [{map, {jsanon, "function (v) { return [JSON.parse(v.values[0].data)]; }"},
+                                               undefined, true}]))
+             end)},
 
-%% javascript_named_map_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     B = <<"bucket">>,
-%%     K = <<"foo">>,
-%%     O=riakc_obj:new(B, K),
-%%     ?MODULE:put(Pid, riakc_obj:update_value(O, <<"99">>, "application/json")),
+     {"javascript_named_map_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 B = <<"bucket">>,
+                 K = <<"foo">>,
+                 O=riakc_obj:new(B, K),
+                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"99">>, "application/json")),
 
-%%     ?assertEqual({ok, [{0, [99]}]},
-%%                  ?MODULE:mapred(Pid, 
-%%                                 [{B, K}],
-%%                                 [{map, {jsfun, "Riak.mapValuesJson"},
-%%                                   undefined, true}])).
+                 ?assertEqual({ok, [{0, [99]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{B, K}],
+                                             [{map, {jsfun, "Riak.mapValuesJson"},
+                                               undefined, true}]))
+             end)},
  
-%% javascript_source_map_reduce_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Store = fun({K,V}) ->
-%%                     O=riakc_obj:new(<<"bucket">>, K),
-%%                     ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
-%%             end,
-%%     [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
-    
-%%     ?assertEqual({ok, [{1, 3}]},
-%%                  ?MODULE:mapred(Pid, 
-%%                                 [{<<"bucket">>, <<"foo">>},
-%%                                  {<<"bucket">>, <<"bar">>},
-%%                                  {<<"bucket">>, <<"baz">>}],
-%%                                 [{map, {jsanon, "function (v) { return [1]; }"}, 
-%%                                   undefined, false},
-%%                                  {reduce, {jsanon, "function(v) { return v.length; } "}, 
-%%                                   undefined, true}])).
+     {"javascript_source_map_reduce_test()", 
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
 
-%% javascript_named_map_reduce_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Store = fun({K,V}) ->
-%%                     O=riakc_obj:new(<<"bucket">>, K),
-%%                     ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
-%%             end,
-%%     [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
-    
-%%     ?assertEqual({ok, [{1, [9]}]},
-%%                  ?MODULE:mapred(Pid, 
-%%                                 [{<<"bucket">>, <<"foo">>},
-%%                                  {<<"bucket">>, <<"bar">>},
-%%                                  {<<"bucket">>, <<"baz">>}],
-%%                                 [{map, {jsfun, "Riak.mapValuesJson"}, undefined, false},
-%%                                  {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}])).
+                 ?assertEqual({ok, [{1, 3}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{<<"bucket">>, <<"foo">>},
+                                              {<<"bucket">>, <<"bar">>},
+                                              {<<"bucket">>, <<"baz">>}],
+                                             [{map, {jsanon, "function (v) { return [1]; }"}, 
+                                               undefined, false},
+                                              {reduce, {jsanon, "function(v) { return v.length; } "}, 
+                                               undefined, true}]))
+             end)},
 
-%% javascript_bucket_map_reduce_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Store = fun({K,V}) ->
-%%                     O=riakc_obj:new(<<"bucket">>, K),
-%%                     ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
-%%             end,
-%%     [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
-    
-%%     ?assertEqual({ok, [{1, [9]}]},
-%%                  ?MODULE:mapred_bucket(Pid, <<"bucket">>,
-%%                                 [{map, {jsfun, "Riak.mapValuesJson"}, undefined, false},
-%%                                  {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}])).
+     {"javascript_named_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
 
-%% javascript_arg_map_reduce_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     O=riakc_obj:new(<<"bucket">>, <<"foo">>),
-%%     ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
-%%     ?assertEqual({ok, [{1, [10]}]},
-%%                  ?MODULE:mapred(Pid, 
-%%                                 [{{<<"bucket">>, <<"foo">>}, 5},
-%%                                  {{<<"bucket">>, <<"foo">>}, 10},
-%%                                  {{<<"bucket">>, <<"foo">>}, 15},
-%%                                  {{<<"bucket">>, <<"foo">>}, -15},
-%%                                  {{<<"bucket">>, <<"foo">>}, -5}],
-%%                                 [{map, {jsanon, "function(v, arg) { return [arg]; }"},
-%%                                   undefined, false},
-%%                                  {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}])).
+                 ?assertEqual({ok, [{1, [9]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{<<"bucket">>, <<"foo">>},
+                                              {<<"bucket">>, <<"bar">>},
+                                              {<<"bucket">>, <<"baz">>}],
+                                             [{map, {jsfun, "Riak.mapValuesJson"}, undefined, false},
+                                              {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}]))
+             end)},
 
-%% erlang_map_reduce_test() ->
-%%     reset_riak(),
-%%     {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-%%     Store = fun({K,V}) ->
-%%                     O=riakc_obj:new(<<"bucket">>, K),
-%%                     ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
-%%             end,
-%%     [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, {<<"bar">>, <<"3">>}, {<<"baz">>, <<"4">>}]],
-    
-%%     {ok, [{1, Results}]} = ?MODULE:mapred(Pid, 
-%%                                      [{<<"bucket">>, <<"foo">>},
-%%                                       {<<"bucket">>, <<"bar">>},
-%%                                       {<<"bucket">>, <<"baz">>}],
-%%                                      [{map, {modfun, riak_kv_mapreduce, map_object_value}, 
-%%                                        undefined, false},
-%%                                       {reduce, {modfun, riak_kv_mapreduce, reduce_set_union}, 
-%%                                        undefined, true}]),
-%%     ?assertEqual(lists:sort(Results), ["2", "3", "4"]).
+     {"javascript_bucket_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
+
+                 ?assertEqual({ok, [{1, [9]}]},
+                              ?MODULE:mapred_bucket(Pid, <<"bucket">>,
+                                                    [{map, {jsfun, "Riak.mapValuesJson"}, undefined, false},
+                                                     {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}]))
+             end)},
+
+     {"javascript_arg_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 O=riakc_obj:new(<<"bucket">>, <<"foo">>),
+                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
+                 ?assertEqual({ok, [{1, [10]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{{<<"bucket">>, <<"foo">>}, 5},
+                                              {{<<"bucket">>, <<"foo">>}, 10},
+                                              {{<<"bucket">>, <<"foo">>}, 15},
+                                              {{<<"bucket">>, <<"foo">>}, -15},
+                                              {{<<"bucket">>, <<"foo">>}, -5}],
+                                             [{map, {jsanon, "function(v, arg) { return [arg]; }"},
+                                               undefined, false},
+                                              {reduce, {jsfun, "Riak.reduceSum"}, undefined, true}]))
+             end)},
+
+     {"erlang_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
+
+                 {ok, [{1, Results}]} = ?MODULE:mapred(Pid, 
+                                                       [{<<"bucket">>, <<"foo">>},
+                                                        {<<"bucket">>, <<"bar">>},
+                                                        {<<"bucket">>, <<"baz">>}],
+                                                       [{map, {modfun, riak_kv_mapreduce,
+                                                               map_object_value}, 
+                                                         undefined, false},
+                                                        {reduce, {modfun, riak_kv_mapreduce, 
+                                                                  reduce_set_union}, 
+                                                         undefined, true}]),
+                 ?assertEqual(lists:sort(Results), ["2", "3", "4"])
+             end)}
+    ].
 
 -endif.
 
