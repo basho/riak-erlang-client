@@ -126,7 +126,7 @@ pbify_rpbcontents([Content | Rest], Acc) ->
 
 %% Convert a metadata/value pair into an #rpbcontent{} record    
 pbify_rpbcontent({Metadata, Value}) ->
-    dict:fold(fun pbify_rpbcontent_entry/3, {#rpbcontent{value = Value}, []}, Metadata).
+    dict:fold(fun pbify_rpbcontent_entry/3, #rpbcontent{value = Value}, Metadata).
 
 %% Convert the metadata dictionary entries to protocol buffers
 pbify_rpbcontent_entry(?MD_CTYPE, ContentType, PbContent) when is_list(ContentType) -> 
@@ -248,18 +248,6 @@ maybe_underscore_atom(Bin) ->
 %% Unit Tests
 %% ===================================================================
 -ifdef(TEST).
-
-bin_to_fun_name_test() ->
-    ?assertEqual({ok, bin_to_fun_name_test}, bin_to_fun_name(<<"bin_to_fun_name_test">>)),
-    ?assertEqual({error, "nonexistant function name not_a_function_name"}, 
-                 bin_to_fun_name(<<"not_a_function_name">>)).
-
-bin_to_mod_test() ->
-    ?assertEqual({ok, ?MODULE}, bin_to_mod(list_to_binary(atom_to_list(?MODULE)))),
-    %% test against an unlikely module to make sure it gets loaded
-    ?assertEqual({ok, orber_iiop_inproxy}, bin_to_mod(<<"orber_iiop_inproxy">>)),
-    ?assertEqual({error, "module never_a_module not found in code path"},
-                  bin_to_mod(<<"never_a_module">>)).
 
 pb_test_() ->
     {setup, fun() ->
