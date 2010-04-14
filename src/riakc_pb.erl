@@ -126,33 +126,25 @@ pbify_rpbcontents([Content | Rest], Acc) ->
 
 %% Convert a metadata/value pair into an #rpbcontent{} record    
 pbify_rpbcontent({Metadata, Value}) ->
-    {PbContent, LeftOver} = 
-        dict:fold(fun pbify_rpbcontent_entry/3, {#rpbcontent{value = Value}, []}, Metadata),
-    case LeftOver of
-        [] ->
-            PbLeftOver = undefined;
-        LeftOver ->
-            PbLeftOver = pbify_rpbterm({struct, LeftOver})
-    end,
-    PbContent#rpbcontent{metadata = PbLeftOver}.
+    dict:fold(fun pbify_rpbcontent_entry/3, {#rpbcontent{value = Value}, []}, Metadata).
 
 %% Convert the metadata dictionary entries to protocol buffers
-pbify_rpbcontent_entry(?MD_CTYPE, ContentType, {PbContent, LeftOver}) when is_list(ContentType) -> 
-    {PbContent#rpbcontent{content_type = ContentType}, LeftOver};
-pbify_rpbcontent_entry(?MD_CHARSET, Charset, {PbContent, LeftOver}) when is_list(Charset) ->
-    {PbContent#rpbcontent{charset = Charset}, LeftOver};
-pbify_rpbcontent_entry(?MD_ENCODING, Encoding, {PbContent, LeftOver}) when is_list(Encoding) ->
-    {PbContent#rpbcontent{content_encoding = Encoding}, LeftOver};
-pbify_rpbcontent_entry(?MD_VTAG, Vtag, {PbContent, LeftOver}) when is_list(Vtag) ->
-    {PbContent#rpbcontent{vtag = Vtag}, LeftOver};
-pbify_rpbcontent_entry(?MD_LINKS, Links, {PbContent, LeftOver}) when is_list(Links) ->
-    {PbContent#rpbcontent{links = [pbify_rpblink(E) || E <- Links]}, LeftOver};
-pbify_rpbcontent_entry(?MD_LASTMOD, {MS,S,US}, {PbContent, LeftOver}) -> 
-    {PbContent#rpbcontent{last_mod = 1000000*MS+S, last_mod_usecs = US}, LeftOver};
-pbify_rpbcontent_entry(?MD_USERMETA, UserMeta, {PbContent, LeftOver}) when is_list(UserMeta) ->
-    {PbContent#rpbcontent{usermeta = [pbify_rpbpair(E) || E <- UserMeta]}, LeftOver};
-pbify_rpbcontent_entry(Key, Value, {PbContent, LeftOver}) ->
-    {PbContent, [{Key, Value} | LeftOver]}.
+pbify_rpbcontent_entry(?MD_CTYPE, ContentType, PbContent) when is_list(ContentType) -> 
+    PbContent#rpbcontent{content_type = ContentType};
+pbify_rpbcontent_entry(?MD_CHARSET, Charset, PbContent) when is_list(Charset) ->
+    PbContent#rpbcontent{charset = Charset};
+pbify_rpbcontent_entry(?MD_ENCODING, Encoding, PbContent) when is_list(Encoding) ->
+    PbContent#rpbcontent{content_encoding = Encoding};
+pbify_rpbcontent_entry(?MD_VTAG, Vtag, PbContent) when is_list(Vtag) ->
+    PbContent#rpbcontent{vtag = Vtag};
+pbify_rpbcontent_entry(?MD_LINKS, Links, PbContent) when is_list(Links) ->
+    PbContent#rpbcontent{links = [pbify_rpblink(E) || E <- Links]};
+pbify_rpbcontent_entry(?MD_LASTMOD, {MS,S,US}, PbContent) -> 
+    PbContent#rpbcontent{last_mod = 1000000*MS+S, last_mod_usecs = US};
+pbify_rpbcontent_entry(?MD_USERMETA, UserMeta, PbContent) when is_list(UserMeta) ->
+    PbContent#rpbcontent{usermeta = [pbify_rpbpair(E) || E <- UserMeta]};
+pbify_rpbcontent_entry(Key, Value, PbContent) ->
+    PbContent.
 
 %% Convert a list of rpbcontent pb messages to a list of [{MetaData,Value}] tuples
 erlify_rpbcontents(RpbContents) ->
@@ -160,14 +152,7 @@ erlify_rpbcontents(RpbContents) ->
 
 %% Convert an rpccontent pb message to an erlang {MetaData,Value} tuple
 erlify_rpbcontent(PbC) ->
-    case PbC#rpbcontent.metadata of
-        undefined ->
-            ErlMd0 = dict:new();
-        
-        PbMd ->
-            {struct, MdList} = erlify_rpbterm(PbMd), 
-            ErlMd0 = dict:from_list(MdList)
-    end,
+    ErlMd0 = dict:new(),
     case PbC#rpbcontent.content_type of
         undefined ->
             ErlMd1 = ErlMd0;
@@ -240,311 +225,6 @@ pbify_rpblink({{B,K},T}) ->
 erlify_rpblink(#rpblink{bucket = B, key = K, tag = T}) ->
     {{B,K},T}.
 
-%% Protocol bufferify bucket properties
-%%
-pbify_bucket_props(Props) ->
-    pbify_rpbterm({struct, [pbify_bucket_prop(Prop) || Prop <- Props]}).
-
-
-pbify_bucket_prop({linkfun, {modfun, Module, Function}}) ->
-    {?PB_LINKFUN, {struct, [{?PB_MOD, to_binary(Module)},
-                             {?PB_FUN, to_binary(Function)}]}};
-pbify_bucket_prop({linkfun, {qfun, _}}) ->
-    {?PB_LINKFUN, <<"qfun">>};
-pbify_bucket_prop({linkfun, {jsfun, Name}}) ->
-    {?PB_LINKFUN, {struct, [{?PB_JSFUN, to_binary(Name)}]}};
-pbify_bucket_prop({linkfun, {jsanon, {Bucket, Key}}}) ->
-    {?PB_LINKFUN, {struct, [{?PB_JSANON,
-                               {struct, [{?PB_JSBUCKET, Bucket},
-                                         {?PB_JSKEY, Key}]}}]}};
-pbify_bucket_prop({linkfun, {jsanon, Source}}) ->
-    {?PB_LINKFUN, {struct, [{?PB_JSANON, Source}]}};
-pbify_bucket_prop({chash_keyfun, {Module, Function}}) ->
-    {?PB_CHASH, {struct, [{?PB_MOD, to_binary(Module)},
-                          {?PB_FUN, to_binary(Function)}]}};
-pbify_bucket_prop({allow_mult, AllowMult}) ->
-    {?PB_ALLOW_MULT, {bool, AllowMult}};
-pbify_bucket_prop({Prop, Value}) ->
-    {list_to_binary(atom_to_list(Prop)), Value}.
-
-
-%% Erlify bucket properties
-%%
-erlify_bucket_props(RpbProps) ->
-    {struct, Props} = erlify_rpbterm(RpbProps),
-    [erlify_bucket_prop(Prop) || Prop <- Props].
-
-%% @spec erlify_bucket_prop({Property::binary(), jsonpropvalue()}) ->
-%%          {Property::atom(), erlpropvalue()}
-%% @doc The reverse of pbify_bucket_prop/1.  Converts PB representation
-%%      of bucket properties to their Erlang form.
-erlify_bucket_prop({?PB_LINKFUN, {struct, Props}}) ->
-    case {proplists:get_value(?PB_MOD, Props),
-          proplists:get_value(?PB_FUN, Props)} of
-        {Mod, Fun} when is_binary(Mod), is_binary(Fun) ->
-            {linkfun, {modfun,
-                       list_to_existing_atom(binary_to_list(Mod)),
-                       list_to_existing_atom(binary_to_list(Fun))}};
-        {undefined, undefined} ->
-            case proplists:get_value(?PB_JSFUN, Props) of
-                Name when is_binary(Name) ->
-                    {linkfun, {jsfun, Name}};
-                undefined ->
-                    case proplists:get_value(?PB_JSANON, Props) of
-                        {struct, Bkey} ->
-                            Bucket = proplists:get_value(?PB_JSBUCKET, Bkey),
-                            Key = proplists:get_value(?PB_JSKEY, Bkey),
-                            %% bomb if malformed
-                            true = is_binary(Bucket) andalso is_binary(Key),
-                            {linkfun, {jsanon, {Bucket, Key}}};
-                        Source when is_binary(Source) ->
-                            {linkfun, {jsanon, Source}}
-                    end
-            end
-    end;
-erlify_bucket_prop({?PB_CHASH, {struct, Props}}) ->
-    {chash_keyfun, {list_to_existing_atom(
-                      binary_to_list(
-                        proplists:get_value(?PB_MOD, Props))),
-                    list_to_existing_atom(
-                      binary_to_list(
-                        proplists:get_value(?PB_FUN, Props)))}};
-erlify_bucket_prop({?PB_ALLOW_MULT, Value}) ->
-    {allow_mult, any_to_bool(Value)};
-erlify_bucket_prop({Prop, Value}) ->
-    {list_to_existing_atom(binary_to_list(Prop)), Value}.
-
-%% Convert erlang tuples to RpbMapRedInput message
-pbify_mapred_input({{Bucket, Key}, Data}) ->
-    #rpbmapredinput{bucket = Bucket, key = Key, data = pbify_rpbterm(Data)};
-pbify_mapred_input({Bucket, Key}) ->
-    #rpbmapredinput{bucket = Bucket, key = Key}.
-    
-
-%% Convert RpbMapRedInput message to erlang tuple
-erlify_mapred_input(#rpbmapredinput{bucket = Bucket, key = Key, data = undefined}) ->
-    {Bucket, Key};
-erlify_mapred_input(#rpbmapredinput{bucket = Bucket, key = Key, data = PbData}) ->
-    {{Bucket, Key}, erlify_rpbterm(PbData)}.
-
-%% Convert a list of erlang phase tuple to a list of RpbMapRedPhase message
-pbify_mapred_query(Phases) ->
-    [pbify_mapred_phase(Phase) || Phase <- Phases].
-
-%% Convert an erlang phase tuple to a RpbMapRedPhase message
-pbify_mapred_phase({MR, FunTerm, Arg, Keep}) when MR =:= map; MR =:= reduce->
-    PbMapRedPhase = pbify_mapred_funterm(FunTerm),
-    PbMapRedPhase#rpbmapredphase{type = to_binary(MR),
-                                 arg = pbify_rpbterm(Arg),
-                                 keep = any_to_rpbbool(Keep)};
-pbify_mapred_phase({link, B, T, Keep}) ->
-    #rpbmapredphase{type = <<"link">>,
-                    bucket = to_binary(B),
-                    tag = to_binary(T),
-                    keep = any_to_rpbbool(Keep)}.
-
-%% Convert list of RpbMapRedPhase to list of erlang phase tuples
-erlify_mapred_query(PbQuery) ->
-    erlify_mapred_phases(PbQuery, []).
-
-%% Convert an RpbMapRedPhase to an erlang phase tuple
-erlify_mapred_phases([], ErlPhases) ->
-    {ok, lists:reverse(ErlPhases)};
-erlify_mapred_phases([#rpbmapredphase{type = <<"link">>, keep = PbKeep, 
-                                      bucket = B, tag = T} | Rest], 
-                     ErlPhases) ->
-    case {B, T} of
-        {undefined, _} ->
-            {error, "link missing bucket"};
-        {_, undefined} ->
-            {error, "link missing tag"};
-        _ ->
-            erlify_mapred_phases(Rest, [{link, maybe_underscore_atom(B), 
-                                         maybe_underscore_atom(T),
-                                         any_to_bool(PbKeep)} | ErlPhases])
-    end;
-erlify_mapred_phases([#rpbmapredphase{type = <<"map">>, keep = PbKeep, arg = PbArg}=PbPhase | Rest],
-                     ErlPhases) ->
-    case erlify_mapred_funterm(PbPhase) of
-        {ok, FunTerm} ->
-            Arg = erlify_rpbterm(PbArg),
-            erlify_mapred_phases(Rest, [{map, FunTerm, Arg, any_to_bool(PbKeep)} | ErlPhases]);
-        X ->
-            X
-    end;
-erlify_mapred_phases([#rpbmapredphase{type = <<"reduce">>, keep = PbKeep, arg = PbArg}=PbPhase | 
-                      Rest], ErlPhases) ->
-    case erlify_mapred_funterm(PbPhase) of
-        {ok, FunTerm} ->
-            Arg = erlify_rpbterm(PbArg),
-            erlify_mapred_phases(Rest, [{reduce, FunTerm, Arg, any_to_bool(PbKeep)} | ErlPhases]);
-        X ->
-            X
-    end;
-erlify_mapred_phases([#rpbmapredphase{type = Type} | _Rest], _ErlPhases) ->
-    {error, {unknown_phase_type, Type}}.
-
-%% Create an RpbMapRedPhase from a FunTerm
-pbify_mapred_funterm({jsanon, {B, K}}) ->
-    #rpbmapredphase{language = <<"javascript">>, bucket = to_binary(B), key = to_binary(K)};
-pbify_mapred_funterm({jsanon, Source}) when is_list(Source); is_binary(Source) ->
-    #rpbmapredphase{language = <<"javascript">>, source = Source};
-pbify_mapred_funterm({jsfun, Function}) ->
-    #rpbmapredphase{language = <<"javascript">>, function = to_binary(Function)};
-pbify_mapred_funterm({modfun, Module, Function}) ->
-    #rpbmapredphase{language = <<"erlang">>,  module = to_binary(Module), 
-                    function = to_binary(Function)};
-pbify_mapred_funterm({qfun, Function}) ->
-    #rpbmapredphase{language = <<"erlang">>, function = term_to_binary(Function, [compressed])}.
-    
-%% Build the FunTerm for a phase from an RpbMapRedPhase message
-erlify_mapred_funterm(Phase) ->
-    case Phase of
-        #rpbmapredphase{language = <<"javascript">>, source = undefined, bucket = B, key = K,
-                       function = undefined} when 
-              B =/= undefined, K =/= undefined ->
-            {ok, {jsanon, {B, K}}};
-        #rpbmapredphase{language = <<"javascript">>, source = Source,
-                        bucket = undefined, key = undefined} when Source =/= undefined ->
-            {ok, {jsanon, Source}};
-        #rpbmapredphase{language = <<"javascript">>, source = undefined,
-                        bucket = undefined, key = undefined, function = Function} when 
-              function =/= undefined ->
-            {ok, {jsfun, Function}};
-        #rpbmapredphase{language = <<"erlang">>, source = undefined,
-                        module = BinModule, function = BinFunc} when BinModule =/= undefined,
-                                                                     BinFunc =/= undefined ->
-            case bin_to_mod(BinModule) of
-                {error, ModReason} ->
-                    {error, ModReason};
-                {ok, Module} ->
-                    case bin_to_fun_name(BinFunc) of
-                        {error, FuncReason} ->
-                            {error, FuncReason};
-                        {ok, Function} ->
-                            {ok, {modfun, Module, Function}}
-                    end
-            end;
-        #rpbmapredphase{language = <<"erlang">>, source = undefined,
-                        module = undefined, function = Function} when Function =/= undefined ->
-            try
-                F = binary_to_term(Function),
-                true = is_function(F),
-                {ok, {qfun, F}}
-            catch
-                error:badarg ->
-                    {error, "function is not a valid erlang binary"};
-                error:{badmatch,_} ->
-                    {error, "not an external binary encoded function"}
-            end;
-        _ ->
-            {error, "cannot parse function term"}
-    end.
- 
-bin_to_mod(BinMod) when is_binary(BinMod) ->
-    bin_to_mod(binary_to_list(BinMod));
-bin_to_mod(StrMod) ->
-    File = StrMod ++ code:objfile_extension(),
-    case code:where_is_file(File) of
-        non_existing ->
-            {error, "module " ++ StrMod ++ " not found in code path"};
-        _ ->
-            %% Make sure the module is loaded so bin_to_fun_name can check for existing atoms
-            Module = list_to_atom(StrMod),
-            case code:ensure_loaded(Module) of
-                {module, Module} ->
-                    {ok, Module};
-                {error, Reason} ->
-                    {error, lists:flatten(io_lib:format("module ~p cannot be loaded: ~p", 
-                                                        [Module, Reason]))}
-            end
-    end.
-
-bin_to_fun_name(BinFunc) ->
-    try
-        {ok, list_to_existing_atom(binary_to_list(BinFunc))}
-    catch
-        error:badarg ->
-            {error, "nonexistant function name " ++ binary_to_list(BinFunc)}
-    end.
-
-
-%% Convert erlang term to RpbTerm message tree
-%% JSON-like generic mapping for sending general terms across the PB interface
-%% Uses the same {array, [term()]} and {object, [{term(),term()}]} convention
-%% as mochijson.
-
--define(RPB_TERM_INTEGER, 1).
--define(RPB_TERM_BOOLEAN, 2).
--define(RPB_TERM_STRING, 3).
--define(RPB_TERM_OBJECT, 5).
--define(RPB_TERM_ARRAY, 6).
- 
-pbify_rpbterm(undefined) ->
-    undefined;
-pbify_rpbterm(T) when is_atom(T) ->
-    #rpbterm{type = ?RPB_TERM_STRING, string_value = list_to_binary(atom_to_list(T))};
-pbify_rpbterm(T) when is_list(T) ->
-    %% treat lists as lists - encode as a binary if you want a string
-    #rpbterm{type = ?RPB_TERM_ARRAY, array_values = [pbify_rpbterm(E) || E <- T]};
-pbify_rpbterm(T) when is_binary(T) ->
-    #rpbterm{type = ?RPB_TERM_STRING, string_value = T};
-pbify_rpbterm(T) when is_integer(T) ->
-    #rpbterm{type = ?RPB_TERM_INTEGER, int_value = T};
-pbify_rpbterm({array, L}) when is_list(L) ->
-    #rpbterm{type = ?RPB_TERM_ARRAY, array_values = [pbify_rpbterm(E) || E <- L]};
-pbify_rpbterm({struct, L}) ->
-    E = [#rpbobjectentry{name = to_binary(Name), value = pbify_rpbterm(Value)} ||
-            {Name, Value} <- L],
-    #rpbterm{type = ?RPB_TERM_OBJECT, object_entries = E};
-pbify_rpbterm({bool, B}) ->
-    V = case B of true -> 1; false -> 0 end,
-    #rpbterm{type = ?RPB_TERM_BOOLEAN, int_value = V}.
-    
-%% Convert RpbTerm message to a term()
-erlify_rpbterm(#rpbterm{type = ?RPB_TERM_INTEGER, int_value = Int}) when Int =/= undefined ->
-    Int;
-erlify_rpbterm(#rpbterm{type = ?RPB_TERM_BOOLEAN, int_value = Int}) when Int =/= undefined ->
-    case Int of
-        0 ->
-            false;
-        _ ->
-            true
-    end;
-erlify_rpbterm(#rpbterm{type = ?RPB_TERM_STRING, string_value = Str}) when Str =/= undefined ->
-    binary_to_list(Str);
-erlify_rpbterm(#rpbterm{type = ?RPB_TERM_OBJECT, object_entries = undefined}) ->
-    {struct, []};
-erlify_rpbterm(#rpbterm{type = ?RPB_TERM_OBJECT, object_entries = List}) ->
-    {struct, [{Name, erlify_rpbterm(Value)} || 
-                  #rpbobjectentry{name=Name, value=Value} <- List]};
-erlify_rpbterm(#rpbterm{type = ?RPB_TERM_ARRAY, array_values = List}) ->
-    {array, [erlify_rpbterm(E) || E <- List]};
-erlify_rpbterm(undefined) ->
-    undefined.
-
-%% Convert RpbTerm message to a term() without the {object,struct, bool} stuff need
-%% to be bidirectional
-strip_rpbterm(#rpbterm{type = ?RPB_TERM_INTEGER, int_value = Int}) when Int =/= undefined ->
-    Int;
-strip_rpbterm(#rpbterm{type = ?RPB_TERM_BOOLEAN, int_value = Int}) when Int =/= undefined ->
-    case Int of
-        0 ->
-            false;
-        _ ->
-            true
-    end;
-strip_rpbterm(#rpbterm{type = ?RPB_TERM_STRING, string_value = Str}) when Str =/= undefined ->
-    binary_to_list(Str);
-strip_rpbterm(#rpbterm{type = ?RPB_TERM_OBJECT, object_entries = undefined}) ->
-    [];
-strip_rpbterm(#rpbterm{type = ?RPB_TERM_OBJECT, object_entries = List}) ->
-    [{Name, strip_rpbterm(Value)} || 
-                  #rpbobjectentry{name=Name, value=Value} <- List];
-strip_rpbterm(#rpbterm{type = ?RPB_TERM_ARRAY, array_values = List}) ->
-    [strip_rpbterm(E) || E <- List];
-strip_rpbterm(undefined) ->
-    undefined.
 
 
 %% Make sure an atom/string/binary is definitely a binary
@@ -555,23 +235,6 @@ to_binary(L) when is_list(L) ->
 to_binary(B) when is_binary(B) ->
     B.
 
-%% Try and convert to true/false atoms
-any_to_bool(V) when is_list(V) ->
-    (V == "1") orelse (V == "true") orelse (V == "TRUE");
-any_to_bool(V) when is_binary(V) ->
-    any_to_bool(binary_to_list(V));
-any_to_bool(V) when is_integer(V) ->
-    V /= 0;
-any_to_bool(V) when is_boolean(V) ->
-    V.
-
-%% Try and convert to true/false value for rpb message
-any_to_rpbbool(true) ->
-    true;
-any_to_rpbbool(N) when is_number(N), N =/= 0 ->
-    true;
-any_to_rpbbool(_) ->
-    false.
 
 %% Convert <<"_">> to '_', otherwise leaves binary alone
 maybe_underscore_atom(<<"_">>) ->
@@ -624,24 +287,8 @@ pb_test_() ->
                   MdSame = (dict:to_list(MetaData) =:= dict:to_list(MetaData2)),
                   MdSame = true,
                   Value = Value2
-              end)},
-      {"mapred phase encode decode",
-       ?_test(begin
-
-                  Query = [{map, {jsanon, {<<"bucket">>, <<"key">>}}, undefined, true},
-                           {map, {jsanon, <<"source">>}, undefined, true},
-                           {map, {jsfun, <<"name">>}, undefined, true},
-                           {map, {modfun, ?MODULE, mapred_phase_encode_decode_test}, undefined, true},
-                           {map, {qfun, fun(_Arg) -> on end}, undefined, true},
-                           {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test}, 1, true},
-                           {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test},
-                            {array, [1,2,3]}, true},
-                           {reduce, {modfun, ?MODULE, mapred_phase_encode_decode_test}, 
-                            {struct, [{<<"k">>,1}]}, false},
-                           {link, <<"bucket">>, <<"tag">>, true}],
-                  {ok, Query2} = erlify_mapred_query(pbify_mapred_query(Query)),
-                  ?assertEqual(Query, Query2)
-              end)}]}.
+              end)}
+     ]}.
 
 -endif.
   
