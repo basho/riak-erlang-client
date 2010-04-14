@@ -143,7 +143,9 @@ pbify_rpbcontent_entry(?MD_LASTMOD, {MS,S,US}, PbContent) ->
     PbContent#rpbcontent{last_mod = 1000000*MS+S, last_mod_usecs = US};
 pbify_rpbcontent_entry(?MD_USERMETA, UserMeta, PbContent) when is_list(UserMeta) ->
     PbContent#rpbcontent{usermeta = [pbify_rpbpair(E) || E <- UserMeta]};
-pbify_rpbcontent_entry(Key, Value, PbContent) ->
+pbify_rpbcontent_entry(_Key, _Value, PbContent) ->
+    %% Ignore unknown metadata - need to add to RpbContent if it needs to make it
+    %% to/from the client
     PbContent.
 
 %% Convert a list of rpbcontent pb messages to a list of [{MetaData,Value}] tuples
