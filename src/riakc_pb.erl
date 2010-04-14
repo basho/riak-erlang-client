@@ -58,50 +58,45 @@ decode(MsgCode, MsgData) ->
     riakclient_pb:decode(msg_type(MsgCode), MsgData).
 
 msg_type(0) -> rpberrorresp;
-msg_type(1) -> rpbhelloreq;
-msg_type(2) -> rpbhelloresp;
-msg_type(3) -> rpbpingreq;
-msg_type(4) -> rpbpingresp;
-msg_type(5) -> rpbgetreq;
-msg_type(6) -> rpbgetresp;
-msg_type(7) -> rpbputreq;
-msg_type(8) -> rpbputresp;
-msg_type(9) -> rpbdelreq;
-msg_type(10) -> rpbdelresp;
-msg_type(11) -> rpbgetbucketpropsreq;
-msg_type(12) -> rpbgetbucketpropsresp;
-msg_type(13) -> rpbsetbucketpropsreq;
-msg_type(14) -> rpbsetbucketpropsresp;
+msg_type(1) -> rpbpingreq;
+msg_type(2) -> rpbpingresp;
+msg_type(3) -> rpbgetclientidreq;
+msg_type(4) -> rpbgetclientidresp;
+msg_type(5) -> rpbsetclientidreq;
+msg_type(6) -> rpbsetclientidresp;
+msg_type(7) -> rpbgetserverinforeq;
+msg_type(8) -> rpbgetserverinforesp;
+msg_type(9) -> rpbgetreq;
+msg_type(10) -> rpbgetresp;
+msg_type(11) -> rpbputreq;
+msg_type(12) -> rpbputresp;
+msg_type(13) -> rpbdelreq;
+msg_type(14) -> rpbdelresp;
 msg_type(15) -> rpblistbucketsreq;
 msg_type(16) -> rpblistbucketsresp;
 msg_type(17) -> rpblistkeysreq;
 msg_type(18) -> rpblistkeysresp;
-msg_type(19) -> rpbmapredreq;
-msg_type(20) -> rpbmapredresp;
 msg_type(_) -> undefined.
     
-msg_code(rpberrorresp) -> 0;
-msg_code(rpbhelloreq)  -> 1;
-msg_code(rpbhelloresp) -> 2;
-msg_code(rpbpingreq)   -> 3;
-msg_code(rpbpingresp)  -> 4;
-msg_code(rpbgetreq)    -> 5;
-msg_code(rpbgetresp)   -> 6;
-msg_code(rpbputreq)    -> 7;
-msg_code(rpbputresp)   -> 8;
-msg_code(rpbdelreq)    -> 9;
-msg_code(rpbdelresp)   -> 10;
-msg_code(rpbgetbucketpropsreq)   -> 11;
-msg_code(rpbgetbucketpropsresp)  -> 12;
-msg_code(rpbsetbucketpropsreq)   -> 13;
-msg_code(rpbsetbucketpropsresp)  -> 14;
+msg_code(rpberrorresp)           -> 0;
+msg_code(rpbpingreq)             -> 1;
+msg_code(rpbpingresp)            -> 2;
+msg_code(rpbgetclientidreq)      -> 3;
+msg_code(rpbgetclientidresp)     -> 4;
+msg_code(rpbsetclientidreq)      -> 5;
+msg_code(rpbsetclientidresp)     -> 6;
+msg_code(rpbgetserverinforeq)    -> 7;
+msg_code(rpbgetserverinforesp)   -> 8;
+msg_code(rpbgetreq)              -> 9;
+msg_code(rpbgetresp)             -> 10;
+msg_code(rpbputreq)              -> 11;
+msg_code(rpbputresp)             -> 12;
+msg_code(rpbdelreq)              -> 13;
+msg_code(rpbdelresp)             -> 14;
 msg_code(rpblistbucketsreq)      -> 15;
 msg_code(rpblistbucketsresp)     -> 16;
 msg_code(rpblistkeysreq)         -> 17;
-msg_code(rpblistkeysresp)        -> 18;
-msg_code(rpbmapredreq)           -> 19;
-msg_code(rpbmapredresp)          -> 20.
-    
+msg_code(rpblistkeysresp)        -> 18.
 
 %% ===================================================================
 %% Encoding/Decoding

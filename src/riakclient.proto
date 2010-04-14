@@ -51,45 +51,37 @@
 **   The client should be prepared to handle messages without any pbmsg
 **   (i.e. length==1) for requests like ping or a put without return_body set.
 **   
-** 
+**   RpbGetClientIdReq -> RpbGetClientIdResp
+**   RpbSetClientIdReq -> RpbSetClientIdResp
+**   RpbGetServerInfoReq -> RpbGetServerInfoResp
 **   RpbPingReq -> RpbPingResp
 **   RpbGetReq -> RpbErrorResp | RbpGetResp
 **   RpbPutReq -> RpbErrorResp | RpbPutResp
 **   RpbDelReq -> RpbErrorResp | RpbDelResp
-**   RpbGetBucketPropsReq -> RpbErrorResp | RpbGetBucketPropsResp
-**   RpbSetBucketPropsReq -> RpbErrorResp | RpbSetBucketPropsResp
 **   RpbListBucketsReq -> RpbErrorResp | RpbListBucketsResp{1,}
 **   RpbListKeysReq -> RpbErrorResp | RpbListKeysResp{1,}
-**   RpbMapRedReq -> RpbErrorResp | RpbMapRedResp{1,}
 **
 **
 ** Message Codes
 **  0 - RpbErrorResp
-**  1 - RpbGetClientIdReq
-**  2 - RpbGetClientIdResp
-**  3 - RpbSetClientIdReq
-**  4 - RpbSetClientIdResp
-**  5 - RpbGetServerInfoReq
-**  6 - RpbGetServerInfoResp
-**  7 - RpbHelloResp
-**  8 - RpbPingReq - 0 length
-**  9 - RpbPingResp (pong) - 0 length
-** 10 - RpbGetReq 
-** 11 - RpbGetResp
-** 12 - RpbPutReq 
-** 13 - RpbPutResp - 0 length
-** 14 - RpbDelReq 
-** 15 - RpbDelResp
-** 16 - RpbListBucketsReq
-** 17 - RpbListBucketsResp{1,}
-** 18 - RpbListKeysReq
-** 19 - RpbListKeysResp{1,}
-** 20 - RpbGetBucketPropsReq
-** 21 - RpbGetBucketPropsResp
-** 22 - RpbSetBucketPropsReq
-** 23 - RpbSetBucketPropsResp
-** 24 - RpbMapRedReq
-** 25 - RpbMapRedResp{1,}
+**  1 - RpbPingReq - 0 length
+**  2 - RpbPingResp (pong) - 0 length
+**  3 - RpbGetClientIdReq
+**  4 - RpbGetClientIdResp
+**  5 - RpbSetClientIdReq
+**  6 - RpbSetClientIdResp
+**  7 - RpbGetServerInfoReq
+**  8 - RpbGetServerInfoResp
+**  9 - RpbGetReq 
+** 10 - RpbGetResp
+** 11 - RpbPutReq 
+** 12 - RpbPutResp - 0 length
+** 13 - RpbDelReq 
+** 14 - RpbDelResp
+** 15 - RpbListBucketsReq
+** 16 - RpbListBucketsResp{1,}
+** 17 - RpbListKeysReq
+** 18 - RpbListKeysResp{1,}
 **
 */
 
