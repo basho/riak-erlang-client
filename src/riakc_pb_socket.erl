@@ -106,7 +106,7 @@ get(Pid, Bucket, Key) ->
 -spec get(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> 
                  {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key, Options) ->
-    Req = #rpbgetreq{bucket = Bucket, key = Key, options = riakc_pb:pbify_rpboptions(Options)},
+    Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req}).
 
 %% @doc Put the metadata/value in the object under bucket/key
@@ -120,12 +120,13 @@ put(Pid, Obj) ->
 %%      [{return_body, true}] returns the updated metadata/value
 -spec put(pid(), riakc_obj(), riak_pbc_options()) -> ok | {ok, riakc_obj()} | {error, term()}.
 put(Pid, Obj, Options) ->
-    Req = #rpbputreq{bucket = riakc_obj:bucket(Obj), 
-                     key = riakc_obj:key(Obj),
-                     vclock = riakc_obj:vclock(Obj),
-                     content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
-                                                          riakc_obj:get_update_value(Obj)}),
-                     options = riakc_pb:pbify_rpboptions(Options)},
+    Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
+                                         riakc_obj:get_update_value(Obj)}),
+    Req = put_options(Options,
+                      #rpbputreq{bucket = riakc_obj:bucket(Obj), 
+                                 key = riakc_obj:key(Obj),
+                                 vclock = riakc_obj:vclock(Obj),
+                                 content = Content}),
     gen_server:call(Pid, {req, Req}).
  
 %% @doc Delete the key/value
@@ -135,9 +136,10 @@ delete(Pid, Bucket, Key) ->
 
 %% @doc Delete the key/value with options
 %%      [{rw,2}] sets rw=2
--spec delete(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> ok | {error, term()}.
+-spec delete(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> 
+                    ok | {error, term()}.
 delete(Pid, Bucket, Key, Options) ->
-    Req = #rpbdelreq{bucket = Bucket, key = Key, options = riakc_pb:pbify_rpboptions(Options)},
+    Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req}).
 
 %% @doc List all buckets on the server
@@ -243,6 +245,28 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% internal functions
 %% ====================================================================
  
+get_options([], Req) ->
+    Req;
+get_options([{r, R} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{r = R}).
+
+put_options([], Req) ->
+    Req;
+put_options([{w, W} | Rest], Req) ->
+    get_options(Rest, Req#rpbputreq{w = W});
+put_options([{dw, DW} | Rest], Req) ->
+    get_options(Rest, Req#rpbputreq{dw = DW});
+put_options([return_body | Rest], Req) ->
+    get_options(Rest, Req#rpbputreq{return_body = 1});
+put_options([{return_body, Flag} | Rest], Req) ->
+    get_options(Rest, Req#rpbputreq{return_body = riakc_pb:pbify_bool(Flag)}).
+
+delete_options([], Req) ->
+    Req;
+delete_options([{rw, RW} | Rest], Req) ->
+    get_options(Rest, Req#rpbdelreq{rw = RW}).
+
+
 %% Process response from the server - passes back in the request and 
 %% context the request was issued with.
 %% Return noreply if the request is completed, but no reply needed

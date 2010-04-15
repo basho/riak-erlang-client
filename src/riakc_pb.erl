@@ -102,17 +102,6 @@ msg_code(rpblistkeysresp)        -> 18.
 %% Encoding/Decoding
 %% ===================================================================
     
-%% Convert options to protocol buffers
-pbify_rpboptions(undefined) ->
-    undefined;
-pbify_rpboptions(Options) ->
-   pbify_rpboptions(Options, #rpboptions{}).
-
-pbify_rpboptions([], RpbOpts) ->
-    RpbOpts;
-pbify_rpboptions([return_body|Rest], RpbOpts) ->
-    pbify_rpboptions(Rest, RpbOpts#rpboptions{return_body = true}).
-
 %% Convert a list of {MetaData,Value} pairs to protocol buffers
 pbify_rpbcontents([], Acc) ->
     lists:reverse(Acc);
@@ -222,7 +211,18 @@ pbify_rpblink({{B,K},T}) ->
 erlify_rpblink(#rpblink{bucket = B, key = K, tag = T}) ->
     {{B,K},T}.
 
-
+%% Convert a true/false, 1/0 etc to a 1/0 for protocol buffers bool
+pbify_bool(true) ->
+    1;
+pbify_bool(false) ->
+    0;
+pbify_bool(N) when is_integer(N) ->
+    case N =:= 0 of
+        true ->
+            1;
+        false ->
+            0
+    end.
 
 %% Make sure an atom/string/binary is definitely a binary
 to_binary(A) when is_atom(A) ->
