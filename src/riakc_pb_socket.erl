@@ -27,8 +27,10 @@
 -behaviour(gen_server).
 
 -export([start_link/2,
-         start/2, start/3,
+         start/2,
          ping/1,
+         get_client_id/1,
+         set_client_id/2,
          get/3, get/4,
          put/2, put/3,
          delete/3, delete/4,
@@ -70,16 +72,20 @@ start_link(Address, Port) ->
 start(Address, Port) ->
     gen_server:start(?MODULE, [Address, Port], []).
 
-%% @doc Create a process to talk with the riak server on Address:Port
-%%      with the specified client id
--spec start(address(), portnum(), client_id()) -> {ok, pid()} | {error, term()}.
-start(Address, Port, ClientId) ->
-    gen_server:start(?MODULE, [Address, Port, ClientId], []).
-
 %% @doc Ping the server
 -spec ping(pid()) -> ok | {error, term()}.
 ping(Pid) ->
     gen_server:call(Pid, {req, rpbpingreq}).
+
+%% @doc Get the client id for this connection
+-spec get_client_id(pid()) -> {ok, client_id()} | {error, term()}.
+get_client_id(Pid) ->
+    gen_server:call(Pid, {req, rpbgetclientidreq}).
+
+%% @doc Set the client id for this connection
+-spec set_client_id(pid(), client_id()) -> {ok, client_id()} | {error, term()}.
+set_client_id(Pid, ClientId) ->
+    gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}}).
 
 %% @doc Get bucket/key from the server 
 %%      Will return {error, notfound} if the key is not on the server
@@ -241,7 +247,12 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
                               {pending, #state{}}.
 process_response(rpbpingreq, _Ctx, rpbpingresp, State) ->
     {reply, ok, State};
-
+process_response(rpbgetclientidreq, undefined, 
+                 #rpbgetclientidresp{client_id = ClientId}, State) ->
+    {reply, {ok, ClientId}, State};
+process_response(#rpbsetclientidreq{}, undefined, 
+                 rpbsetclientidresp, State) ->
+    {reply, ok, State};
 process_response(#rpbgetreq{}, undefined, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};
@@ -431,7 +442,17 @@ pb_socket_test_() ->
      end}}.
 
 live_node_tests() ->
-    [{"get_should_read_put_test()", 
+    [{"set client id", ?_test(
+                          begin
+                              {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                              {ok, <<OrigId:32>>} = ?MODULE:get_client_id(Pid),
+                              
+                              NewId = <<(OrigId+1):32>>,
+                              ok = ?MODULE:set_client_id(Pid, NewId),
+                              {ok, NewId} = ?MODULE:get_client_id(Pid)
+                          end)},
+
+     {"get_should_read_put_test()", 
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
