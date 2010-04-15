@@ -103,7 +103,7 @@ message RpbSetClientIdReq {
 
 // Get server info request - no message defined, just send RpbGetServerInfoReq message code
 
-message RpbServerInfoResp {
+message RpbGetServerInfoResp {
     optional bytes node = 1;
     optional bytes server_version = 2;
 }

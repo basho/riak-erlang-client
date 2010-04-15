@@ -31,6 +31,7 @@
          ping/1,
          get_client_id/1,
          set_client_id/2,
+         get_server_info/1,
          get/3, get/4,
          put/2, put/3,
          delete/3, delete/4,
@@ -59,6 +60,8 @@
 -type rpb_req() :: tuple().
 -type ctx() :: any().
 -type rpb_resp() :: tuple().
+-type server_prop() :: {node, binary()} | {server_version, binary()}.
+-type server_info() :: [server_prop()].
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
@@ -86,6 +89,11 @@ get_client_id(Pid) ->
 -spec set_client_id(pid(), client_id()) -> {ok, client_id()} | {error, term()}.
 set_client_id(Pid, ClientId) ->
     gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}}).
+
+%% @doc Get the server information for this connection
+-spec get_server_info(pid()) -> {ok, server_info()} | {error, term()}.
+get_server_info(Pid) ->
+    gen_server:call(Pid, {req, rpbgetserverinforeq}).
 
 %% @doc Get bucket/key from the server 
 %%      Will return {error, notfound} if the key is not on the server
@@ -253,6 +261,21 @@ process_response(rpbgetclientidreq, undefined,
 process_response(#rpbsetclientidreq{}, undefined, 
                  rpbsetclientidresp, State) ->
     {reply, ok, State};
+process_response(rpbgetserverinforeq, undefined, 
+                 #rpbgetserverinforesp{node = Node, server_version = ServerVersion}, State) ->
+    case Node of
+        undefined ->
+            NodeInfo = [];
+        Node ->
+            NodeInfo = [{node, Node}]
+    end,
+    case ServerVersion of
+        undefined ->
+            VersionInfo = [];
+        ServerVersion ->
+            VersionInfo = [{server_version, ServerVersion}]
+    end,
+    {reply, {ok, NodeInfo++VersionInfo}, State};
 process_response(#rpbgetreq{}, undefined, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};
@@ -450,6 +473,13 @@ live_node_tests() ->
                               NewId = <<(OrigId+1):32>>,
                               ok = ?MODULE:set_client_id(Pid, NewId),
                               {ok, NewId} = ?MODULE:get_client_id(Pid)
+                          end)},
+
+     {"version", ?_test(
+                          begin
+                              {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                              {ok, ServerInfo} = ?MODULE:get_server_info(Pid),
+                              [{node, _}, {server_version, _}] = lists:sort(ServerInfo)
                           end)},
 
      {"get_should_read_put_test()", 
