@@ -356,7 +356,7 @@ on_error(_Req, _Ctx, ErrMsg, From) when From =/= undefined ->
 %% @private
 send_request(Req, Ctx, From, State) ->
     Pkt = riakc_pb:encode(Req),
-    ok = gen_tcp:send(State#state.sock, Pkt),
+    gen_tcp:send(State#state.sock, Pkt),
     case after_send(Req, Ctx, State) of
         {reply, Response, NewState} ->
             %% Respond after send - process_response will use an alternate mechanism
