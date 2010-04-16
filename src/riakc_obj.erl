@@ -41,6 +41,9 @@
          get_update_metadata/1,
          get_update_value/1]).
 -include("riakc_obj.hrl").
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 -type bucket() :: binary().
 -type key() :: binary().
@@ -140,7 +143,7 @@ update_metadata(Object=#riakc_obj{}, M) ->
 -spec update_content_type(#riakc_obj{}, metadata()) -> #riakc_obj{}.
 update_content_type(Object=#riakc_obj{}, CT) ->
     M1 = get_update_metadata(Object),
-    Object#riakc_obj{updatemetadata=dict:store(?MD_CTYPE, to_binary(CT), M1)}.
+    Object#riakc_obj{updatemetadata=dict:store(?MD_CTYPE, riakc_pb:to_binary(CT), M1)}.
 
 %% @doc  Set the updated value of an object to V
 -spec update_value(#riakc_obj{}, value()) -> #riakc_obj{}.
@@ -155,24 +158,101 @@ update_value(Object=#riakc_obj{}, V, CT) ->
 %% @doc  Return the updated metadata of this riakc_obj.
 -spec get_update_metadata(#riakc_obj{}) -> metadata().
 get_update_metadata(#riakc_obj{updatemetadata=UM}) -> 
-    case UM of 
-        undefined ->
-            dict:new();
-        UM ->
-            UM
-    end.
+    UM.
            
+%% @doc Return the content type of the update value
+get_update_content_type(Object=#riakc_obj{}) ->
+    UM = get_update_metadata(Object),
+    case dict:find(?MD_CTYPE, UM) of
+        error ->
+            undefined;
+        {ok, Ctype} ->
+            Ctype
+    end.
 
 %% @doc  Return the updated value of this riakc_obj.
 -spec get_update_value(#riakc_obj{}) -> value().
 get_update_value(#riakc_obj{updatevalue=UV}) -> UV.
 
+%% ===================================================================
+%% Unit Tests
+%% ===================================================================
+-ifdef(TEST).
 
-%% @private
-%% Make sure an atom/string/binary is definitely a binary
-to_binary(A) when is_atom(A) ->
-    list_to_binary(atom_to_list(A));
-to_binary(L) when is_list(L) ->
-    list_to_binary(L);
-to_binary(B) when is_binary(B) ->
-    B.
+bucket_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    ?assertEqual(<<"b">>, bucket(O)).
+
+key_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    ?assertEqual(<<"k">>, key(O)).
+
+vclock_test() ->
+    %% For internal use only
+    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>, []),
+    ?assertEqual(<<"vclock">>, vclock(O)).
+
+contents0_test() ->   
+    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>, []),
+    ?assertEqual(0, value_count(O)),
+    ?assertEqual([], get_metadatas(O)),
+    ?assertEqual([], get_values(O)),
+    ?assertEqual([], get_contents(O)),
+    ?assertError({badmatch, []}, get_metadata(O)),
+    ?assertError({badmatch, []}, get_value(O)).
+
+contents1_test() ->   
+    M1 = dict:from_list([{?MD_VTAG, "tag1"}]),
+    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>,
+                      [{M1, <<"val1">>}]),
+    ?assertEqual(1, value_count(O)),
+    ?assertEqual([M1], get_metadatas(O)),
+    ?assertEqual([<<"val1">>], get_values(O)),
+    ?assertEqual([{M1,<<"val1">>}], get_contents(O)),
+    ?assertEqual(M1, get_metadata(O)),
+    ?assertEqual(<<"val1">>, get_value(O)).
+
+contents2_test() ->   
+    M1 = dict:from_list([{?MD_VTAG, "tag1"}]),
+    M2 = dict:from_list([{?MD_VTAG, "tag1"}]),
+    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>,
+                      [{M1, <<"val1">>},
+                       {M2, <<"val2">>}]),
+    ?assertEqual(2, value_count(O)),
+    ?assertEqual([M1, M2], get_metadatas(O)),
+    ?assertEqual([<<"val1">>, <<"val2">>], get_values(O)),
+    ?assertEqual([{M1,<<"val1">>},{M2,<<"val2">>}], get_contents(O)),
+    ?assertError({badmatch, [{M1,<<"val1">>},{M2,<<"val2">>}]}, get_metadata(O)),
+    ?assertError({badmatch, [{M1,<<"val1">>},{M2,<<"val2">>}]}, get_value(O)).
+
+update_metadata_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    UM = riakc_obj:get_update_metadata(O),
+    ?assertEqual([], dict:to_list(UM)).
+
+update_value_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    ?assertEqual(undefined, get_update_value(O)),
+    O1 = riakc_obj:update_value(O, <<"v">>),
+    ?assertEqual(<<"v">>, get_update_value(O1)),
+    M1 = dict:from_list([{?MD_VTAG, "tag1"}]),
+    O2 = riakc_obj:update_metadata(O1, M1),
+    ?assertEqual(M1, get_update_metadata(O2)).
+  
+updatevalue_ct_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    ?assertEqual(undefined, get_update_value(O)),
+    O1 = riakc_obj:update_value(O, <<"v">>, <<"x-application/custom">>),
+    ?assertEqual(<<"v">>, get_update_value(O1)),
+    M1 = dict:from_list([{?MD_VTAG, "tag1"}]),
+    O2 = riakc_obj:update_metadata(O1, M1),
+    ?assertEqual(M1, get_update_metadata(O2)),
+    ?assertEqual(<<"x-application/custom">>, get_update_content_type(O1)).
+  
+update_content_type_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    undefined = get_update_content_type(O),
+    O1 = update_content_type(O, <<"application/json">>),
+    ?assertEqual(<<"application/json">>, get_update_content_type(O1)).
+
+-endif.
