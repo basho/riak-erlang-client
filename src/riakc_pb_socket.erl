@@ -36,7 +36,6 @@
          put/2, put/3,
          delete/3, delete/4,
          list_buckets/1,
-         stream_list_buckets/1,
          list_keys/2,
          stream_list_keys/2]).
 
@@ -145,19 +144,8 @@ delete(Pid, Bucket, Key, Options) ->
 %% @doc List all buckets on the server
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}. 
 list_buckets(Pid) ->
-    {ok, ReqId} = stream_list_buckets(Pid),
-    wait_for_listbuckets(ReqId, ?DEFAULT_TIMEOUT).
-
-%% @doc Stream list of buckets on the server to the calling process.  The
-%%      process receives these messages.
-%%        {ReqId, {buckets, [bucket()]}}
-%%        {ReqId, done} 
--spec stream_list_buckets(pid()) -> {ok, req_id()} | {error, term()}.
-stream_list_buckets(Pid) ->
-    ReqMsg = rpblistbucketsreq,
-    ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, {ReqId, self()}}).
-
+    gen_server:call(Pid, {req, rpblistbucketsreq}).
+ 
 %% @doc List all keys in a bucket
 -spec list_keys(pid(), bucket()) -> {ok, [key()]}.
 list_keys(Pid, Bucket) ->
@@ -278,7 +266,7 @@ delete_options([{rw, RW} | Rest], Req) ->
                               {reply, term(), #state{}} | 
                               {pending, #state{}}.
 process_response(rpbpingreq, _Ctx, rpbpingresp, State) ->
-    {reply, ok, State};
+    {reply, pong, State};
 process_response(rpbgetclientidreq, undefined, 
                  #rpbgetclientidresp{client_id = ClientId}, State) ->
     {reply, {ok, ClientId}, State};
@@ -320,21 +308,9 @@ process_response(#rpbdelreq{}, undefined, rpbdelresp, State) ->
     %% server just returned the rpbdelresp code - no message was encoded
     {reply, ok, State};
 
-process_response(rpblistbucketsreq, {ReqId, Client},
-                 #rpblistbucketsresp{done = Done, buckets = Buckets}, State) ->
-    case Buckets of
-        undefined ->
-            ok;
-        _ ->
-            Client ! {ReqId, {buckets, Buckets}}
-    end,
-    case Done of
-        1 ->
-            Client ! {ReqId, done},
-            {noreply, State};
-        _ ->
-            {pending, State}
-    end;
+process_response(rpblistbucketsreq, undefined,
+                 #rpblistbucketsresp{buckets = Buckets}, State) ->
+    {reply, {ok, Buckets}, State};
 
 process_response(#rpblistkeysreq{}, {ReqId, Client},
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
@@ -410,19 +386,6 @@ dequeue_request(State) ->
 mk_reqid() -> erlang:phash2(erlang:now()). % only has to be unique per-pid
     
 %% @private
-wait_for_listbuckets(ReqId, Timeout) ->
-    wait_for_listbuckets(ReqId,Timeout,[]).
-%% @private
-wait_for_listbuckets(ReqId,Timeout,Acc) ->
-    receive
-        {ReqId, done} -> {ok, lists:flatten(Acc)};
-        {ReqId, {buckets, Res}} -> wait_for_listbuckets(ReqId,Timeout,[Res|Acc]);
-        {ReqId, {error, Reason}} -> {error, Reason}
-    after Timeout ->
-            {error, {timeout, Acc}}
-    end.
-
-%% @private
 wait_for_listkeys(ReqId, Timeout) ->
     wait_for_listkeys(ReqId,Timeout,[]).
 %% @private
@@ -459,6 +422,16 @@ reset_riak() ->
     ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
     {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup).
 
+pause_riak_pb_sockets() ->
+    Children = supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}),
+    Pids = [Pid || {_,Pid,_,_} <- Children],
+    [rpc:call(?TEST_RIAK_NODE, sys, suspend, [Pid]) || Pid <- Pids].
+
+resume_riak_pb_sockets() ->
+    Children = supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}),
+    Pids = [Pid || {_,Pid,_,_} <- Children],
+    [rpc:call(?TEST_RIAK_NODE, sys, resume, [Pid]) || Pid <- Pids].
+
 maybe_start_network() ->
     %% Try to spin up net_kernel
     case net_kernel:start([?TEST_EUNIT_NODE]) of
@@ -470,6 +443,11 @@ maybe_start_network() ->
         X ->
             X
     end.
+
+bad_connect_test() ->
+    %% Start with an unlikely port number
+    {error, econnrefused} = start({127,0,0,1}, 65535). 
+
 
 pb_socket_test_() ->
     {setup,
@@ -489,23 +467,30 @@ pb_socket_test_() ->
      end}}.
 
 live_node_tests() ->
-    [{"set client id", ?_test(
-                          begin
-                              {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-                              {ok, <<OrigId:32>>} = ?MODULE:get_client_id(Pid),
-                              
-                              NewId = <<(OrigId+1):32>>,
-                              ok = ?MODULE:set_client_id(Pid, NewId),
-                              {ok, NewId} = ?MODULE:get_client_id(Pid)
-                          end)},
+    [{"ping", 
+      ?_test( begin
+                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                  pong = ?MODULE:ping(Pid)
+              end)},
+     {"set client id",
+      ?_test(
+         begin
+             {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+             {ok, <<OrigId:32>>} = ?MODULE:get_client_id(Pid),
+             
+             NewId = <<(OrigId+1):32>>,
+             ok = ?MODULE:set_client_id(Pid, NewId),
+             {ok, NewId} = ?MODULE:get_client_id(Pid)
+         end)},
 
-     {"version", ?_test(
-                          begin
-                              {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-                              {ok, ServerInfo} = ?MODULE:get_server_info(Pid),
-                              [{node, _}, {server_version, _}] = lists:sort(ServerInfo)
-                          end)},
-
+     {"version",
+      ?_test(
+         begin
+             {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+             {ok, ServerInfo} = ?MODULE:get_server_info(Pid),
+             [{node, _}, {server_version, _}] = lists:sort(ServerInfo)
+         end)},
+     
      {"get_should_read_put_test()", 
       ?_test(begin
                  reset_riak(),
@@ -574,7 +559,24 @@ live_node_tests() ->
                  {ok, LKs} = ?MODULE:list_keys(Pid, Bucket),
                  ?assertEqual(Ks, lists:sort(LKs))
              end)}
-    ].
+,
+
+     {"queue test",
+      ?_test(begin
+                 %% Would really like this in a nested {setup, blah} structure
+                 %% but eunit does not allow
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 pause_riak_pb_sockets(),
+                 Me = self(),
+                 %% this request will block as 
+                 spawn(fun() -> Me ! {1, ping(Pid)} end), 
+                 %% this request should be queued as socket will not be created
+                 spawn(fun() -> Me ! {2, ping(Pid)} end),
+                 resume_riak_pb_sockets(),
+                 receive {1,Ping1} -> ?assertEqual(Ping1, pong) end,
+                 receive {2,Ping2} -> ?assertEqual(Ping2, pong) end
+             end)}
+     ].
 
 -endif.
 
