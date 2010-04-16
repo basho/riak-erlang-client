@@ -241,18 +241,16 @@ get_options([{r, R} | Rest], Req) ->
 put_options([], Req) ->
     Req;
 put_options([{w, W} | Rest], Req) ->
-    get_options(Rest, Req#rpbputreq{w = W});
+    put_options(Rest, Req#rpbputreq{w = W});
 put_options([{dw, DW} | Rest], Req) ->
-    get_options(Rest, Req#rpbputreq{dw = DW});
+    put_options(Rest, Req#rpbputreq{dw = DW});
 put_options([return_body | Rest], Req) ->
-    get_options(Rest, Req#rpbputreq{return_body = 1});
-put_options([{return_body, Flag} | Rest], Req) ->
-    get_options(Rest, Req#rpbputreq{return_body = riakc_pb:pbify_bool(Flag)}).
+    put_options(Rest, Req#rpbputreq{return_body = 1}).
 
 delete_options([], Req) ->
     Req;
 delete_options([{rw, RW} | Rest], Req) ->
-    get_options(Rest, Req#rpbdelreq{rw = RW}).
+    delete_options(Rest, Req#rpbdelreq{rw = RW}).
 
 
 %% Process response from the server - passes back in the request and 
@@ -502,6 +500,17 @@ live_node_tests() ->
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
+     {"get should read put with options", 
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 O0 = riakc_obj:new(<<"b">>, <<"k">>),
+                 O = riakc_obj:update_value(O0, <<"v">>),
+                 {ok, PO} = ?MODULE:put(Pid, O, [{w, 1}, {dw, 1}, return_body]),
+                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>, [{r, 1}]),
+                 ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
+             end)},
+
      {"update_should_change_value_test()",
       ?_test(begin
                  reset_riak(),
@@ -529,6 +538,15 @@ live_node_tests() ->
                  %% Delete and check no longer found
                  ok = ?MODULE:delete(Pid, <<"b">>, <<"k">>),
                  {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"k">>)
+             end)},
+
+    {"delete missing key test",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                  %% Delete and check no longer found
+                 ok = ?MODULE:delete(Pid, <<"notabucket">>, <<"k">>, [{rw, 1}]),
+                 {error, notfound} = ?MODULE:get(Pid, <<"notabucket">>, <<"k">>)
              end)},
 
      {"list_buckets_test()",
