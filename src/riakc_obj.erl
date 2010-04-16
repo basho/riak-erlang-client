@@ -39,6 +39,7 @@
          update_value/3,
          update_content_type/2,
          get_update_metadata/1,
+         get_update_content_type/1,
          get_update_value/1]).
 -include("riakc_obj.hrl").
 -ifdef(TEST).
