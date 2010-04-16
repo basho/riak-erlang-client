@@ -138,37 +138,37 @@ erlify_rpbcontents(RpbContents) ->
 
 %% Convert an rpccontent pb message to an erlang {MetaData,Value} tuple
 erlify_rpbcontent(PbC) ->
-    ErlMd0 = dict:new(),
+    ErlMd0 = orddict:new(),
     case PbC#rpbcontent.content_type of
         undefined ->
             ErlMd1 = ErlMd0;
         ContentType ->
-            ErlMd1 = dict:store(?MD_CTYPE, binary_to_list(ContentType), ErlMd0)
+            ErlMd1 = orddict:store(?MD_CTYPE, binary_to_list(ContentType), ErlMd0)
     end,
     case PbC#rpbcontent.charset of
         undefined ->
             ErlMd2 = ErlMd1;
         Charset ->
-            ErlMd2 = dict:store(?MD_CHARSET, binary_to_list(Charset), ErlMd1)
+            ErlMd2 = orddict:store(?MD_CHARSET, binary_to_list(Charset), ErlMd1)
     end,
     case PbC#rpbcontent.content_encoding of
         undefined ->
             ErlMd3 = ErlMd2;
         Encoding ->
-            ErlMd3 = dict:store(?MD_ENCODING, binary_to_list(Encoding), ErlMd2)
+            ErlMd3 = orddict:store(?MD_ENCODING, binary_to_list(Encoding), ErlMd2)
     end,
     case PbC#rpbcontent.vtag of
         undefined ->
             ErlMd4 = ErlMd3;
         Vtag ->
-            ErlMd4 = dict:store(?MD_VTAG, binary_to_list(Vtag), ErlMd3)
+            ErlMd4 = orddict:store(?MD_VTAG, binary_to_list(Vtag), ErlMd3)
     end,
     case PbC#rpbcontent.links of
         undefined ->
             ErlMd5 = ErlMd4;
         PbLinks ->
             Links = [erlify_rpblink(E) || E <- PbLinks],
-            ErlMd5 = dict:store(?MD_LINKS, Links, ErlMd4)
+            ErlMd5 = orddict:store(?MD_LINKS, Links, ErlMd4)
     end,
     case PbC#rpbcontent.last_mod of
         undefined ->
@@ -182,17 +182,17 @@ erlify_rpbcontent(PbC) ->
             end,
             Msec = LastMod div 1000000,
             Sec = LastMod rem 1000000,
-            ErlMd6 = dict:store(?MD_LASTMOD, {Msec,Sec,Usec}, ErlMd5)
+            ErlMd6 = orddict:store(?MD_LASTMOD, {Msec,Sec,Usec}, ErlMd5)
     end,
     case PbC#rpbcontent.usermeta of
         undefined ->
             ErlMd = ErlMd6;
         PbUserMeta ->
             UserMeta = [erlify_rpbpair(E) || E <- PbUserMeta],
-            ErlMd = dict:store(?MD_USERMETA, UserMeta, ErlMd6)
+            ErlMd = orddict:store(?MD_USERMETA, UserMeta, ErlMd6)
     end,
 
-    {ErlMd, PbC#rpbcontent.value}.
+    {dict:from_list(orddict:to_list(ErlMd)), PbC#rpbcontent.value}.
     
 
 %% Convert {K,V} tuple to protocol buffers
@@ -226,7 +226,7 @@ pbify_bool(N) when is_integer(N) ->
 
 %% Make sure an atom/string/binary is definitely a binary
 to_binary(A) when is_atom(A) ->
-    list_to_binary(atom_to_list(A));
+    atom_to_binary(A, latin1);
 to_binary(L) when is_list(L) ->
     list_to_binary(L);
 to_binary(B) when is_binary(B) ->
@@ -269,7 +269,8 @@ pb_test_() ->
                                           riakclient_pb:decode_rpbcontent(
                                             riakclient_pb:encode_rpbcontent(
                                               pbify_rpbcontent({MetaData, Value})))),
-                  MdSame = (dict:to_list(MetaData) =:= dict:to_list(MetaData2)),
+                  MdSame = (lists:sort(dict:to_list(MetaData)) =:= 
+                                lists:sort(dict:to_list(MetaData2))),
                   MdSame = true,
                   Value = Value2
               end)}
