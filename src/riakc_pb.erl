@@ -232,13 +232,6 @@ to_binary(L) when is_list(L) ->
 to_binary(B) when is_binary(B) ->
     B.
 
-
-%% Convert <<"_">> to '_', otherwise leaves binary alone
-maybe_underscore_atom(<<"_">>) ->
-    '_';
-maybe_underscore_atom(Bin) ->
-    Bin.
-
 %% ===================================================================
 %% Unit Tests
 %% ===================================================================
@@ -271,10 +264,38 @@ pb_test_() ->
                                               pbify_rpbcontent({MetaData, Value})))),
                   MdSame = (lists:sort(dict:to_list(MetaData)) =:= 
                                 lists:sort(dict:to_list(MetaData2))),
-                  MdSame = true,
+                  ?assertEqual(true, MdSame),
                   Value = Value2
+              end)},
+      {"empty content encode decode", 
+       ?_test(begin
+                  MetaData = dict:new(),
+                  Value = <<"test value">>,
+                  {MetaData2, Value2} = erlify_rpbcontent(
+                                          riakclient_pb:decode_rpbcontent(
+                                            riakclient_pb:encode_rpbcontent(
+                                              pbify_rpbcontent({MetaData, Value})))),
+                  MdSame = (lists:sort(dict:to_list(MetaData)) =:= 
+                                lists:sort(dict:to_list(MetaData2))),
+                  ?assertEqual(true, MdSame),
+                  Value = Value2
+              end)},
+      {"msg code encode decode",
+       ?_test(begin
+                  msg_code_encode_decode(0)
               end)}
-     ]}.
+     ]
+    }.
+
+
+msg_code_encode_decode(N) ->
+    case msg_type(N) of
+        undefined ->
+            ok;
+        MsgType ->
+            ?assertEqual(N, msg_code(MsgType)),
+            msg_code_encode_decode(N+1)
+    end.
 
 -endif.
   
