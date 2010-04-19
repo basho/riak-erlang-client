@@ -37,7 +37,9 @@
          delete/3, delete/4,
          list_buckets/1,
          list_keys/2,
-         stream_list_keys/2]).
+         stream_list_keys/2,
+         get_bucket/2,
+         set_bucket/3]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -61,6 +63,8 @@
 -type rpb_resp() :: tuple().
 -type server_prop() :: {node, binary()} | {server_version, binary()}.
 -type server_info() :: [server_prop()].
+-type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
+-type bucket_props() :: [bucket_prop()].
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
@@ -162,6 +166,18 @@ stream_list_keys(Pid, Bucket) ->
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, ReqMsg, {ReqId, self()}}).
 
+%% @doc Get bucket properties
+-spec get_bucket(pid(), bucket()) -> {ok, bucket_props()} | {error, term()}.
+get_bucket(Pid, Bucket) ->
+    Req = #rpbgetbucketreq{bucket = Bucket},
+    gen_server:call(Pid, {req, Req}).
+
+%% @doc Set bucket properties
+-spec set_bucket(pid(), bucket(), bucket_props()) -> ok | {error, term()}.
+set_bucket(Pid, Bucket, BucketProps) ->
+    PbProps = riakc_pb:pbify_rpbbucketprops(BucketProps),
+    Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
+    gen_server:call(Pid, {req, Req}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -324,8 +340,17 @@ process_response(#rpblistkeysreq{}, {ReqId, Client},
             {noreply, State};
         _ ->
             {pending, State}
-    end.
+    end;
 
+process_response(#rpbgetbucketreq{}, undefined,
+                 #rpbgetbucketresp{props = PbProps}, State) ->
+    Props = riakc_pb:erlify_rpbbucketprops(PbProps),
+    {reply, {ok, Props}, State};
+
+process_response(#rpbsetbucketreq{}, undefined,
+                 rpbsetbucketresp, State) ->
+    {reply, ok, State}.
+      
 %%
 %% Called after sending a message - supports returning a
 %% request id for streaming calls
@@ -414,11 +439,20 @@ wait_for_listkeys(ReqId,Timeout,Acc) ->
 
 reset_riak() ->
     ?assertEqual(ok, maybe_start_network()), 
+
     %% Until there is a good way to empty the vnodes, require the 
-    %% test to run with ETS and kill the vnode sup to empty all the ETS tables
+    %% test to run with ETS and kill the vnode master/sup to empty all the ETS tables
+    %% and the ring manager to remove any bucket properties
     ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
+
+    ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master),
     ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
-    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup).
+    ok = supervisor:terminate_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_ring_manager),
+
+    {ok, _} = supervisor:restart_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_ring_manager),
+    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
+    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master).
+    
 
 pause_riak_pb_sockets() ->
     Children = supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}),
@@ -576,9 +610,51 @@ live_node_tests() ->
                  [F(K) || K <- Ks],
                  {ok, LKs} = ?MODULE:list_keys(Pid, Bucket),
                  ?assertEqual(Ks, lists:sort(LKs))
-             end)}
-,
+             end)},
 
+     {"get bucket properties test",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Props} = get_bucket(Pid, <<"b">>),
+                 ?assertEqual([{allow_mult,false},
+                               {n_val,3}],
+                              lists:sort(Props))
+             end)},
+ 
+     {"get bucket properties test",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 ok = set_bucket(Pid, <<"b">>, [{n_val, 2}, {allow_mult, true}]),
+                 {ok, Props} = get_bucket(Pid, <<"b">>),
+                 ?assertEqual([{allow_mult,true},
+                               {n_val,2}],
+                              lists:sort(Props))
+             end)},
+ 
+     {"allow_mult should allow dupes", 
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid1} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid2} = start_link(?TEST_IP, ?TEST_PORT),
+                 ok = set_bucket(Pid1, <<"multibucket">>, [{allow_mult, true}]),
+                 ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>),
+                 {error, notfound} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 O = riakc_obj:new(<<"multibucket">>, <<"foo">>),
+                 O1 = riakc_obj:update_value(O, <<"pid1">>),
+                 O2 = riakc_obj:update_value(O, <<"pid2">>),
+                 ok = ?MODULE:put(Pid1, O1),
+                 ok = ?MODULE:put(Pid2, O2),
+                 {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
+                 O4 = riakc_obj:update_value(O3, <<"resolved">>),
+                 ok = ?MODULE:put(Pid1, O4),
+                 {ok, GO} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
+                 ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>)
+             end)},
+    
      {"queue test",
       ?_test(begin
                  %% Would really like this in a nested {setup, blah} structure
