@@ -432,6 +432,7 @@ resume_riak_pb_sockets() ->
 
 maybe_start_network() ->
     %% Try to spin up net_kernel
+    os:cmd("epmd -daemon"),
     case net_kernel:start([?TEST_EUNIT_NODE]) of
         {ok, _} ->
             erlang:set_cookie(?TEST_RIAK_NODE, ?TEST_COOKIE),
