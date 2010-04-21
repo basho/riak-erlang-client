@@ -292,7 +292,7 @@ process_response(#rpbgetreq{}, undefined, rpbgetresp, State) ->
 process_response(#rpbgetreq{bucket = Bucket, key = Key}, _Ctx, 
                  #rpbgetresp{content = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
-    {reply, {ok, riakc_obj:new(Bucket, Key, Vclock, Contents)}, State};
+    {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
 
 process_response(#rpbputreq{}, undefined, rpbputresp, State) ->
     %% server just returned the rpbputresp code - no message was encoded
@@ -300,7 +300,7 @@ process_response(#rpbputreq{}, undefined, rpbputresp, State) ->
 process_response(#rpbputreq{bucket = Bucket, key = Key}, _Ctx, 
                  #rpbputresp{contents = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
-    {reply, {ok, riakc_obj:new(Bucket, Key, Vclock, Contents)}, State};
+    {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
 
 process_response(#rpbdelreq{}, undefined, rpbdelresp, State) ->
     %% server just returned the rpbdelresp code - no message was encoded
@@ -457,11 +457,11 @@ pb_socket_test_() ->
      end,
      {generator, 
      fun() ->
-             case net_adm:ping(?TEST_RIAK_NODE) of
-                 pang ->
-                     []; %% {skipped, need_live_server};
+             case catch net_adm:ping(?TEST_RIAK_NODE) of
                  pong ->
-                     live_node_tests()
+                     live_node_tests();
+                 _ ->
+                     [] %% {skipped, need_live_server};
              end
      end}}.
 
