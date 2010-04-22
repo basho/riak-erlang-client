@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% riakc_obj: container for Riak data and metadata
+%% riakc_obj: Container for Riak data and metadata
 %%
 %% Copyright (c) 2007-2010 Basho Technologies, Inc.  All Rights Reserved.
 %%
@@ -20,7 +20,10 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc container for Riak data and metadata required to use protocol buffer interface
+%% @doc riakc_obj is used to wrap bucket/key/value data sent to the
+%%                server on put and received on get.  It provides
+%%                accessors for retrieving the data and metadata
+%%                and copes with siblings if multiple values are allowed.
 
 
 -module(riakc_obj).
@@ -59,7 +62,6 @@
 -type value() :: binary().
 -type contents() :: [{metadata(), value()}].
 
-%% @type riakc_obj().  Opaque container for Riak objects.
 -record(riakc_obj, {
           bucket :: bucket(),
           key :: key(),
