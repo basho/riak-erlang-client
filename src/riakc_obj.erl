@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% riakc_obj: container for Riak data and metadata
+%% riakc_obj: Container for Riak data and metadata
 %%
 %% Copyright (c) 2007-2010 Basho Technologies, Inc.  All Rights Reserved.
 %%
@@ -20,11 +20,15 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc container for Riak data and metadata required to use protocol buffer interface
+%% @doc riakc_obj is used to wrap bucket/key/value data sent to the
+%%                server on put and received on get.  It provides
+%%                accessors for retrieving the data and metadata
+%%                and copes with siblings if multiple values are allowed.
 
 
 -module(riakc_obj).
--export([new/2, new/4,
+-export([new/2, new/3, new/4,
+         new_obj/4,
          bucket/1,
          key/1,
          vclock/1,
@@ -32,6 +36,8 @@
          get_contents/1,
          get_metadata/1,
          get_metadatas/1,
+         get_content_type/1,
+         get_content_types/1,
          get_value/1,
          get_values/1,
          update_metadata/2,
@@ -40,7 +46,9 @@
          update_content_type/2,
          get_update_metadata/1,
          get_update_content_type/1,
-         get_update_value/1]).
+         get_update_value/1,
+         md_ctype/1
+        ]).
 -include("riakc_obj.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -51,10 +59,9 @@
 -type vclock() :: binary().
 -type metadata() :: dict().
 -type content_type() :: binary().
--type value() :: term().
+-type value() :: binary().
 -type contents() :: [{metadata(), value()}].
 
-%% @type riakc_obj().  Opaque container for Riak objects.
 -record(riakc_obj, {
           bucket :: bucket(),
           key :: key(),
@@ -73,13 +80,25 @@
 new(Bucket, Key) ->
     #riakc_obj{bucket = Bucket, key = Key}.
 
+%% @doc Constructor for new riak client objects with an update value
+-spec new(bucket(), key(), value()) -> #riakc_obj{}.
+new(Bucket, Key, Value) ->
+    #riakc_obj{bucket = Bucket, key = Key, updatevalue = Value}.
+
+%% @doc Constructor for new riak client objects with an update value
+-spec new(bucket(), key(), value(), content_type()) -> #riakc_obj{}.
+new(Bucket, Key, Value, ContentType) ->
+    O = #riakc_obj{bucket = Bucket, key = Key, updatevalue = Value},
+    update_content_type(O, ContentType).
+
+
 %% @doc  INTERNAL USE ONLY.  Set the contents of riak_object to the
 %%       {Metadata, Value} pairs in MVs. Normal clients should use the
 %%       set_update_[value|metadata]() + apply_updates() method for changing
 %%       object contents.
 %% @private
--spec new(bucket(), key(), vclock(), contents()) -> #riakc_obj{}.
-new(Bucket, Key, Vclock, Contents) ->
+-spec new_obj(bucket(), key(), vclock(), contents()) -> #riakc_obj{}.
+new_obj(Bucket, Key, Vclock, Contents) ->
     #riakc_obj{bucket = Bucket, key = Key, vclock = Vclock, contents = Contents}.
 
 %% @doc Return the containing bucket for this riakc_obj.
@@ -122,6 +141,19 @@ get_metadata(O=#riakc_obj{}) ->
 get_metadatas(#riakc_obj{contents=Contents}) ->
     [M || {M,_V} <- Contents].
 
+%% @doc Return the content type of the value if there are no siblings
+-spec get_content_type(#riakc_obj{}) -> content_type().
+get_content_type(Object=#riakc_obj{}) ->
+    UM = get_metadata(Object),
+    md_ctype(UM).
+
+%% @doc Return a list of content types for all siblings
+-spec get_content_types(#riakc_obj{}) -> [content_type()].
+get_content_types(Object=#riakc_obj{}) ->
+    F = fun({M,_}) -> md_ctype(M) end,
+    [F(C) || C<- get_contents(Object)].
+    
+
 %% @doc  Assert that this riakc_obj has no siblings and return its associated
 %%       value.  This function will fail with a badmatch error if the object
 %%       has siblings (value_count() > 1).
@@ -159,21 +191,31 @@ update_value(Object=#riakc_obj{}, V, CT) ->
 %% @doc  Return the updated metadata of this riakc_obj.
 -spec get_update_metadata(#riakc_obj{}) -> metadata().
 get_update_metadata(#riakc_obj{updatemetadata=UM}) -> 
-    UM.
+    case UM of 
+        undefined ->
+            dict:new();
+        UM ->
+            UM
+    end.
            
 %% @doc Return the content type of the update value
 get_update_content_type(Object=#riakc_obj{}) ->
     UM = get_update_metadata(Object),
-    case dict:find(?MD_CTYPE, UM) of
+    md_ctype(UM).
+
+%% @doc  Return the updated value of this riakc_obj.
+-spec get_update_value(#riakc_obj{}) -> value().
+get_update_value(#riakc_obj{updatevalue=UV}) -> UV.
+
+%% @doc  Return the content type from metadata
+-spec md_ctype(dict()) -> undefined | content_type().
+md_ctype(MetaData) ->
+    case dict:find(?MD_CTYPE, MetaData) of
         error ->
             undefined;
         {ok, Ctype} ->
             Ctype
     end.
-
-%% @doc  Return the updated value of this riakc_obj.
--spec get_update_value(#riakc_obj{}) -> value().
-get_update_value(#riakc_obj{updatevalue=UV}) -> UV.
 
 %% ===================================================================
 %% Unit Tests
@@ -190,11 +232,11 @@ key_test() ->
 
 vclock_test() ->
     %% For internal use only
-    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>, []),
+    O = riakc_obj:new_obj(<<"b">>, <<"k">>, <<"vclock">>, []),
     ?assertEqual(<<"vclock">>, vclock(O)).
 
 contents0_test() ->   
-    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>, []),
+    O = riakc_obj:new_obj(<<"b">>, <<"k">>, <<"vclock">>, []),
     ?assertEqual(0, value_count(O)),
     ?assertEqual([], get_metadatas(O)),
     ?assertEqual([], get_values(O)),
@@ -204,7 +246,7 @@ contents0_test() ->
 
 contents1_test() ->   
     M1 = dict:from_list([{?MD_VTAG, "tag1"}]),
-    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>,
+    O = riakc_obj:new_obj(<<"b">>, <<"k">>, <<"vclock">>,
                       [{M1, <<"val1">>}]),
     ?assertEqual(1, value_count(O)),
     ?assertEqual([M1], get_metadatas(O)),
@@ -216,7 +258,7 @@ contents1_test() ->
 contents2_test() ->   
     M1 = dict:from_list([{?MD_VTAG, "tag1"}]),
     M2 = dict:from_list([{?MD_VTAG, "tag1"}]),
-    O = riakc_obj:new(<<"b">>, <<"k">>, <<"vclock">>,
+    O = riakc_obj:new_obj(<<"b">>, <<"k">>, <<"vclock">>,
                       [{M1, <<"val1">>},
                        {M2, <<"val2">>}]),
     ?assertEqual(2, value_count(O)),
