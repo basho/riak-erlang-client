@@ -87,6 +87,8 @@
 ** 20 - RpbGetBucketResp
 ** 21 - RpbSetBucketReq
 ** 22 - RpbSetBucketResp
+** 23 - RpbMapRedReq
+** 24 - RpbMapRedResp
 **
 */
 
