@@ -39,7 +39,11 @@
          list_keys/2,
          stream_list_keys/2,
          get_bucket/2,
-         set_bucket/3]).
+         set_bucket/3,
+         mapred/3, mapred/4,
+         mapred_stream/5,
+         mapred_bucket/3, mapred_bucket/4,
+         mapred_bucket_stream/5]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -178,6 +182,94 @@ set_bucket(Pid, Bucket, BucketProps) ->
     PbProps = riakc_pb:pbify_rpbbucketprops(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
     gen_server:call(Pid, {req, Req}).
+
+%% @spec mapred(Inputs :: list(),
+%%              Query :: [riak_kv_mapred_query:mapred_queryterm()]) ->
+%%       {ok, riak_kv_mapred_query:mapred_result()} |
+%%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
+%%       {error, timeout} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+%% @equiv mapred(Inputs, Query, default_timeout())
+mapred(Pid, Inputs, Query) -> 
+    mapred(Pid, Inputs, Query, ?DEFAULT_TIMEOUT).
+
+%% @spec mapred(Inputs :: list(),
+%%              Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%              TimeoutMillisecs :: integer()  | 'infinity') ->
+%%       {ok, riak_kv_mapred_query:mapred_result()} |
+%%       {error, timeout} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred(Pid, Inputs, Query, Timeout) ->
+    {ok, ReqId} = mapred_stream(Pid, Inputs, Query, self(), Timeout),
+    wait_for_mapred(ReqId, Timeout).
+
+%% @spec mapred_stream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid()) ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a streaming map/reduce job across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+%% mapred_stream(Pid, Query, ClientPid) ->
+%%     mapred_stream(Pid, Query, ClientPid,?DEFAULT_TIMEOUT).
+
+%% @spec mapred_stream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a streaming map/reduce job with a timeout across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
+    MapRed = [{'inputs', Inputs},
+              {'query', Query},
+              {'timeout', Timeout}],
+    send_mapred_req(Pid, MapRed, ClientPid).
+    
+%% @spec mapred_bucket(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job against a bucket with a timeout 
+%%      across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred_bucket(Pid, Bucket, Query) ->
+    mapred_bucket(Pid, Bucket, Query, ?DEFAULT_TIMEOUT).
+
+%% @spec mapred_bucket_tream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a map/reduce job against a bucket with a timeout 
+%%      across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred_bucket(Pid, Bucket, Query, Timeout) ->
+    {ok, ReqId} = mapred_bucket_stream(Pid, Bucket, Query, self(), Timeout),
+    wait_for_mapred(ReqId, Timeout).
+
+%% @spec mapred_bucket_stream(Pid :: pid(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                     ClientPid :: pid(),
+%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
+%%       {error, Err :: term()}
+%% @doc Perform a streaming map/reduce job against a bucket with a timeout 
+%%      across the cluster.
+%%      See the map/reduce documentation for explanation of behavior.
+mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
+    MapRed = [{'inputs', Bucket},
+              {'query', Query},
+              {'timeout', Timeout}],
+    send_mapred_req(Pid, MapRed, ClientPid).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -349,7 +441,24 @@ process_response(#rpbgetbucketreq{}, undefined,
 
 process_response(#rpbsetbucketreq{}, undefined,
                  rpbsetbucketresp, State) ->
-    {reply, ok, State}.
+    {reply, ok, State};
+
+process_response(#rpbmapredreq{content_type = ContentType}, {ReqId, Client},
+                 #rpbmapredresp{done = Done, phase=PhaseId, response=Data}, State) ->
+    case Data of
+        undefined ->
+            ok;
+        _ ->
+            Response = decode_mapred_resp(Data, ContentType),
+            Client ! {ReqId, {mapred, PhaseId, Response}}
+    end,
+    case Done of
+        1 ->
+            Client ! {ReqId, done},
+            {noreply, State};
+        _ ->
+            {pending, State}
+    end.
       
 %%
 %% Called after sending a message - supports returning a
@@ -358,6 +467,8 @@ process_response(#rpbsetbucketreq{}, undefined,
 after_send(#rpblistkeysreq{}, {ReqId, _Client}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(rpblistbucketsreq, {ReqId, _Client}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#rpbmapredreq{}, {ReqId, _Client}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(_Req, _Ctx, State) ->
     {noreply, State}.
@@ -370,10 +481,20 @@ on_error(#rpblistkeysreq{}, {ReqId, Client},  ErrMsg, undefined) ->
     Client ! { ReqId, {error, ErrMsg}};
 on_error(rpblistbucketsreq, {ReqId, Client}, ErrMsg, undefined) ->
     Client ! { ReqId, {error, ErrMsg}};
+on_error(#rpbmapredreq{}, {ReqId, Client}, ErrMsg, undefined) ->
+    Client ! { ReqId, {error, ErrMsg}};
 on_error(_Req, _Ctx, ErrMsg, From) when From =/= undefined ->
     gen_server:reply(From, {error, ErrMsg}).
 %% deliberately crash if the handling an error response after
 %% the client has been replied to
+
+%% Common code for sending a single bucket or multiple inputs map/request
+%% @private
+send_mapred_req(Pid, MapRed, ClientPid) ->
+    ReqMsg = #rpbmapredreq{request = encode_mapred_req(MapRed),
+                           content_type = <<"application/x-erlang-binary">>},
+    ReqId = mk_reqid(),
+    gen_server:call(Pid, {req, ReqMsg, {ReqId, ClientPid}}).
 
 %% Send a request to the server and prepare the state for the response
 %% @private
@@ -419,6 +540,37 @@ wait_for_listkeys(ReqId,Timeout,Acc) ->
         {ReqId, {error, Reason}} -> {error, Reason}
     after Timeout ->
             {error, {timeout, Acc}}
+    end.
+
+
+%% @private
+wait_for_mapred(ReqId, Timeout) ->
+    wait_for_mapred(ReqId,Timeout,orddict:new()).
+%% @private
+wait_for_mapred(ReqId, Timeout, Acc) ->
+    receive
+        {ReqId, done} -> {ok, orddict:to_list(Acc)};
+        {ReqId, {mapred,Phase,Res}} -> 
+            wait_for_listkeys(ReqId,Timeout,orddict:append_list(Phase,Res,Acc));
+        {ReqId, {error, Reason}} -> {error, Reason}
+    after Timeout ->
+            {error, {timeout, orddict:to_list(Acc)}}
+    end.
+
+
+%% Encode the map/reduce request using term to binary
+%% @private
+encode_mapred_req(Req) ->
+    term_to_binary(Req).
+
+%% Decode a partial phase response 
+%% @private
+decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
+    try
+        binary_to_term(Data)
+    catch
+        _:Error -> % On error, merge in with the other results
+            [{error, Error}]
     end.
 
 %% ====================================================================
@@ -670,7 +822,146 @@ live_node_tests() ->
                  resume_riak_pb_sockets(),
                  receive {1,Ping1} -> ?assertEqual(Ping1, pong) end,
                  receive {2,Ping2} -> ?assertEqual(Ping2, pong) end
+             end)},
+
+     {"javascript_source_map_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 B = <<"bucket">>,
+                 K = <<"foo">>,
+                 O=riakc_obj:new(B, K),
+                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
+
+                 ?assertEqual({ok, [{0, [2]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{B, K}],
+                                             [{map, {jsanon, <<"function (v) { return [JSON.parse(v.values[0].data)]; }">>},
+                                               undefined, true}]))
+             end)},
+
+     {"javascript_named_map_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 B = <<"bucket">>,
+                 K = <<"foo">>,
+                 O=riakc_obj:new(B, K),
+                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"99">>, "application/json")),
+
+                 ?assertEqual({ok, [{0, [99]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{B, K}],
+                                             [{map, {jsfun, <<"Riak.mapValuesJson">>},
+                                               undefined, true}]))
+             end)},
+ 
+     {"javascript_source_map_reduce_test()", 
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
+
+                 ?assertEqual({ok, [{1, 3}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{<<"bucket">>, <<"foo">>},
+                                              {<<"bucket">>, <<"bar">>},
+                                              {<<"bucket">>, <<"baz">>}],
+                                             [{map, {jsanon, <<"function (v) { return [1]; }">>}, 
+                                               undefined, false},
+                                              {reduce, {jsanon, <<"function(v) { return v.length; } ">>}, 
+                                               undefined, true}]))
+             end)},
+
+     {"javascript_named_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
+
+                 ?assertEqual({ok, [{1, [9]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{<<"bucket">>, <<"foo">>},
+                                              {<<"bucket">>, <<"bar">>},
+                                              {<<"bucket">>, <<"baz">>}],
+                                             [{map, {jsfun, <<"Riak.mapValuesJson">>}, undefined, false},
+                                              {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
+             end)},
+
+     {"javascript_bucket_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
+
+                 ?assertEqual({ok, [{1, [9]}]},
+                              ?MODULE:mapred_bucket(Pid, <<"bucket">>,
+                                                    [{map, {jsfun, <<"Riak.mapValuesJson">>}, undefined, false},
+                                                     {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
+             end)},
+
+     {"javascript_arg_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 O=riakc_obj:new(<<"bucket">>, <<"foo">>),
+                 ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
+                 ?assertEqual({ok, [{1, [10]}]},
+                              ?MODULE:mapred(Pid, 
+                                             [{{<<"bucket">>, <<"foo">>}, 5},
+                                              {{<<"bucket">>, <<"foo">>}, 10},
+                                              {{<<"bucket">>, <<"foo">>}, 15},
+                                              {{<<"bucket">>, <<"foo">>}, -15},
+                                              {{<<"bucket">>, <<"foo">>}, -5}],
+                                             [{map, {jsanon, <<"function(v, arg) { return [arg]; }">>},
+                                               undefined, false},
+                                              {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
+             end)},
+
+     {"erlang_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Store = fun({K,V}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
+                                      {<<"bar">>, <<"3">>}, 
+                                      {<<"baz">>, <<"4">>}]],
+
+                 {ok, [{1, Results}]} = ?MODULE:mapred(Pid, 
+                                                       [{<<"bucket">>, <<"foo">>},
+                                                        {<<"bucket">>, <<"bar">>},
+                                                        {<<"bucket">>, <<"baz">>}],
+                                                       [{map, {modfun, riak_kv_mapreduce,
+                                                               map_object_value}, 
+                                                         undefined, false},
+                                                        {reduce, {modfun, riak_kv_mapreduce, 
+                                                                  reduce_set_union}, 
+                                                         undefined, true}]),
+                 ?assertEqual([<<"2">>, <<"3">>, <<"4">>], lists:sort(Results))
              end)}
+
+
      ].
 
 -endif.
