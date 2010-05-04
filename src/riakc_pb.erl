@@ -76,6 +76,12 @@ msg_type(15) -> rpblistbucketsreq;
 msg_type(16) -> rpblistbucketsresp;
 msg_type(17) -> rpblistkeysreq;
 msg_type(18) -> rpblistkeysresp;
+msg_type(19) -> rpbgetbucketreq;
+msg_type(20) -> rpbgetbucketresp;
+msg_type(21) -> rpbsetbucketreq;
+msg_type(22) -> rpbsetbucketresp;
+msg_type(23) -> rpbmapredreq;
+msg_type(24) -> rpbmapredresp;
 msg_type(_) -> undefined.
     
 msg_code(rpberrorresp)           -> 0;
@@ -96,7 +102,13 @@ msg_code(rpbdelresp)             -> 14;
 msg_code(rpblistbucketsreq)      -> 15;
 msg_code(rpblistbucketsresp)     -> 16;
 msg_code(rpblistkeysreq)         -> 17;
-msg_code(rpblistkeysresp)        -> 18.
+msg_code(rpblistkeysresp)        -> 18;
+msg_code(rpbgetbucketreq)        -> 19;
+msg_code(rpbgetbucketresp)       -> 20;
+msg_code(rpbsetbucketreq)        -> 21;
+msg_code(rpbsetbucketresp)       -> 22;
+msg_code(rpbmapredreq)           -> 23;
+msg_code(rpbmapredresp)          -> 24.
 
 %% ===================================================================
 %% Encoding/Decoding
@@ -211,18 +223,56 @@ pbify_rpblink({{B,K},T}) ->
 erlify_rpblink(#rpblink{bucket = B, key = K, tag = T}) ->
     {{B,K},T}.
 
+
+%% Convert an RpbBucketProps message to a property list
+erlify_rpbbucketprops(undefined) ->
+    [];
+erlify_rpbbucketprops(Pb) ->
+    lists:flatten(
+      [case Pb#rpbbucketprops.n_val of
+           undefined ->
+               [];
+           Nval ->
+               {n_val, Nval}
+       end,
+       case Pb#rpbbucketprops.allow_mult of
+           undefined ->
+               [];
+           Flag ->
+               {allow_mult, erlify_bool(Flag)}
+       end]).
+
+%% Convert a property list to an RpbBucketProps message
+pbify_rpbbucketprops(Props) ->
+    pbify_rpbbucketprops(Props, #rpbbucketprops{}).
+
+pbify_rpbbucketprops([], Pb) ->
+    Pb;
+pbify_rpbbucketprops([{n_val, Nval} | Rest], Pb) ->
+    pbify_rpbbucketprops(Rest, Pb#rpbbucketprops{n_val = Nval});
+pbify_rpbbucketprops([{allow_mult, Flag} | Rest], Pb) ->
+    pbify_rpbbucketprops(Rest, Pb#rpbbucketprops{allow_mult = pbify_bool(Flag)});
+pbify_rpbbucketprops([_Ignore|Rest], Pb) ->
+    %% Ignore any properties not explicitly part of the PB message
+    pbify_rpbbucketprops(Rest, Pb).
+    
 %% Convert a true/false, 1/0 etc to a 1/0 for protocol buffers bool
 pbify_bool(true) ->
-    1;
+    true;
 pbify_bool(false) ->
-    0;
+    false;
 pbify_bool(N) when is_integer(N) ->
     case N =:= 0 of
         true ->
-            1;
+            true;
         false ->
-            0
+            false
     end.
+
+erlify_bool(0) ->
+    false;
+erlify_bool(1) ->
+    true.
 
 %% Make sure an atom/string/binary is definitely a binary
 to_binary(A) when is_atom(A) ->
@@ -283,6 +333,30 @@ pb_test_() ->
       {"msg code encode decode",
        ?_test(begin
                   msg_code_encode_decode(0)
+              end)},
+      {"bucket props encode decode",
+       ?_test(begin
+                  Props = [{n_val, 99},
+                           {allow_mult, true}],
+                  Props2 = erlify_rpbbucketprops(
+                             riakclient_pb:decode_rpbbucketprops(
+                               riakclient_pb:encode_rpbbucketprops(
+                                 pbify_rpbbucketprops(Props)))),
+                  MdSame = (lists:sort(Props) =:= 
+                                lists:sort(Props2)),
+                  ?assertEqual(true, MdSame)
+              end)},
+      {"bucket props encode decode 2",
+       ?_test(begin
+                  Props = [{n_val, 33},
+                           {allow_mult, false}],
+                  Props2 = erlify_rpbbucketprops(
+                             riakclient_pb:decode_rpbbucketprops(
+                               riakclient_pb:encode_rpbbucketprops(
+                                 pbify_rpbbucketprops(Props)))),
+                  MdSame = (lists:sort(Props) =:= 
+                                lists:sort(Props2)),
+                  ?assertEqual(true, MdSame)
               end)}
      ]
     }.

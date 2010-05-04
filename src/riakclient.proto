@@ -21,7 +21,7 @@
 ** -------------------------------------------------------------------
 */
 /*
-** Revision: 1.0
+** Revision: 1.1
 **
 ** Lowest Common Denominator Protocol Buffers Client
 **   - no ENUM (protobuffs_erlang does not support)
@@ -60,6 +60,7 @@
 **   RpbDelReq -> RpbErrorResp | RpbDelResp
 **   RpbListBucketsReq -> RpbErrorResp | RpbListBucketsResp
 **   RpbListKeysReq -> RpbErrorResp | RpbListKeysResp{1,}
+**   RpbGetBucketReq -> RpbErrorResp | RpbGetBucketResp
 **
 **
 ** Message Codes
@@ -82,6 +83,12 @@
 ** 16 - RpbListBucketsResp{1,}
 ** 17 - RpbListKeysReq
 ** 18 - RpbListKeysResp{1,}
+** 19 - RpbGetBucketReq
+** 20 - RpbGetBucketResp
+** 21 - RpbSetBucketReq
+** 22 - RpbSetBucketResp
+** 23 - RpbMapRedReq
+** 24 - RpbMapRedResp
 **
 */
 
@@ -171,12 +178,30 @@ message RpbListKeysResp {
     optional bool done = 2;
 }
 
+// Get bucket properties request
+message RpbGetBucketReq {
+    required bytes bucket = 1;
+}
+
+// Get bucket properties response
+message RpbGetBucketResp {
+    required RpbBucketProps props = 1;    
+}
+
+// Set bucket properties request
+message RpbSetBucketReq {
+    required bytes bucket = 1;
+    required RpbBucketProps props = 2;
+}
+
+
+// Set bucket properties response - no message defined, just send RpbSetBucketResp
+
 
 // Map/Reduce request
 message RpbMapRedReq {
     required bytes request = 1;
     required bytes content_type = 2;
-    optional uint32 timeout = 3; // timeout for operation in milliseconds
 }
 
 // Map/Reduce response
@@ -213,4 +238,10 @@ message RpbLink {
     optional bytes bucket = 1;
     optional bytes key = 2;
     optional bytes tag = 3;
+}
+
+// Bucket properties
+message RpbBucketProps {
+    optional uint32 n_val = 1;
+    optional bool allow_mult = 2;
 }
