@@ -478,13 +478,23 @@ after_send(_Req, _Ctx, State) ->
 %% an error for streamign calls 
 %% @private
 on_error(#rpblistkeysreq{}, {ReqId, Client},  ErrMsg, undefined) ->
-    Client ! { ReqId, {error, ErrMsg}};
+    Client ! { ReqId, fmt_err_msg(ErrMsg)};
 on_error(rpblistbucketsreq, {ReqId, Client}, ErrMsg, undefined) ->
-    Client ! { ReqId, {error, ErrMsg}};
+    Client ! { ReqId, fmt_err_msg(ErrMsg)};
 on_error(#rpbmapredreq{}, {ReqId, Client}, ErrMsg, undefined) ->
-    Client ! { ReqId, {error, ErrMsg}};
+    Client ! { ReqId, fmt_err_msg(ErrMsg)};
 on_error(_Req, _Ctx, ErrMsg, From) when From =/= undefined ->
-    gen_server:reply(From, {error, ErrMsg}).
+    gen_server:reply(From, fmt_err_msg(ErrMsg)).
+
+%% Format the PB encoded error message
+fmt_err_msg(ErrMsg) ->
+    case ErrMsg#rpberrorresp.errcode of
+        Code when Code =:= 1; Code =:= undefined ->
+            {error, ErrMsg#rpberrorresp.errmsg};
+        Code ->
+            {error, {Code, ErrMsg#rpberrorresp.errmsg}}
+    end.
+        
 %% deliberately crash if the handling an error response after
 %% the client has been replied to
 
@@ -959,8 +969,36 @@ live_node_tests() ->
                                                                   reduce_set_union}, 
                                                          undefined, true}]),
                  ?assertEqual([<<"2">>, <<"3">>, <<"4">>], lists:sort(Results))
+             end)},
+     {"map reduce bad inputs",
+      ?_test(begin
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket or a list of target tuples:\",\n         undefined}}">>},
+                              ?MODULE:mapred(Pid, undefined,
+                                             [{map, {jsfun, <<"Riak.mapValuesJson">>}, 
+                                               undefined, false},
+                                              {reduce, {jsfun, <<"Riak.reduceSum">>}, 
+                                               undefined, true}]))
+             end)},
+     {"map reduce bad input keys",
+      ?_test(begin
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Res = ?MODULE:mapred(Pid, [<<"b">>], % no {B,K} tuple
+                                      [{map, {jsfun, <<"Riak.mapValuesJson">>}, 
+                                        undefined, false},
+                                       {reduce, {jsfun, <<"Riak.reduceSum">>}, 
+                                        undefined, true}]),
+                 ?assertEqual({error,<<"{inputs,{\"Inputs target tuples must be {B,K} or {{B,K},KeyData}:\",[<<\"b\">>]}}">>},
+                              Res)
+             end)},
+     {"map reduce bad query",
+      ?_test(begin
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Res = ?MODULE:mapred(Pid, [{<<"b">>,<<"k">>}], % no {B,K} tuple
+                                      undefined),
+                 ?assertEqual({error,<<"{'query',{\"Query takes a list of step tuples\",undefined}}">>},
+                              Res)
              end)}
-
 
      ].
 
