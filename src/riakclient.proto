@@ -202,7 +202,6 @@ message RpbSetBucketReq {
 message RpbMapRedReq {
     required bytes request = 1;
     required bytes content_type = 2;
-    optional uint32 timeout = 3; // timeout for operation in milliseconds
 }
 
 // Map/Reduce response
