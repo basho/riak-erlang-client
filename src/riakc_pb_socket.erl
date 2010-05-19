@@ -102,7 +102,7 @@ set_client_id(Pid, ClientId) ->
 get_server_info(Pid) ->
     gen_server:call(Pid, {req, rpbgetserverinforeq}).
 
-%% @doc Get bucket/key from the server 
+%% @doc Get bucket/key from the server
 %%      Will return {error, notfound} if the key is not on the server
 -spec get(pid(), bucket() | string(), key() | string()) -> {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key) ->
@@ -110,7 +110,7 @@ get(Pid, Bucket, Key) ->
 
 %% @doc Get bucket/key from the server supplying options
 %%      [{r, 1}] would set r=1 for the request
--spec get(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> 
+-spec get(pid(), bucket() | string(), key() | string(), riak_pbc_options()) ->
                  {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key, Options) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
@@ -130,12 +130,12 @@ put(Pid, Obj, Options) ->
     Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
                                          riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
-                      #rpbputreq{bucket = riakc_obj:bucket(Obj), 
+                      #rpbputreq{bucket = riakc_obj:bucket(Obj),
                                  key = riakc_obj:key(Obj),
                                  vclock = riakc_obj:vclock(Obj),
                                  content = Content}),
     gen_server:call(Pid, {req, Req}).
- 
+
 %% @doc Delete the key/value
 -spec delete(pid(), bucket() | string(), key() | string()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key) ->
@@ -143,17 +143,17 @@ delete(Pid, Bucket, Key) ->
 
 %% @doc Delete the key/value with options
 %%      [{rw,2}] sets rw=2
--spec delete(pid(), bucket() | string(), key() | string(), riak_pbc_options()) -> 
+-spec delete(pid(), bucket() | string(), key() | string(), riak_pbc_options()) ->
                     ok | {error, term()}.
 delete(Pid, Bucket, Key, Options) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req}).
 
 %% @doc List all buckets on the server
--spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}. 
+-spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid) ->
     gen_server:call(Pid, {req, rpblistbucketsreq}).
- 
+
 %% @doc List all keys in a bucket
 -spec list_keys(pid(), bucket()) -> {ok, [key()]}.
 list_keys(Pid, Bucket) ->
@@ -163,7 +163,7 @@ list_keys(Pid, Bucket) ->
 %% @doc Stream list of keys in the bucket to the calling process.  The
 %%      process receives these messages.
 %%        {ReqId, {keys, [key()]}}
-%%        {ReqId, done} 
+%%        {ReqId, done}
 -spec stream_list_keys(pid(), bucket()) -> {ok, req_id()} | {error, term()}.
 stream_list_keys(Pid, Bucket) ->
     ReqMsg = #rpblistkeysreq{bucket = Bucket},
@@ -192,7 +192,7 @@ set_bucket(Pid, Bucket, BucketProps) ->
 %% @doc Perform a map/reduce job across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 %% @equiv mapred(Inputs, Query, default_timeout())
-mapred(Pid, Inputs, Query) -> 
+mapred(Pid, Inputs, Query) ->
     mapred(Pid, Inputs, Query, ?DEFAULT_TIMEOUT).
 
 %% @spec mapred(Inputs :: list(),
@@ -230,14 +230,14 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
               {'query', Query},
               {'timeout', Timeout}],
     send_mapred_req(Pid, MapRed, ClientPid).
-    
+
 %% @spec mapred_bucket(Pid :: pid(),
 %%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
 %%                     ClientPid :: pid(),
 %%                     TimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
-%% @doc Perform a map/reduce job against a bucket with a timeout 
+%% @doc Perform a map/reduce job against a bucket with a timeout
 %%      across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_bucket(Pid, Bucket, Query) ->
@@ -249,7 +249,7 @@ mapred_bucket(Pid, Bucket, Query) ->
 %%                     TimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
-%% @doc Perform a map/reduce job against a bucket with a timeout 
+%% @doc Perform a map/reduce job against a bucket with a timeout
 %%      across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_bucket(Pid, Bucket, Query, Timeout) ->
@@ -262,7 +262,7 @@ mapred_bucket(Pid, Bucket, Query, Timeout) ->
 %%                     TimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
-%% @doc Perform a streaming map/reduce job against a bucket with a timeout 
+%% @doc Perform a streaming map/reduce job against a bucket with a timeout
 %%      across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
@@ -294,7 +294,7 @@ handle_call({req, Req}, From, State) ->
     {noreply, send_request(Req, undefined, From, State)};
 handle_call({req, Req, Ctx}, From, State) ->
     {noreply, send_request(Req, Ctx, From, State)}.
- 
+
 %% @private
 handle_info({tcp_closed, _Socket}, State) ->
     {stop, normal, State};
@@ -312,23 +312,23 @@ handle_info({tcp, _Socket, Data}, State=#state{sock=Sock, req = Req, ctx = Ctx, 
                     %% Send reply and get ready for the next request - send the next one if it's queued up
                     gen_server:reply(From, Response),
                     NewState = dequeue_request(NewState0#state{req = undefined, from = undefined});
-                
+
                 {noreply, NewState0} ->
                     %% Request has completed with no reply needed, send the next next one if queued up
                     NewState = dequeue_request(NewState0#state{req = undefined, from = undefined});
-                
+
                 {pending, NewState} ->
                     ok %% Request is still pending - do not queue up a new one
             end
     end,
     inet:setopts(Sock, [{active, once}]),
     {noreply, NewState};
-    
+
 handle_info(_, State) ->
     {noreply, State}.
 
 %% @private
-handle_cast(_Msg, State) -> 
+handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% @private
@@ -340,7 +340,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 %% internal functions
 %% ====================================================================
- 
+
 get_options([], Req) ->
     Req;
 get_options([{r, R} | Rest], Req) ->
@@ -361,25 +361,25 @@ delete_options([{rw, RW} | Rest], Req) ->
     delete_options(Rest, Req#rpbdelreq{rw = RW}).
 
 
-%% Process response from the server - passes back in the request and 
+%% Process response from the server - passes back in the request and
 %% context the request was issued with.
 %% Return noreply if the request is completed, but no reply needed
 %%        reply if the request is completed with a reply to the caller
 %%        pending if the request has not completed yet (streaming op)
 %% @private
 -spec process_response(rpb_req(), ctx(), rpb_resp(), #state{}) ->
-                              {noreply, #state{}} | 
-                              {reply, term(), #state{}} | 
+                              {noreply, #state{}} |
+                              {reply, term(), #state{}} |
                               {pending, #state{}}.
 process_response(rpbpingreq, _Ctx, rpbpingresp, State) ->
     {reply, pong, State};
-process_response(rpbgetclientidreq, undefined, 
+process_response(rpbgetclientidreq, undefined,
                  #rpbgetclientidresp{client_id = ClientId}, State) ->
     {reply, {ok, ClientId}, State};
-process_response(#rpbsetclientidreq{}, undefined, 
+process_response(#rpbsetclientidreq{}, undefined,
                  rpbsetclientidresp, State) ->
     {reply, ok, State};
-process_response(rpbgetserverinforeq, undefined, 
+process_response(rpbgetserverinforeq, undefined,
                  #rpbgetserverinforesp{node = Node, server_version = ServerVersion}, State) ->
     case Node of
         undefined ->
@@ -397,7 +397,7 @@ process_response(rpbgetserverinforeq, undefined,
 process_response(#rpbgetreq{}, undefined, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};
-process_response(#rpbgetreq{bucket = Bucket, key = Key}, _Ctx, 
+process_response(#rpbgetreq{bucket = Bucket, key = Key}, _Ctx,
                  #rpbgetresp{content = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
     {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
@@ -405,7 +405,7 @@ process_response(#rpbgetreq{bucket = Bucket, key = Key}, _Ctx,
 process_response(#rpbputreq{}, undefined, rpbputresp, State) ->
     %% server just returned the rpbputresp code - no message was encoded
     {reply, ok, State};
-process_response(#rpbputreq{bucket = Bucket, key = Key}, _Ctx, 
+process_response(#rpbputreq{bucket = Bucket, key = Key}, _Ctx,
                  #rpbputresp{contents = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
     {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
@@ -459,7 +459,7 @@ process_response(#rpbmapredreq{content_type = ContentType}, {ReqId, Client},
         _ ->
             {pending, State}
     end.
-      
+
 %%
 %% Called after sending a message - supports returning a
 %% request id for streaming calls
@@ -475,7 +475,7 @@ after_send(_Req, _Ctx, State) ->
 
 %%
 %% Called after receiving an error message - supports retruning
-%% an error for streamign calls 
+%% an error for streamign calls
 %% @private
 on_error(#rpblistkeysreq{}, {ReqId, Client},  ErrMsg, undefined) ->
     Client ! { ReqId, fmt_err_msg(ErrMsg)};
@@ -494,7 +494,7 @@ fmt_err_msg(ErrMsg) ->
         Code ->
             {error, {Code, ErrMsg#rpberrorresp.errmsg}}
     end.
-        
+
 %% deliberately crash if the handling an error response after
 %% the client has been replied to
 
@@ -535,10 +535,10 @@ dequeue_request(State) ->
         {{value, {Req, Ctx, From}}, Q2} ->
             send_request(Req, Ctx, From, State#state{queue = Q2})
     end.
-    
+
 %% @private
 mk_reqid() -> erlang:phash2(erlang:now()). % only has to be unique per-pid
-    
+
 %% @private
 wait_for_listkeys(ReqId, Timeout) ->
     wait_for_listkeys(ReqId,Timeout,[]).
@@ -560,7 +560,7 @@ wait_for_mapred(ReqId, Timeout) ->
 wait_for_mapred(ReqId, Timeout, Acc) ->
     receive
         {ReqId, done} -> {ok, orddict:to_list(Acc)};
-        {ReqId, {mapred,Phase,Res}} -> 
+        {ReqId, {mapred,Phase,Res}} ->
             wait_for_listkeys(ReqId,Timeout,orddict:append_list(Phase,Res,Acc));
         {ReqId, {error, Reason}} -> {error, Reason}
     after Timeout ->
@@ -573,7 +573,7 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
 encode_mapred_req(Req) ->
     term_to_binary(Req).
 
-%% Decode a partial phase response 
+%% Decode a partial phase response
 %% @private
 decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
     try
@@ -600,9 +600,9 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 -define(TEST_COOKIE, 'riak').
 
 reset_riak() ->
-    ?assertEqual(ok, maybe_start_network()), 
+    ?assertEqual(ok, maybe_start_network()),
 
-    %% Until there is a good way to empty the vnodes, require the 
+    %% Until there is a good way to empty the vnodes, require the
     %% test to run with ETS and kill the vnode master/sup to empty all the ETS tables
     %% and the ring manager to remove any bucket properties
     ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
@@ -614,7 +614,7 @@ reset_riak() ->
     {ok, _} = supervisor:restart_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_ring_manager),
     {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
     {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master).
-    
+
 
 pause_riak_pb_sockets() ->
     Children = supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}),
@@ -641,7 +641,7 @@ maybe_start_network() ->
 
 bad_connect_test() ->
     %% Start with an unlikely port number
-    {error, econnrefused} = start({127,0,0,1}, 65535). 
+    {error, econnrefused} = start({127,0,0,1}, 65535).
 
 
 pb_socket_test_() ->
@@ -651,7 +651,7 @@ pb_socket_test_() ->
              code:add_pathz("../ebin"),
              ok = maybe_start_network()
      end,
-     {generator, 
+     {generator,
      fun() ->
              case catch net_adm:ping(?TEST_RIAK_NODE) of
                  pong ->
@@ -662,7 +662,7 @@ pb_socket_test_() ->
      end}}.
 
 live_node_tests() ->
-    [{"ping", 
+    [{"ping",
       ?_test( begin
                   {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                   pong = ?MODULE:ping(Pid)
@@ -672,7 +672,7 @@ live_node_tests() ->
          begin
              {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
              {ok, <<OrigId:32>>} = ?MODULE:get_client_id(Pid),
-             
+
              NewId = <<(OrigId+1):32>>,
              ok = ?MODULE:set_client_id(Pid, NewId),
              {ok, NewId} = ?MODULE:get_client_id(Pid)
@@ -685,8 +685,8 @@ live_node_tests() ->
              {ok, ServerInfo} = ?MODULE:get_server_info(Pid),
              [{node, _}, {server_version, _}] = lists:sort(ServerInfo)
          end)},
-     
-     {"get_should_read_put_test()", 
+
+     {"get_should_read_put_test()",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
@@ -697,7 +697,7 @@ live_node_tests() ->
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
-     {"get should read put with options", 
+     {"get should read put with options",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
@@ -784,7 +784,7 @@ live_node_tests() ->
                                {n_val,3}],
                               lists:sort(Props))
              end)},
- 
+
      {"get bucket properties test",
       ?_test(begin
                  reset_riak(),
@@ -795,8 +795,8 @@ live_node_tests() ->
                                {n_val,2}],
                               lists:sort(Props))
              end)},
- 
-     {"allow_mult should allow dupes", 
+
+     {"allow_mult should allow dupes",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid1} = start_link(?TEST_IP, ?TEST_PORT),
@@ -817,7 +817,7 @@ live_node_tests() ->
                  ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
                  ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>)
              end)},
-    
+
      {"queue test",
       ?_test(begin
                  %% Would really like this in a nested {setup, blah} structure
@@ -825,8 +825,8 @@ live_node_tests() ->
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  pause_riak_pb_sockets(),
                  Me = self(),
-                 %% this request will block as 
-                 spawn(fun() -> Me ! {1, ping(Pid)} end), 
+                 %% this request will block as
+                 spawn(fun() -> Me ! {1, ping(Pid)} end),
                  %% this request should be queued as socket will not be created
                  spawn(fun() -> Me ! {2, ping(Pid)} end),
                  resume_riak_pb_sockets(),
@@ -844,7 +844,7 @@ live_node_tests() ->
                  ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
 
                  ?assertEqual({ok, [{0, [2]}]},
-                              ?MODULE:mapred(Pid, 
+                              ?MODULE:mapred(Pid,
                                              [{B, K}],
                                              [{map, {jsanon, <<"function (v) { return [JSON.parse(v.values[0].data)]; }">>},
                                                undefined, true}]))
@@ -860,13 +860,13 @@ live_node_tests() ->
                  ?MODULE:put(Pid, riakc_obj:update_value(O, <<"99">>, "application/json")),
 
                  ?assertEqual({ok, [{0, [99]}]},
-                              ?MODULE:mapred(Pid, 
+                              ?MODULE:mapred(Pid,
                                              [{B, K}],
                                              [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                                undefined, true}]))
              end)},
- 
-     {"javascript_source_map_reduce_test()", 
+
+     {"javascript_source_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
@@ -874,18 +874,18 @@ live_node_tests() ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
                          end,
-                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
-                                      {<<"bar">>, <<"3">>}, 
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
+                                      {<<"bar">>, <<"3">>},
                                       {<<"baz">>, <<"4">>}]],
 
                  ?assertEqual({ok, [{1, 3}]},
-                              ?MODULE:mapred(Pid, 
+                              ?MODULE:mapred(Pid,
                                              [{<<"bucket">>, <<"foo">>},
                                               {<<"bucket">>, <<"bar">>},
                                               {<<"bucket">>, <<"baz">>}],
-                                             [{map, {jsanon, <<"function (v) { return [1]; }">>}, 
+                                             [{map, {jsanon, <<"function (v) { return [1]; }">>},
                                                undefined, false},
-                                              {reduce, {jsanon, <<"function(v) { return v.length; } ">>}, 
+                                              {reduce, {jsanon, <<"function(v) { return v.length; } ">>},
                                                undefined, true}]))
              end)},
 
@@ -897,12 +897,12 @@ live_node_tests() ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
                          end,
-                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
-                                      {<<"bar">>, <<"3">>}, 
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
+                                      {<<"bar">>, <<"3">>},
                                       {<<"baz">>, <<"4">>}]],
 
                  ?assertEqual({ok, [{1, [9]}]},
-                              ?MODULE:mapred(Pid, 
+                              ?MODULE:mapred(Pid,
                                              [{<<"bucket">>, <<"foo">>},
                                               {<<"bucket">>, <<"bar">>},
                                               {<<"bucket">>, <<"baz">>}],
@@ -918,8 +918,8 @@ live_node_tests() ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
                          end,
-                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
-                                      {<<"bar">>, <<"3">>}, 
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
+                                      {<<"bar">>, <<"3">>},
                                       {<<"baz">>, <<"4">>}]],
 
                  ?assertEqual({ok, [{1, [9]}]},
@@ -935,7 +935,7 @@ live_node_tests() ->
                  O=riakc_obj:new(<<"bucket">>, <<"foo">>),
                  ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
                  ?assertEqual({ok, [{1, [10]}]},
-                              ?MODULE:mapred(Pid, 
+                              ?MODULE:mapred(Pid,
                                              [{{<<"bucket">>, <<"foo">>}, 5},
                                               {{<<"bucket">>, <<"foo">>}, 10},
                                               {{<<"bucket">>, <<"foo">>}, 15},
@@ -954,39 +954,65 @@ live_node_tests() ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
                          end,
-                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>}, 
-                                      {<<"bar">>, <<"3">>}, 
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
+                                      {<<"bar">>, <<"3">>},
                                       {<<"baz">>, <<"4">>}]],
 
-                 {ok, [{1, Results}]} = ?MODULE:mapred(Pid, 
+                 {ok, [{1, Results}]} = ?MODULE:mapred(Pid,
                                                        [{<<"bucket">>, <<"foo">>},
                                                         {<<"bucket">>, <<"bar">>},
                                                         {<<"bucket">>, <<"baz">>}],
                                                        [{map, {modfun, riak_kv_mapreduce,
-                                                               map_object_value}, 
+                                                               map_object_value},
                                                          undefined, false},
-                                                        {reduce, {modfun, riak_kv_mapreduce, 
-                                                                  reduce_set_union}, 
+                                                        {reduce, {modfun, riak_kv_mapreduce,
+                                                                  reduce_set_union},
                                                          undefined, true}]),
                  ?assertEqual([<<"2">>, <<"3">>, <<"4">>], lists:sort(Results))
              end)},
+     {"missing_key_erlang_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Results} = ?MODULE:mapred(Pid, [{<<"bucket">>, <<"foo">>},
+                                                       {<<"bucket">>, <<"bar">>},
+                                                      {<<"bucket">>, <<"baz">>}],
+                                                [{map, {modfun, riak_kv_mapreduce,
+                                                        map_object_value},
+                                                  undefined, false},
+                                                 {reduce, {modfun, riak_kv_mapreduce,
+                                                           reduce_set_union},
+                                                  undefined, true}]),
+                 [{1, [{not_found, {_, _}}|_]}] = Results end)},
+     {"missing_key_javascript_map_reduce_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Results} = ?MODULE:mapred(Pid, [{<<"bucket">>, <<"foo">>},
+                                                       {<<"bucket">>, <<"bar">>},
+                                                      {<<"bucket">>, <<"baz">>}],
+                                                [{map, {jsfun, <<"Riak.mapValuesJson">>},
+                                                  undefined, false},
+                                                 {reduce, {jsfun, <<"Riak.reduceSort">>},
+                                                  undefined, true}]),
+                 [{1, [{not_found, {_, _}}|_]}] = Results end)},
      {"map reduce bad inputs",
       ?_test(begin
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket or a list of target tuples:\",\n         undefined}}">>},
                               ?MODULE:mapred(Pid, undefined,
-                                             [{map, {jsfun, <<"Riak.mapValuesJson">>}, 
+                                             [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                                undefined, false},
-                                              {reduce, {jsfun, <<"Riak.reduceSum">>}, 
+                                              {reduce, {jsfun, <<"Riak.reduceSum">>},
                                                undefined, true}]))
              end)},
      {"map reduce bad input keys",
       ?_test(begin
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  Res = ?MODULE:mapred(Pid, [<<"b">>], % no {B,K} tuple
-                                      [{map, {jsfun, <<"Riak.mapValuesJson">>}, 
+                                      [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                         undefined, false},
-                                       {reduce, {jsfun, <<"Riak.reduceSum">>}, 
+                                       {reduce, {jsfun, <<"Riak.reduceSum">>},
                                         undefined, true}]),
                  ?assertEqual({error,<<"{inputs,{\"Inputs target tuples must be {B,K} or {{B,K},KeyData}:\",[<<\"b\">>]}}">>},
                               Res)
@@ -1003,4 +1029,3 @@ live_node_tests() ->
      ].
 
 -endif.
-
