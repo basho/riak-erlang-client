@@ -41,7 +41,7 @@
          get_bucket/2,
          set_bucket/3,
          mapred/3, mapred/4,
-         mapred_stream/5,
+         mapred_stream/4, mapred_stream/5,
          mapred_bucket/3, mapred_bucket/4,
          mapred_bucket_stream/5]).
 
@@ -210,6 +210,7 @@ mapred(Pid, Inputs, Query, Timeout) ->
     wait_for_mapred(ReqId, Timeout).
 
 %% @spec mapred_stream(Pid :: pid(),
+%%                     Inputs :: list(),
 %%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
 %%                     ClientPid :: pid()) ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
@@ -217,8 +218,8 @@ mapred(Pid, Inputs, Query, Timeout) ->
 %% @doc Perform a streaming map/reduce job across the cluster sending results
 %%      to ClientPid.
 %%      See the map/reduce documentation for explanation of behavior.
-mapred_stream(Pid, Query, ClientPid) ->
-    mapred_stream(Pid, Query, ClientPid,?DEFAULT_TIMEOUT).
+mapred_stream(Pid, Inputs, Query, ClientPid) ->
+    mapred_stream(Pid, Inputs, Query, ClientPid,?DEFAULT_TIMEOUT).
 
 %% @spec mapred_stream(Pid :: pid(),
 %%                     Inputs :: list(),
@@ -812,6 +813,7 @@ live_node_tests() ->
                  O1 = riakc_obj:update_value(O, <<"pid1">>),
                  O2 = riakc_obj:update_value(O, <<"pid2">>),
                  ok = ?MODULE:put(Pid1, O1),
+
                  ok = ?MODULE:put(Pid2, O2),
                  {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
                  ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
