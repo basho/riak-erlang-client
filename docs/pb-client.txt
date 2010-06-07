@@ -16,8 +16,8 @@ You'll know you've done this correctly if you can execute the
 following commands and get a path to a beam file, instead of the atom
 'non_existing':
 
-1> code:which(riakc_pb_client).
-".../riak-erlang-client/ebin/riakc_pb_client.beam"
+1> code:which(riakc_pb_socket).
+".../riak-erlang-client/ebin/riakc_pb_socket.beam"
 
 Or you can install the library into your code path using rebar
 

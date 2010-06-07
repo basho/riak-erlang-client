@@ -183,7 +183,8 @@ set_bucket(Pid, Bucket, BucketProps) ->
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
     gen_server:call(Pid, {req, Req}).
 
-%% @spec mapred(Inputs :: list(),
+%% @spec mapred(Pid :: pid(),
+%%              Inputs :: list(),
 %%              Query :: [riak_kv_mapred_query:mapred_queryterm()]) ->
 %%       {ok, riak_kv_mapred_query:mapred_result()} |
 %%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
@@ -195,7 +196,8 @@ set_bucket(Pid, Bucket, BucketProps) ->
 mapred(Pid, Inputs, Query) ->
     mapred(Pid, Inputs, Query, ?DEFAULT_TIMEOUT).
 
-%% @spec mapred(Inputs :: list(),
+%% @spec mapred(Pid :: pid(),
+%%              Inputs :: list(),
 %%              Query :: [riak_kv_mapred_query:mapred_queryterm()],
 %%              TimeoutMillisecs :: integer()  | 'infinity') ->
 %%       {ok, riak_kv_mapred_query:mapred_result()} |
@@ -212,18 +214,21 @@ mapred(Pid, Inputs, Query, Timeout) ->
 %%                     ClientPid :: pid()) ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
-%% @doc Perform a streaming map/reduce job across the cluster.
+%% @doc Perform a streaming map/reduce job across the cluster sending results
+%%      to ClientPid.
 %%      See the map/reduce documentation for explanation of behavior.
-%% mapred_stream(Pid, Query, ClientPid) ->
-%%     mapred_stream(Pid, Query, ClientPid,?DEFAULT_TIMEOUT).
+mapred_stream(Pid, Query, ClientPid) ->
+    mapred_stream(Pid, Query, ClientPid,?DEFAULT_TIMEOUT).
 
 %% @spec mapred_stream(Pid :: pid(),
+%%                     Inputs :: list(),
 %%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
 %%                     ClientPid :: pid(),
 %%                     TimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
 %% @doc Perform a streaming map/reduce job with a timeout across the cluster.
+%%      sending results to ClientPid.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
     MapRed = [{'inputs', Inputs},
@@ -232,20 +237,18 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
     send_mapred_req(Pid, MapRed, ClientPid).
 
 %% @spec mapred_bucket(Pid :: pid(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     ClientPid :: pid(),
-%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%                     Bucket :: bucket(),
+%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()]) ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
-%% @doc Perform a map/reduce job against a bucket with a timeout
-%%      across the cluster.
+%% @doc Perform a map/reduce job against a bucket across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_bucket(Pid, Bucket, Query) ->
     mapred_bucket(Pid, Bucket, Query, ?DEFAULT_TIMEOUT).
 
-%% @spec mapred_bucket_tream(Pid :: pid(),
+%% @spec mapred_bucket(Pid :: pid(),
+%%                     Bucket :: bucket(),
 %%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     ClientPid :: pid(),
 %%                     TimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
@@ -257,9 +260,10 @@ mapred_bucket(Pid, Bucket, Query, Timeout) ->
     wait_for_mapred(ReqId, Timeout).
 
 %% @spec mapred_bucket_stream(Pid :: pid(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     ClientPid :: pid(),
-%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%                            Bucket :: bucket(),
+%%                            Query :: [riak_kv_mapred_query:mapred_queryterm()],
+%%                            ClientPid :: pid(),
+%%                            TimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
 %% @doc Perform a streaming map/reduce job against a bucket with a timeout
