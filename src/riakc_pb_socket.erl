@@ -125,6 +125,9 @@ put(Pid, Obj) ->
 %%      [{w,2}] sets w=2,
 %%      [{dw,1}] set dw=1,
 %%      [{return_body, true}] returns the updated metadata/value
+%%      Put throws siblings if the riakc_obj contains siblings
+%%      that have not been resolved by calling select_sibling/2 or 
+%%      update_value/2 and update_metadata/2.
 -spec put(pid(), riakc_obj(), riak_pbc_options()) -> ok | {ok, riakc_obj()} | {error, term()}.
 put(Pid, Obj, Options) ->
     Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
@@ -597,6 +600,7 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 %%
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include("riakc_obj.hrl").
 
 -define(TEST_IP, {127,0,0,1}).
 -define(TEST_PORT, 8087).
@@ -817,11 +821,25 @@ live_node_tests() ->
                  ok = ?MODULE:put(Pid2, O2),
                  {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
                  ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
-                 O4 = riakc_obj:update_value(O3, <<"resolved">>),
+                 O4 = riakc_obj:update_value(riakc_obj:select_sibling(1, O3), <<"resolved">>),
                  ok = ?MODULE:put(Pid1, O4),
                  {ok, GO} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
                  ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
                  ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>)
+             end)},
+
+     {"update object test", 
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 O0 = riakc_obj:new(<<"b">>, <<"k">>, <<"d">>),
+                 io:format("O0: ~p\n", [O0]),
+                 {ok, O1} = riakc_pb_socket:put(Pid, O0, [return_body]),
+                 io:format("O1: ~p\n", [O1]),
+                 M1 = riakc_obj:get_metadata(O1),
+                 M2 = dict:store(?MD_LINKS, [{{<<"b">>, <<"k1">>}, <<"t1">>}], M1),
+                 O2 = riakc_obj:update_metadata(O1, M2),
+                 riakc_pb_socket:put(Pid, O2)
              end)},
 
      {"queue test",
@@ -981,7 +999,7 @@ live_node_tests() ->
                  reset_riak(),
                  {ok, Pid} = {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  {ok, Results} = ?MODULE:mapred(Pid, [{<<"bucket">>, <<"foo">>},
-                                                       {<<"bucket">>, <<"bar">>},
+                                                      {<<"bucket">>, <<"bar">>},
                                                       {<<"bucket">>, <<"baz">>}],
                                                 [{map, {modfun, riak_kv_mapreduce,
                                                         map_object_value},
@@ -989,19 +1007,19 @@ live_node_tests() ->
                                                  {reduce, {modfun, riak_kv_mapreduce,
                                                            reduce_set_union},
                                                   undefined, true}]),
-                 [{1, [{not_found, {_, _}}|_]}] = Results end)},
+                 [{1, [{not_found, {_, _},undefined}|_]}] = Results end)},
      {"missing_key_javascript_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  {ok, Results} = ?MODULE:mapred(Pid, [{<<"bucket">>, <<"foo">>},
-                                                       {<<"bucket">>, <<"bar">>},
+                                                      {<<"bucket">>, <<"bar">>},
                                                       {<<"bucket">>, <<"baz">>}],
                                                 [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                                   undefined, false},
                                                  {reduce, {jsfun, <<"Riak.reduceSort">>},
                                                   undefined, true}]),
-                 [{1, [{not_found, {_, _}}|_]}] = Results end)},
+                 [{1, [{not_found, {_, _},<<"undefined">>}|_]}] = Results end)},
      {"map reduce bad inputs",
       ?_test(begin
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
