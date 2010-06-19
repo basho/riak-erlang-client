@@ -23,7 +23,7 @@
 -module(riakc_pb_socket).
 -include_lib("kernel/include/inet.hrl").
 -include("riakclient_pb.hrl").
-
+-include("riakc_pb.hrl").
 -behaviour(gen_server).
 
 -export([start_link/2,
@@ -349,22 +349,28 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 get_options([], Req) ->
     Req;
 get_options([{r, R} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{r = R}).
+    get_options(Rest, Req#rpbgetreq{r = normalize_rw_value(R)}).
 
 put_options([], Req) ->
     Req;
 put_options([{w, W} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{w = W});
+    put_options(Rest, Req#rpbputreq{w = normalize_rw_value(W)});
 put_options([{dw, DW} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{dw = DW});
+    put_options(Rest, Req#rpbputreq{dw = normalize_rw_value(DW)});
 put_options([return_body | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{return_body = 1}).
 
 delete_options([], Req) ->
     Req;
 delete_options([{rw, RW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{rw = RW}).
+    delete_options(Rest, Req#rpbdelreq{rw = normalize_rw_value(RW)}).
 
+
+normalize_rw_value(one) -> ?RIAKC_RW_ONE;
+normalize_rw_value(quorum) -> ?RIAKC_RW_QUORUM;
+normalize_rw_value(all) -> ?RIAKC_RW_ALL;
+normalize_rw_value(N) -> N.
+     
 
 %% Process response from the server - passes back in the request and
 %% context the request was issued with.

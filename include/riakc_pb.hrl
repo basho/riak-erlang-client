@@ -22,3 +22,7 @@
 
 %% Error codes
 -define(RIAKC_ERR_GENERAL, 1).
+
+-define(RIAKC_RW_ONE, 65535).
+-define(RIAKC_RW_QUORUM, 65534).
+-define(RIAKC_RW_ALL, 65533).
