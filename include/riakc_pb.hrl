@@ -1,3 +1,4 @@
+
 %% -------------------------------------------------------------------
 %%
 %% riakc_obj.hrl: Riak Client-side Object header
@@ -23,6 +24,8 @@
 %% Error codes
 -define(RIAKC_ERR_GENERAL, 1).
 
--define(RIAKC_RW_ONE, 65535).
--define(RIAKC_RW_QUORUM, 65534).
--define(RIAKC_RW_ALL, 65533).
+-define(UINT_MAX, 16#ffffffff).
+-define(RIAKC_RW_ONE, ?UINT_MAX-1).
+-define(RIAKC_RW_QUORUM, ?UINT_MAX-2).
+-define(RIAKC_RW_ALL, ?UINT_MAX-3).
+-define(RIAKC_RW_DEFAULT, ?UINT_MAX-4).

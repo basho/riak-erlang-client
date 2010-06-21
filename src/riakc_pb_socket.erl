@@ -369,6 +369,7 @@ delete_options([{rw, RW} | Rest], Req) ->
 normalize_rw_value(one) -> ?RIAKC_RW_ONE;
 normalize_rw_value(quorum) -> ?RIAKC_RW_QUORUM;
 normalize_rw_value(all) -> ?RIAKC_RW_ALL;
+normalize_rw_value(default) -> ?RIAKC_RW_DEFAULT;
 normalize_rw_value(N) -> N.
      
 
