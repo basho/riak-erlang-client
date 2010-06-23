@@ -576,7 +576,7 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
     receive
         {ReqId, done} -> {ok, orddict:to_list(Acc)};
         {ReqId, {mapred,Phase,Res}} ->
-            wait_for_listkeys(ReqId,Timeout,orddict:append_list(Phase,Res,Acc));
+            wait_for_mapred(ReqId,Timeout,orddict:append_list(Phase,Res,Acc));
         {ReqId, {error, Reason}} -> {error, Reason}
     after Timeout ->
             {error, {timeout, orddict:to_list(Acc)}}
