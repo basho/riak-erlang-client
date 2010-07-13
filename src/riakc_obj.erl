@@ -117,7 +117,7 @@ value_count(#riakc_obj{contents=Contents}) ->
     length(Contents).
 
 %% @doc  Select the sibling to use for update - starting from 1.
--spec select_sibling(#riakc_obj{}, pos_integer()) -> #riakc_obj{}.
+-spec select_sibling(pos_integer(), #riakc_obj{}, pos_integer()) -> #riakc_obj{}.
 select_sibling(Index, O) ->
     {MD,V} = lists:nth(Index, O#riakc_obj.contents),
     O#riakc_obj{updatemetadata=MD, updatevalue=V}.
