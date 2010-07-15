@@ -38,7 +38,7 @@ Connecting
 
 Once you have your node running, pass your Riak server's connection
 information to riakc_pb_socket:start_link/2. The arguments to this
-function correspond to 'pd_ip' and 'pb_port' from the 'app.config'
+function correspond to 'pb_ip' and 'pb_port' from the 'app.config'
 file on your Riak server.
 
 1> {ok, Pid} = riakc_pb_socket:start_link("127.0.0.1", 8087).
