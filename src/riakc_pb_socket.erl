@@ -421,7 +421,7 @@ process_response(#rpbputreq{}, undefined, rpbputresp, State) ->
     %% server just returned the rpbputresp code - no message was encoded
     {reply, ok, State};
 process_response(#rpbputreq{bucket = Bucket, key = Key}, _Ctx,
-                 #rpbputresp{contents = RpbContents, vclock = Vclock}, State) ->
+                 #rpbputresp{content = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
     {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
 
