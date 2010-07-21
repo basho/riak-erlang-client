@@ -623,13 +623,15 @@ reset_riak() ->
     %% and the ring manager to remove any bucket properties
     ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
 
+    %% Restart the vnodes so they come up with ETS
     ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master),
-    ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
-    ok = supervisor:terminate_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_ring_manager),
-
-    {ok, _} = supervisor:restart_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_ring_manager),
-    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_sup),
-    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master).
+    ok = supervisor:terminate_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_vnode_sup),
+    {ok, _} = supervisor:restart_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_vnode_sup),
+    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master),
+    
+    %% Now reset the ring so bucket properties are default
+    Ring = rpc:call(?TEST_RIAK_NODE, riak_core_ring, fresh, []),
+    ok = rpc:call(?TEST_RIAK_NODE, riak_core_ring_manager, set_my_ring, [Ring]).
 
 
 pause_riak_pb_sockets() ->
