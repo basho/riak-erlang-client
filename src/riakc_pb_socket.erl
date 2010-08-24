@@ -433,6 +433,11 @@ process_response(rpblistbucketsreq, undefined,
                  #rpblistbucketsresp{buckets = Buckets}, State) ->
     {reply, {ok, Buckets}, State};
 
+process_response(rpblistbucketsreq, undefined,
+                 rpblistbucketsresp, State) ->
+    %% empty buckets generate an empty message
+    {reply, {ok, []}, State};
+
 process_response(#rpblistkeysreq{}, {ReqId, Client},
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
     case Keys of
@@ -762,6 +767,13 @@ live_node_tests() ->
                   %% Delete and check no longer found
                  ok = ?MODULE:delete(Pid, <<"notabucket">>, <<"k">>, [{rw, 1}]),
                  {error, notfound} = ?MODULE:get(Pid, <<"notabucket">>, <<"k">>)
+             end)},
+
+     {"empty_list_buckets_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 ?assertEqual({ok, []}, ?MODULE:list_buckets(Pid))
              end)},
 
      {"list_buckets_test()",
