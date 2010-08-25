@@ -12,6 +12,8 @@
                   stdlib
                  ]},
   {registered, []},
-  {env, []}
+  {env, [{{timeout, get}, 30000},
+         {{timeout, put}, 30000},
+         {timeout,        60000}]}
  ]}.
 

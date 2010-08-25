@@ -45,7 +45,8 @@
          mapred/3, mapred/4,
          mapred_stream/4, mapred_stream/5,
          mapred_bucket/3, mapred_bucket/4,
-         mapred_bucket_stream/5]).
+         mapred_bucket_stream/5,
+         default_timeout/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -391,6 +392,21 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
               {'timeout', Timeout}],
     send_mapred_req(Pid, MapRed, ClientPid).
 
+%% @spec default_timeout(Operation) -> timeout()
+%% @doc Return the default timeout for an operation if none is specified.
+default_timeout(Op) ->
+    case application:get_env(riakc, {timeout, Op}) of
+        {ok, OpTimeout} ->
+            OpTimeout;
+        undefined ->
+            case application:get_env(riakc, timeout) of
+                {ok, Timeout} ->
+                    Timeout;
+                undefined ->
+                    ?DEFAULT_TIMEOUT
+            end
+    end.
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -519,9 +535,6 @@ send_caller(Msg, #request{ctx = {ReqId, Client},
 send_caller(Msg, #request{from = From}=Request) when From /= undefined ->
     gen_server:reply(From, Msg),
     Request#request{from = undefined}.
-
-default_timeout(_Op) ->
-    60000.
 
 get_options([], Req) ->
     Req;
