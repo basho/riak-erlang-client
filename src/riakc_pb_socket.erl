@@ -28,6 +28,7 @@
 
 -export([start_link/2,
          start/2,
+         stop/1,
          is_connected/1,
          ping/1, ping/2,
          get_client_id/1, get_client_id/2,
@@ -93,6 +94,10 @@ start_link(Address, Port) ->
 -spec start(address(), portnum()) -> {ok, pid()} | {error, term()}.
 start(Address, Port) ->
     gen_server:start(?MODULE, [Address, Port], []).
+
+%% @doc Disconnect the socket and stop the process
+stop(Pid) ->
+    gen_server:call(Pid, stop).
 
 %% @doc Return true if connected to the remote server and {false, [{Reason,integer()}]}
 %%      with a list of failed connect reasons
@@ -396,13 +401,6 @@ init([Address, Port]) ->
     {ok, #state{address = Address, port = Port, queue = queue:new()}}.
 
 %% @private
-handle_call(is_connected, _From, State) ->
-    case State#state.sock of
-        undefined ->
-            {reply, {false, State#state.failed}, State};
-        _ ->
-            {reply, true, State}
-    end;
 handle_call({req, Msg, Timeout}, From, State) when State#state.pending =/= undefined;
                                                    State#state.sock =:= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout), State)};
@@ -412,7 +410,16 @@ handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.pending =/= 
 handle_call({req, Msg, Timeout}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout), State)};
 handle_call({req, Msg, Timeout, Ctx}, From, State) ->
-    {noreply, send_request(new_request(Msg, From, Timeout, Ctx), State)}.
+    {noreply, send_request(new_request(Msg, From, Timeout, Ctx), State)};
+handle_call(is_connected, _From, State) ->
+    case State#state.sock of
+        undefined ->
+            {reply, {false, State#state.failed}, State};
+        _ ->
+            {reply, true, State}
+    end;
+handle_call(stop, _From, State) ->
+    {stop, normal, ok, disconnect(State)}.
 
 %% @private
 handle_info({tcp_error, _Socket, Reason}, State) ->
@@ -893,10 +900,12 @@ riak_pb_listener_pid() ->
     hd([Pid || {Mod,Pid,_,_} <- Children, Mod == riak_kv_pb_listener]).
 
 pause_riak_pb_listener() ->
-    rpc:call(?TEST_RIAK_NODE, sys, suspend, [riak_pb_listener_pid()]).
+    Pid = riak_pb_listener_pid(),
+    rpc:call(?TEST_RIAK_NODE, sys, suspend, [Pid]).
 
 resume_riak_pb_listener() ->
-    rpc:call(?TEST_RIAK_NODE, sys, resume, [riak_pb_listener_pid()]).
+    Pid = riak_pb_listener_pid(),
+    rpc:call(?TEST_RIAK_NODE, sys, resume, [Pid]).
 
 maybe_start_network() ->
     %% Try to spin up net_kernel
@@ -914,8 +923,8 @@ maybe_start_network() ->
 bad_connect_test() ->
     %% Start with an unlikely port number
     {ok, Pid} = start({127,0,0,1}, 65535),
-    ?assertEqual({false, [{econnrefused,1}]}, is_connected(Pid)).
-
+    ?assertEqual({false, [{econnrefused,1}]}, is_connected(Pid)),
+    stop(Pid).
 
 pb_socket_test_() ->
     {setup,
@@ -934,6 +943,26 @@ pb_socket_test_() ->
              end
      end}}.
 
+
+%% Check the reconnect interval increases up to the max and sticks there
+increase_reconnect_interval_test() ->
+    increase_reconnect_interval_test(#state{}).
+
+increase_reconnect_interval_test(State) ->
+    CurrInterval = State#state.reconnect_interval,
+    NextState = increase_reconnect_interval(State),
+    case NextState#state.reconnect_interval of
+        ?MAX_RECONNECT_INTERVAL ->
+            FinalState = increase_reconnect_interval(NextState),
+            ?assertEqual(?MAX_RECONNECT_INTERVAL, FinalState#state.reconnect_interval);
+        NextInterval->
+            ?assert(NextInterval > CurrInterval),
+            increase_reconnect_interval_test(NextState)
+    end.
+
+%%
+%% Tests to run against a live node - NB the node gets reconfigured and generally messed with
+%%
 live_node_tests() ->
     [{"ping",
       ?_test( begin
@@ -1133,8 +1162,8 @@ live_node_tests() ->
       ?_test(begin
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  pause_riak_pb_listener(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  Me = self(),
                  %% this request will block as
                  spawn(fun() -> Me ! {1, ping(Pid, 0)} end),
@@ -1153,6 +1182,15 @@ live_node_tests() ->
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                  Pid ! {req_timeout, make_ref()},
                  ?assertEqual(pong, ping(Pid))
+             end)},
+
+   {"infinite timeout ping test",
+      ?_test(begin
+                 %% Would really like this in a nested {setup, blah} structure
+                 %% but eunit does not allow
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 ?assertEqual(pong, ping(Pid, infinity)),
+                 ?assertEqual(pong, ping(Pid, undefined))
              end)},
 
      {"javascript_source_map_test()",
