@@ -923,14 +923,21 @@ live_node_tests() ->
                                       {<<"bar">>, <<"3">>},
                                       {<<"baz">>, <<"4">>}]],
 
-                 ?assertEqual({ok, [{1, 3}]},
+                 ?assertEqual({ok, [{1, [3]}]},
                               ?MODULE:mapred(Pid,
                                              [{<<"bucket">>, <<"foo">>},
                                               {<<"bucket">>, <<"bar">>},
                                               {<<"bucket">>, <<"baz">>}],
                                              [{map, {jsanon, <<"function (v) { return [1]; }">>},
                                                undefined, false},
-                                              {reduce, {jsanon, <<"function(v) { return v.length; } ">>},
+                                              {reduce, {jsanon, 
+                                                        <<"function(v) {
+                                                             total = v.reduce(
+                                                               function(prev,curr,idx,array) {
+                                                                 return prev+curr;
+                                                               }, 0);
+                                                             return [total];
+                                                           }">>},
                                                undefined, true}]))
              end)},
 
