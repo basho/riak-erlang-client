@@ -440,7 +440,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 
 default_timeout(_Op) ->
-    5000.
+    60000.
 
 get_options([], Req) ->
     Req;
@@ -617,7 +617,7 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
     ReqMsg = #rpbmapredreq{request = encode_mapred_req(MapRed),
                            content_type = <<"application/x-erlang-binary">>},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, {ReqId, ClientPid}}).
+    gen_server:call(Pid, {req, ReqMsg, default_timeout(mapred), {ReqId, ClientPid}}).
 
 %% Send a request to the server and prepare the state for the response
 %% @private
