@@ -48,8 +48,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {address, port, sock, hello, pending, queue}).
--record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), tref}).
+-record(state, {address, port, sock, pending, queue}).
+-record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: integer(),
+                  tref :: reference() | undefined }).
 
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
@@ -409,20 +410,36 @@ handle_info({tcp, _Socket, Data}, State=#state{sock = Sock, pending = Pending}) 
                 {reply, Response, NewState0} ->
                     %% Send reply and get ready for the next request - send the next request
                     %% if one is queued up
-                    NewState1 = send_caller(Response, NewState0),
-                    NewState = dequeue_request(NewState1#state{pending = undefined});
+                    cancel_req_timer(Pending#request.tref),
+                    send_caller(Response, NewState0#state.pending),
+                    NewState = dequeue_request(NewState0#state{pending = undefined});
 
                 {noreply, NewState0} ->
                     %% Request has completed with no reply needed, send the next request 
                     %% if one is queued up
+                    cancel_req_timer(Pending#request.tref),
                     NewState = dequeue_request(NewState0#state{pending = undefined});
 
-                {pending, NewState} ->
-                    ok %% Request is still pending - do not queue up a new one
+                {pending, NewState0} -> %% Request is still pending - do not queue up a new one
+                    NewPending = restart_req_timer(Pending),
+                    NewState = NewState0#state{pending = NewPending}
             end
     end,
     inet:setopts(Sock, [{active, once}]),
     {noreply, NewState};
+handle_info({req_timeout, Ref}, State) ->
+    case State#state.pending of %%
+        undefined ->
+            {noreply, remove_queued_request(Ref, State)};
+        Pending ->
+            case Ref == Pending#request.ref of
+                true ->  %% Matches the current operation
+                    NewState = maybe_reply(on_timeout(State#state.pending, State)),
+                    {noreply, disconnect(NewState#state{pending = undefined})};
+                false ->
+                    {noreply, remove_queued_request(Ref, State)}
+            end
+    end;
 handle_info(_, State) ->
     {noreply, State}.
 
@@ -441,20 +458,22 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 
 maybe_reply({reply, Reply, State}) ->
-    send_caller(Reply, State);
+    Request = State#state.pending,
+    NewRequest = send_caller(Reply, Request),
+    State#state{pending = NewRequest};
 maybe_reply({noreply, State}) ->
     State.
 
 %% @private
 %% Reply to caller - form clause first in case a ReqId/Client was passed
 %% in as the context and gen_server:reply hasn't been called yet.
-send_caller(Msg, State=#state{pending = #request{ctx = {ReqId, Client}, 
-                                                 from = undefined}}) ->
+send_caller(Msg, #request{ctx = {ReqId, Client}, 
+                          from = undefined}=Request) ->
     Client ! {ReqId, Msg},
-    State;
-send_caller(Msg, State=#state{pending=#request{from = From}=Pending}) when From /= undefined ->
+    Request;
+send_caller(Msg, #request{from = From}=Request) when From /= undefined ->
     gen_server:reply(From, Msg),
-    State#state{pending = Pending#request{from = undefined}}.
+    Request#request{from = undefined}.
 
 default_timeout(_Op) ->
     60000.
@@ -606,6 +625,10 @@ after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
 after_send(_Request, State) ->
     {noreply, State}.
 
+%% Called on timeout for an operation
+%% @private
+on_timeout(_Request, State) ->
+    {reply, {error, timeout}, State}.
 %%
 %% Called after receiving an error message - supports reruning
 %% an error for streaming calls
@@ -635,10 +658,56 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
 
 %% @private
 %% Make a new request that can be sent or queued
-new_request(Msg, From, _Timeout) ->
-    #request{ref = make_ref(), msg = Msg, from = From}.
-new_request(Msg, From, _Timeout, Context) ->
-    #request{ref = make_ref(), msg = Msg, from = From, ctx = Context}.
+new_request(Msg, From, Timeout) ->
+    Ref = make_ref(),
+    #request{ref = Ref, msg = Msg, from = From, timeout = Timeout,
+             tref = create_req_timer(Timeout, Ref)}.
+new_request(Msg, From, Timeout, Context) ->
+    Ref = make_ref(),
+    #request{ref =Ref, msg = Msg, from = From, ctx = Context, timeout = Timeout,
+             tref = create_req_timer(Timeout, Ref)}.
+
+%% @private
+%% Create a request timer if desired, otherwise return undefined.
+create_req_timer(infinity, _Ref) ->
+    undefined;
+create_req_timer(undefined, _Ref) ->
+    undefined;
+create_req_timer(Msecs, Ref) ->
+    erlang:send_after(Msecs, self(), {req_timeout, Ref}).
+
+%% @private
+%% Cancel a request timer made by create_timer/2
+cancel_req_timer(undefined) ->
+    ok;
+cancel_req_timer(Tref) ->
+    erlang:cancel_timer(Tref),
+    ok.
+
+%% @private
+%% Restart a request timer
+-spec restart_req_timer(#request{}) -> #request{}.
+restart_req_timer(Request) ->
+    case Request#request.tref of
+        undefined ->
+            Request;
+        Tref ->
+            cancel_req_timer(Tref),
+            NewTref = create_req_timer(Request#request.timeout,
+                                       Request#request.ref),
+            Request#request{tref = NewTref}
+    end.
+
+%% @private
+%% Disconnect socket if connected
+disconnect(State) ->
+    case State#state.sock of
+        undefined ->
+            State;
+        Sock ->
+            gen_tcp:close(Sock),
+            State#state{sock = undefined}
+    end.    
 
 %% Send a request to the server and prepare the state for the response
 %% @private
@@ -660,6 +729,19 @@ dequeue_request(State) ->
             State;
         {{value, Request}, Q2} ->
             send_request(Request, State#state{queue = Q2})
+    end.
+
+%% Remove a queued request by reference - returns same queue if ref not present
+%% @private
+remove_queued_request(Ref, State) ->
+    L = queue:to_list(State#state.queue),
+    case lists:keytake(Ref, #request.ref, L) of
+        false -> % Ref not queued up
+            State;
+        {value, Req, L2} ->
+            {reply, Reply, NewState} = on_timeout(Req, State),
+            send_caller(Reply, Req),
+            NewState#state{queue = queue:from_list(L2)}
     end.
 
 %% @private
@@ -985,6 +1067,32 @@ live_node_tests() ->
                  receive {2,Ping2} -> ?assertEqual(Ping2, pong) end
              end)},
 
+    {"timeout queue test",
+      ?_test(begin
+                 %% Would really like this in a nested {setup, blah} structure
+                 %% but eunit does not allow
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 pause_riak_pb_sockets(),
+                 Me = self(),
+                 %% this request will block as
+                 spawn(fun() -> Me ! {1, ping(Pid, 0)} end),
+                 %% this request should be queued as socket will not be created
+                 spawn(fun() -> Me ! running, Me ! {2, ping(Pid, 0)} end),
+                 receive running -> ok end,
+                 resume_riak_pb_sockets(),
+                 receive {1,Ping1} -> ?assertEqual({error, timeout}, Ping1) end,
+                 receive {2,Ping2} -> ?assertEqual({error, timeout}, Ping2) end
+             end)},
+
+    {"ignore stale tref test",
+      ?_test(begin
+                 %% Would really like this in a nested {setup, blah} structure
+                 %% but eunit does not allow
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 Pid ! {req_timeout, make_ref()},
+                 ?assertEqual(pong, ping(Pid))
+             end)},
+
      {"javascript_source_map_test()",
       ?_test(begin
                  reset_riak(),
@@ -1183,7 +1291,6 @@ live_node_tests() ->
                  ?assertEqual({error,<<"{'query',{\"Query takes a list of step tuples\",undefined}}">>},
                               Res)
              end)}
-
      ].
 
 -endif.
