@@ -28,18 +28,18 @@
 
 -export([start_link/2,
          start/2,
-         ping/1,
-         get_client_id/1,
-         set_client_id/2,
-         get_server_info/1,
-         get/3, get/4,
-         put/2, put/3,
-         delete/3, delete/4,
-         list_buckets/1,
-         list_keys/2,
-         stream_list_keys/2,
-         get_bucket/2,
-         set_bucket/3,
+         ping/1, ping/2,
+         get_client_id/1, get_client_id/2,
+         set_client_id/2, set_client_id/3,
+         get_server_info/1, get_server_info/2,
+         get/3, get/4, get/5,
+         put/2, put/3, put/4,
+         delete/3, delete/4, delete/5,
+         list_buckets/1, list_buckets/2,
+         list_keys/2, list_keys/3,
+         stream_list_keys/2, stream_list_keys/3,
+         get_bucket/2, get_bucket/3,
+         set_bucket/3, set_bucket/4,
          mapred/3, mapred/4,
          mapred_stream/4, mapred_stream/5,
          mapred_bucket/3, mapred_bucket/4,
@@ -85,41 +85,81 @@ start(Address, Port) ->
 %% @doc Ping the server
 -spec ping(pid()) -> ok | {error, term()}.
 ping(Pid) ->
-    gen_server:call(Pid, {req, rpbpingreq}).
+    ping(Pid, default_timeout(ping)).
+
+%% @doc Ping the server specifying timeout
+-spec ping(pid(), timeout()) -> ok | {error, term()}.
+ping(Pid, Timeout) ->
+    gen_server:call(Pid, {req, rpbpingreq, Timeout}, infinity).
 
 %% @doc Get the client id for this connection
 -spec get_client_id(pid()) -> {ok, client_id()} | {error, term()}.
 get_client_id(Pid) ->
-    gen_server:call(Pid, {req, rpbgetclientidreq}).
+    get_client_id(Pid, default_timeout(get_client_id)).
+
+%% @doc Get the client id for this connection specifying timeout
+-spec get_client_id(pid(), timeout()) -> {ok, client_id()} | {error, term()}.
+get_client_id(Pid, Timeout) ->
+    gen_server:call(Pid, {req, rpbgetclientidreq, Timeout}, infinity).
 
 %% @doc Set the client id for this connection
 -spec set_client_id(pid(), client_id()) -> {ok, client_id()} | {error, term()}.
 set_client_id(Pid, ClientId) ->
-    gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}}).
+    set_client_id(Pid, ClientId, default_timeout(set_client_id)).
+
+%% @doc Set the client id for this connection specifying timeout
+-spec set_client_id(pid(), client_id(), timeout()) -> {ok, client_id()} | {error, term()}.
+set_client_id(Pid, ClientId, Timeout) ->
+    gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}, Timeout}, infinity).
 
 %% @doc Get the server information for this connection
 -spec get_server_info(pid()) -> {ok, server_info()} | {error, term()}.
 get_server_info(Pid) ->
-    gen_server:call(Pid, {req, rpbgetserverinforeq}).
+    get_server_info(Pid, default_timeout(get_server_info)).
+
+%% @doc Get the server information for this connection specifying timeout
+-spec get_server_info(pid(), timeout()) -> {ok, server_info()} | {error, term()}.
+get_server_info(Pid, Timeout) ->
+    gen_server:call(Pid, {req, rpbgetserverinforeq, Timeout}, infinity).
 
 %% @doc Get bucket/key from the server
 %%      Will return {error, notfound} if the key is not on the server
 -spec get(pid(), bucket() | string(), key() | string()) -> {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key) ->
-    get(Pid, Bucket, Key, []).
+    get(Pid, Bucket, Key, [], default_timeout(get)).
+
+%% @doc Get bucket/key from the server specifying timeout
+%%      Will return {error, notfound} if the key is not on the server
+-spec get(pid(), bucket() | string(), key() | string(),
+          timeout() |  riak_pbc_options()) ->
+                 {ok, riakc_obj()} | {error, term()}.
+get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    get(Pid, Bucket, Key, [], Timeout);
 
 %% @doc Get bucket/key from the server supplying options
 %%      [{r, 1}] would set r=1 for the request
--spec get(pid(), bucket() | string(), key() | string(), riak_pbc_options()) ->
-                 {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key, Options) ->
+    get(Pid, Bucket, Key, Options, default_timeout(get)).
+ 
+%% @doc Get bucket/key from the server supplying options and timeout
+%%      [{r, 1}] would set r=1 for the request
+-spec get(pid(), bucket() | string(), key() | string(),
+          riak_pbc_options(), timeout()) ->
+                 {ok, riakc_obj()} | {error, term()}.
+get(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req}).
+    gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 %% @doc Put the metadata/value in the object under bucket/key
 -spec put(pid(), riakc_obj()) -> ok | {ok, riakc_obj()} | {error, term()}.
 put(Pid, Obj) ->
     put(Pid, Obj, []).
+
+%% @doc Put the metadata/value in the object under bucket/key
+-spec put(pid(), riakc_obj(), timeout() | riak_pbc_options()) ->
+                 ok | {ok, riakc_obj()} | {error, term()}.
+put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    put(Pid, Obj, [], Timeout);
 
 %% @doc Put the metadata/value in the object under bucket/key with options
 %%      [{w,2}] sets w=2,
@@ -128,8 +168,19 @@ put(Pid, Obj) ->
 %%      Put throws siblings if the riakc_obj contains siblings
 %%      that have not been resolved by calling select_sibling/2 or 
 %%      update_value/2 and update_metadata/2.
--spec put(pid(), riakc_obj(), riak_pbc_options()) -> ok | {ok, riakc_obj()} | {error, term()}.
 put(Pid, Obj, Options) ->
+    put(Pid, Obj, Options, default_timeout(put)).
+
+%% @doc Put the metadata/value in the object under bucket/key with options and timeout
+%%      [{w,2}] sets w=2,
+%%      [{dw,1}] set dw=1,
+%%      [{return_body, true}] returns the updated metadata/value
+%%      Put throws siblings if the riakc_obj contains siblings
+%%      that have not been resolved by calling select_sibling/2 or 
+%%      update_value/2 and update_metadata/2.
+-spec put(pid(), riakc_obj(), riak_pbc_options(), timeout()) -> 
+                 ok | {ok, riakc_obj()} | {error, term()}.
+put(Pid, Obj, Options, Timeout) ->
     Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
                                          riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
@@ -137,31 +188,52 @@ put(Pid, Obj, Options) ->
                                  key = riakc_obj:key(Obj),
                                  vclock = riakc_obj:vclock(Obj),
                                  content = Content}),
-    gen_server:call(Pid, {req, Req}).
+    gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 %% @doc Delete the key/value
 -spec delete(pid(), bucket() | string(), key() | string()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key) ->
     delete(Pid, Bucket, Key, []).
 
+%% @doc Delete the key/value specifying timeout
+-spec delete(pid(), bucket() | string(), key() | string(), 
+             timeout() | riak_pbc_options()) -> ok | {error, term()}.
+delete(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    delete(Pid, Bucket, Key, [], Timeout);
+
 %% @doc Delete the key/value with options
 %%      [{rw,2}] sets rw=2
--spec delete(pid(), bucket() | string(), key() | string(), riak_pbc_options()) ->
-                    ok | {error, term()}.
 delete(Pid, Bucket, Key, Options) ->
+    delete(Pid, Bucket, Key, Options, default_timeout(delete)).
+
+%% @doc Delete the key/value with options and timeout
+%%      [{rw,2}] sets rw=2
+-spec delete(pid(), bucket() | string(), key() | string(), 
+             riak_pbc_options(), timeout()) -> ok | {error, term()}.
+delete(Pid, Bucket, Key, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req}).
+    gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 %% @doc List all buckets on the server
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid) ->
-    gen_server:call(Pid, {req, rpblistbucketsreq}).
+    list_buckets(Pid, default_timeout(list_buckets)).
+
+%% @doc List all buckets on the server specifying timeout
+-spec list_buckets(pid(), timeout()) -> {ok, [bucket()]} | {error, term()}.
+list_buckets(Pid, Timeout) ->
+    gen_server:call(Pid, {req, rpblistbucketsreq, Timeout}).
 
 %% @doc List all keys in a bucket
 -spec list_keys(pid(), bucket()) -> {ok, [key()]}.
 list_keys(Pid, Bucket) ->
-    {ok, ReqId} = stream_list_keys(Pid, Bucket),
-    wait_for_listkeys(ReqId, ?DEFAULT_TIMEOUT).
+    list_keys(Pid, Bucket, default_timeout(list_keys)).
+
+%% @doc List all keys in a bucket specifying timeout
+-spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]}.
+list_keys(Pid, Bucket, Timeout) ->
+    {ok, ReqId} = stream_list_keys(Pid, Bucket, Timeout),
+    wait_for_listkeys(ReqId, Timeout).
 
 %% @doc Stream list of keys in the bucket to the calling process.  The
 %%      process receives these messages.
@@ -169,22 +241,40 @@ list_keys(Pid, Bucket) ->
 %%        {ReqId, done}
 -spec stream_list_keys(pid(), bucket()) -> {ok, req_id()} | {error, term()}.
 stream_list_keys(Pid, Bucket) ->
+    stream_list_keys(Pid, Bucket, default_timeout(stream_list_keys)).
+
+%% @doc Stream list of keys in the bucket to the calling process specifying timeout.
+%%      The process receives these messages.
+%%        {ReqId, {keys, [key()]}}
+%%        {ReqId, done}
+-spec stream_list_keys(pid(), bucket(), timeout()) -> {ok, req_id()} | {error, term()}.
+stream_list_keys(Pid, Bucket, Timeout) ->
     ReqMsg = #rpblistkeysreq{bucket = Bucket},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, {ReqId, self()}}).
+    gen_server:call(Pid, {req, ReqMsg, Timeout, {ReqId, self()}}).
 
 %% @doc Get bucket properties
 -spec get_bucket(pid(), bucket()) -> {ok, bucket_props()} | {error, term()}.
 get_bucket(Pid, Bucket) ->
+    get_bucket(Pid, Bucket, default_timeout(get_bucket)).
+
+%% @doc Get bucket properties specifying a timeout
+-spec get_bucket(pid(), bucket(), timeout()) -> {ok, bucket_props()} | {error, term()}.
+get_bucket(Pid, Bucket, Timeout) ->
     Req = #rpbgetbucketreq{bucket = Bucket},
-    gen_server:call(Pid, {req, Req}).
+    gen_server:call(Pid, {req, Req, Timeout}).
 
 %% @doc Set bucket properties
 -spec set_bucket(pid(), bucket(), bucket_props()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps) ->
+    set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket)).
+
+%% @doc Set bucket properties specifying a timeout
+-spec set_bucket(pid(), bucket(), bucket_props(), timeout()) -> ok | {error, term()}.
+set_bucket(Pid, Bucket, BucketProps, Timeout) ->
     PbProps = riakc_pb:pbify_rpbbucketprops(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
-    gen_server:call(Pid, {req, Req}).
+    gen_server:call(Pid, {req, Req, Timeout}).
 
 %% @spec mapred(Pid :: pid(),
 %%              Inputs :: list(),
@@ -195,7 +285,7 @@ set_bucket(Pid, Bucket, BucketProps) ->
 %%       {error, Err :: term()}
 %% @doc Perform a map/reduce job across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
-%% @equiv mapred(Inputs, Query, default_timeout())
+%% @equiv mapred(Inputs, Query, default_timeout(mapred))
 mapred(Pid, Inputs, Query) ->
     mapred(Pid, Inputs, Query, ?DEFAULT_TIMEOUT).
 
@@ -294,13 +384,13 @@ init([Address, Port]) ->
     end.
 
 %% @private
-handle_call({req, Req}, From, State) when State#state.req =/= undefined ->
+handle_call({req, Req, _Timeout}, From, State) when State#state.req =/= undefined ->
     {noreply, queue_request(Req, undefined, From, State)};
-handle_call({req, Req, Ctx}, From, State) when State#state.req =/= undefined ->
+handle_call({req, Req, _Timeout, Ctx}, From, State) when State#state.req =/= undefined ->
     {noreply, queue_request(Req, Ctx, From, State)};
-handle_call({req, Req}, From, State) ->
+handle_call({req, Req, _Timeout}, From, State) ->
     {noreply, send_request(Req, undefined, From, State)};
-handle_call({req, Req, Ctx}, From, State) ->
+handle_call({req, Req, _Timeout, Ctx}, From, State) ->
     {noreply, send_request(Req, Ctx, From, State)}.
 
 %% @private
@@ -348,6 +438,9 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 %% internal functions
 %% ====================================================================
+
+default_timeout(_Op) ->
+    5000.
 
 get_options([], Req) ->
     Req;
