@@ -28,6 +28,7 @@
 
 -export([start_link/2,
          start/2,
+         is_connected/1,
          ping/1, ping/2,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
@@ -48,13 +49,22 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {address, port, sock, pending, queue}).
--record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: integer(),
-                  tref :: reference() | undefined }).
-
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
 -define(DEFAULT_TIMEOUT, 60000).
+-define(FIRST_RECONNECT_INTERVAL, 100).
+-define(MAX_RECONNECT_INTERVAL, 30000).
+
+-record(state, {address,    % address to connect to
+                port,       % port to connect to
+                sock,       % gen_tcp socket
+                pending,    % active request
+                queue,      % queue of pending requests
+                connects=0, % number of successful connects
+                failed=[],  % breakdown of failed connects
+                reconnect_interval=?FIRST_RECONNECT_INTERVAL}).
+-record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: integer(),
+                  tref :: reference() | undefined }).
 
 -type address() :: string() | atom() | ip_address().
 -type portnum() :: non_neg_integer().
@@ -83,6 +93,11 @@ start_link(Address, Port) ->
 -spec start(address(), portnum()) -> {ok, pid()} | {error, term()}.
 start(Address, Port) ->
     gen_server:start(?MODULE, [Address, Port], []).
+
+%% @doc Return true if connected to the remote server and {false, [{Reason,integer()}]}
+%%      with a list of failed connect reasons
+is_connected(Pid) ->
+    gen_server:call(Pid, is_connected).
 
 %% @doc Ping the server
 -spec ping(pid()) -> ok | {error, term()}.
@@ -377,18 +392,22 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
 
 %% @private
 init([Address, Port]) ->
-    case gen_tcp:connect(Address, Port,
-                         [binary, {active, once}, {packet, 4}, {header, 1}]) of
-        {ok, Sock} ->
-            {ok, #state{address = Address, port = Port, sock = Sock, queue = queue:new()}};
-        {error, Reason} ->
-            {stop, Reason}
-    end.
+    self() ! reconnect,
+    {ok, #state{address = Address, port = Port, queue = queue:new()}}.
 
 %% @private
-handle_call({req, Msg, Timeout}, From, State) when State#state.pending =/= undefined ->
+handle_call(is_connected, _From, State) ->
+    case State#state.sock of
+        undefined ->
+            {reply, {false, State#state.failed}, State};
+        _ ->
+            {reply, true, State}
+    end;
+handle_call({req, Msg, Timeout}, From, State) when State#state.pending =/= undefined;
+                                                   State#state.sock =:= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.pending =/= undefined ->
+handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.pending =/= undefined;
+                                                        State#state.sock =:= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
 handle_call({req, Msg, Timeout}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout), State)};
@@ -396,8 +415,14 @@ handle_call({req, Msg, Timeout, Ctx}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout, Ctx), State)}.
 
 %% @private
+handle_info({tcp_error, _Socket, Reason}, State) ->
+    error_logger:error_msg("PBC client TCP error for ~p:~p - ~p\n",
+                           [State#state.address, State#state.port, Reason]),
+    {noreply, disconnect(State)};
+    
 handle_info({tcp_closed, _Socket}, State) ->
-    {stop, normal, State};
+    {noreply, disconnect(State)};
+
 handle_info({tcp, _Socket, Data}, State=#state{sock = Sock, pending = Pending}) ->
     [MsgCode|MsgData] = Data,
     Resp = riakc_pb:decode(MsgCode, MsgData),
@@ -439,6 +464,19 @@ handle_info({req_timeout, Ref}, State) ->
                 false ->
                     {noreply, remove_queued_request(Ref, State)}
             end
+    end;
+handle_info(reconnect, State) ->
+    #state{address = Address, port = Port, connects = Connects} = State,
+    case gen_tcp:connect(Address, Port,
+                         [binary, {active, once}, {packet, 4}, {header, 1}]) of
+        {ok, Sock} ->
+            NewState = State#state{sock = Sock, connects = Connects+1, 
+                                   reconnect_interval = ?FIRST_RECONNECT_INTERVAL},
+            {noreply, dequeue_request(NewState)};
+        {error, Reason} ->
+            %% Update the failed count and reschedule a reconnection
+            NewState = State#state{failed = orddict:update_counter(Reason, 1, State#state.failed)},
+            {noreply, disconnect(NewState)}
     end;
 handle_info(_, State) ->
     {noreply, State}.
@@ -701,13 +739,36 @@ restart_req_timer(Request) ->
 %% @private
 %% Disconnect socket if connected
 disconnect(State) ->
+
+    %% Tell any pending requests we've disconnected
+    case State#state.pending of
+        undefined ->
+            ok;
+        Request ->
+            send_caller({error, disconnected}, Request)
+    end,
+
+    %% Make sure the connection is really closed
     case State#state.sock of
         undefined ->
-            State;
+            ok;
         Sock ->
-            gen_tcp:close(Sock),
-            State#state{sock = undefined}
-    end.    
+            gen_tcp:close(Sock)
+    end,
+
+    %% Schedule the reconnect message and return state
+    erlang:send_after(State#state.reconnect_interval, self(), reconnect),
+    increase_reconnect_interval(State#state{sock = undefined, pending = undefined}).
+ 
+%% Double the reconnect interval up to the maximum
+increase_reconnect_interval(State) ->
+    case State#state.reconnect_interval of
+        Interval when Interval < ?MAX_RECONNECT_INTERVAL ->
+            NewInterval = lists:min([Interval+Interval,?MAX_RECONNECT_INTERVAL]),
+            State#state{reconnect_interval = NewInterval};
+        _ ->
+            State
+    end.
 
 %% Send a request to the server and prepare the state for the response
 %% @private
@@ -827,15 +888,15 @@ reset_riak() ->
     ok = rpc:call(?TEST_RIAK_NODE, riak_core_ring_manager, set_my_ring, [Ring]).
 
 
-pause_riak_pb_sockets() ->
-    Children = supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}),
-    Pids = [Pid || {_,Pid,_,_} <- Children],
-    [rpc:call(?TEST_RIAK_NODE, sys, suspend, [Pid]) || Pid <- Pids].
+riak_pb_listener_pid() ->
+    Children = supervisor:which_children({riak_kv_sup, ?TEST_RIAK_NODE}),
+    hd([Pid || {Mod,Pid,_,_} <- Children, Mod == riak_kv_pb_listener]).
 
-resume_riak_pb_sockets() ->
-    Children = supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}),
-    Pids = [Pid || {_,Pid,_,_} <- Children],
-    [rpc:call(?TEST_RIAK_NODE, sys, resume, [Pid]) || Pid <- Pids].
+pause_riak_pb_listener() ->
+    rpc:call(?TEST_RIAK_NODE, sys, suspend, [riak_pb_listener_pid()]).
+
+resume_riak_pb_listener() ->
+    rpc:call(?TEST_RIAK_NODE, sys, resume, [riak_pb_listener_pid()]).
 
 maybe_start_network() ->
     %% Try to spin up net_kernel
@@ -852,7 +913,8 @@ maybe_start_network() ->
 
 bad_connect_test() ->
     %% Start with an unlikely port number
-    {error, econnrefused} = start({127,0,0,1}, 65535).
+    {ok, Pid} = start({127,0,0,1}, 65535),
+    ?assertEqual({false, [{econnrefused,1}]}, is_connected(Pid)).
 
 
 pb_socket_test_() ->
@@ -1056,13 +1118,13 @@ live_node_tests() ->
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-                 pause_riak_pb_sockets(),
+                 pause_riak_pb_listener(),
                  Me = self(),
                  %% this request will block as
                  spawn(fun() -> Me ! {1, ping(Pid)} end),
                  %% this request should be queued as socket will not be created
                  spawn(fun() -> Me ! {2, ping(Pid)} end),
-                 resume_riak_pb_sockets(),
+                 resume_riak_pb_listener(),
                  receive {1,Ping1} -> ?assertEqual(Ping1, pong) end,
                  receive {2,Ping2} -> ?assertEqual(Ping2, pong) end
              end)},
@@ -1072,14 +1134,14 @@ live_node_tests() ->
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-                 pause_riak_pb_sockets(),
+                 pause_riak_pb_listener(),
                  Me = self(),
                  %% this request will block as
                  spawn(fun() -> Me ! {1, ping(Pid, 0)} end),
                  %% this request should be queued as socket will not be created
                  spawn(fun() -> Me ! running, Me ! {2, ping(Pid, 0)} end),
                  receive running -> ok end,
-                 resume_riak_pb_sockets(),
+                 resume_riak_pb_listener(),
                  receive {1,Ping1} -> ?assertEqual({error, timeout}, Ping1) end,
                  receive {2,Ping2} -> ?assertEqual({error, timeout}, Ping2) end
              end)},
