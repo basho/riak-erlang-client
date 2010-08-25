@@ -48,7 +48,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {address, port, sock, hello, req, ctx, from, queue}).
+-record(state, {address, port, sock, hello, pending, queue}).
+-record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), tref}).
 
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
@@ -384,36 +385,37 @@ init([Address, Port]) ->
     end.
 
 %% @private
-handle_call({req, Req, _Timeout}, From, State) when State#state.req =/= undefined ->
-    {noreply, queue_request(Req, undefined, From, State)};
-handle_call({req, Req, _Timeout, Ctx}, From, State) when State#state.req =/= undefined ->
-    {noreply, queue_request(Req, Ctx, From, State)};
-handle_call({req, Req, _Timeout}, From, State) ->
-    {noreply, send_request(Req, undefined, From, State)};
-handle_call({req, Req, _Timeout, Ctx}, From, State) ->
-    {noreply, send_request(Req, Ctx, From, State)}.
+handle_call({req, Msg, Timeout}, From, State) when State#state.pending =/= undefined ->
+    {noreply, queue_request(new_request(Msg, From, Timeout), State)};
+handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.pending =/= undefined ->
+    {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
+handle_call({req, Msg, Timeout}, From, State) ->
+    {noreply, send_request(new_request(Msg, From, Timeout), State)};
+handle_call({req, Msg, Timeout, Ctx}, From, State) ->
+    {noreply, send_request(new_request(Msg, From, Timeout, Ctx), State)}.
 
 %% @private
 handle_info({tcp_closed, _Socket}, State) ->
     {stop, normal, State};
-handle_info({tcp, _Socket, Data}, State=#state{sock=Sock, req = Req, ctx = Ctx, from = From}) ->
+handle_info({tcp, _Socket, Data}, State=#state{sock = Sock, pending = Pending}) ->
     [MsgCode|MsgData] = Data,
     Resp = riakc_pb:decode(MsgCode, MsgData),
     case Resp of
         #rpberrorresp{} ->
-            on_error(Req, Ctx, Resp, From),
-            NewState = dequeue_request(State#state{req = undefined, from = undefined});
-
+            NewState1 = maybe_reply(on_error(Pending, Resp, State)),
+            NewState = dequeue_request(NewState1#state{pending = undefined});
         _ ->
-            case process_response(Req, Ctx, Resp, State) of
+            case process_response(Pending, Resp, State) of
                 {reply, Response, NewState0} ->
-                    %% Send reply and get ready for the next request - send the next one if it's queued up
-                    gen_server:reply(From, Response),
-                    NewState = dequeue_request(NewState0#state{req = undefined, from = undefined});
+                    %% Send reply and get ready for the next request - send the next request
+                    %% if one is queued up
+                    NewState1 = send_caller(Response, NewState0),
+                    NewState = dequeue_request(NewState1#state{pending = undefined});
 
                 {noreply, NewState0} ->
-                    %% Request has completed with no reply needed, send the next next one if queued up
-                    NewState = dequeue_request(NewState0#state{req = undefined, from = undefined});
+                    %% Request has completed with no reply needed, send the next request 
+                    %% if one is queued up
+                    NewState = dequeue_request(NewState0#state{pending = undefined});
 
                 {pending, NewState} ->
                     ok %% Request is still pending - do not queue up a new one
@@ -421,7 +423,6 @@ handle_info({tcp, _Socket, Data}, State=#state{sock=Sock, req = Req, ctx = Ctx, 
     end,
     inet:setopts(Sock, [{active, once}]),
     {noreply, NewState};
-
 handle_info(_, State) ->
     {noreply, State}.
 
@@ -438,6 +439,22 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 %% internal functions
 %% ====================================================================
+
+maybe_reply({reply, Reply, State}) ->
+    send_caller(Reply, State);
+maybe_reply({noreply, State}) ->
+    State.
+
+%% @private
+%% Reply to caller - form clause first in case a ReqId/Client was passed
+%% in as the context and gen_server:reply hasn't been called yet.
+send_caller(Msg, State=#state{pending = #request{ctx = {ReqId, Client}, 
+                                                 from = undefined}}) ->
+    Client ! {ReqId, Msg},
+    State;
+send_caller(Msg, State=#state{pending=#request{from = From}=Pending}) when From /= undefined ->
+    gen_server:reply(From, Msg),
+    State#state{pending = Pending#request{from = undefined}}.
 
 default_timeout(_Op) ->
     60000.
@@ -475,19 +492,19 @@ normalize_rw_value(N) -> N.
 %%        reply if the request is completed with a reply to the caller
 %%        pending if the request has not completed yet (streaming op)
 %% @private
--spec process_response(rpb_req(), ctx(), rpb_resp(), #state{}) ->
+-spec process_response(#request{}, rpb_resp(), #state{}) ->
                               {noreply, #state{}} |
                               {reply, term(), #state{}} |
                               {pending, #state{}}.
-process_response(rpbpingreq, _Ctx, rpbpingresp, State) ->
+process_response(#request{msg = rpbpingreq}, rpbpingresp, State) ->
     {reply, pong, State};
-process_response(rpbgetclientidreq, undefined,
+process_response(#request{msg = rpbgetclientidreq},
                  #rpbgetclientidresp{client_id = ClientId}, State) ->
     {reply, {ok, ClientId}, State};
-process_response(#rpbsetclientidreq{}, undefined,
+process_response(#request{msg = #rpbsetclientidreq{}},
                  rpbsetclientidresp, State) ->
     {reply, ok, State};
-process_response(rpbgetserverinforeq, undefined,
+process_response(#request{msg = rpbgetserverinforeq},
                  #rpbgetserverinforesp{node = Node, server_version = ServerVersion}, State) ->
     case Node of
         undefined ->
@@ -502,36 +519,38 @@ process_response(rpbgetserverinforeq, undefined,
             VersionInfo = [{server_version, ServerVersion}]
     end,
     {reply, {ok, NodeInfo++VersionInfo}, State};
-process_response(#rpbgetreq{}, undefined, rpbgetresp, State) ->
+process_response(#request{msg = #rpbgetreq{}}, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};
-process_response(#rpbgetreq{bucket = Bucket, key = Key}, _Ctx,
+process_response(#request{msg = #rpbgetreq{bucket = Bucket, key = Key}},
                  #rpbgetresp{content = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
     {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
 
-process_response(#rpbputreq{}, undefined, rpbputresp, State) ->
+process_response(#request{msg = #rpbputreq{}},
+                 rpbputresp, State) ->
     %% server just returned the rpbputresp code - no message was encoded
     {reply, ok, State};
-process_response(#rpbputreq{bucket = Bucket, key = Key}, _Ctx,
+process_response(#request{msg = #rpbputreq{bucket = Bucket, key = Key}},
                  #rpbputresp{content = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
     {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
 
-process_response(#rpbdelreq{}, undefined, rpbdelresp, State) ->
+process_response(#request{msg = #rpbdelreq{}},
+                 rpbdelresp, State) ->
     %% server just returned the rpbdelresp code - no message was encoded
     {reply, ok, State};
 
-process_response(rpblistbucketsreq, undefined,
+process_response(#request{msg = rpblistbucketsreq},
                  #rpblistbucketsresp{buckets = Buckets}, State) ->
     {reply, {ok, Buckets}, State};
 
-process_response(rpblistbucketsreq, undefined,
+process_response(#request{msg = rpblistbucketsreq},
                  rpblistbucketsresp, State) ->
     %% empty buckets generate an empty message
     {reply, {ok, []}, State};
 
-process_response(#rpblistkeysreq{}, {ReqId, Client},
+process_response(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, Client}},
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
     case Keys of
         undefined ->
@@ -547,16 +566,17 @@ process_response(#rpblistkeysreq{}, {ReqId, Client},
             {pending, State}
     end;
 
-process_response(#rpbgetbucketreq{}, undefined,
+process_response(#request{msg = #rpbgetbucketreq{}},
                  #rpbgetbucketresp{props = PbProps}, State) ->
     Props = riakc_pb:erlify_rpbbucketprops(PbProps),
     {reply, {ok, Props}, State};
 
-process_response(#rpbsetbucketreq{}, undefined,
+process_response(#request{msg = #rpbsetbucketreq{}},
                  rpbsetbucketresp, State) ->
     {reply, ok, State};
 
-process_response(#rpbmapredreq{content_type = ContentType}, {ReqId, Client},
+process_response(#request{msg = #rpbmapredreq{content_type = ContentType},
+                          ctx = {ReqId, Client}},
                  #rpbmapredresp{done = Done, phase=PhaseId, response=Data}, State) ->
     case Data of
         undefined ->
@@ -577,27 +597,21 @@ process_response(#rpbmapredreq{content_type = ContentType}, {ReqId, Client},
 %% Called after sending a message - supports returning a
 %% request id for streaming calls
 %% @private
-after_send(#rpblistkeysreq{}, {ReqId, _Client}, State) ->
+after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
-after_send(rpblistbucketsreq, {ReqId, _Client}, State) ->
+after_send(#request{msg = rpblistbucketsreq, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
-after_send(#rpbmapredreq{}, {ReqId, _Client}, State) ->
+after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
-after_send(_Req, _Ctx, State) ->
+after_send(_Request, State) ->
     {noreply, State}.
 
 %%
-%% Called after receiving an error message - supports retruning
-%% an error for streamign calls
+%% Called after receiving an error message - supports reruning
+%% an error for streaming calls
 %% @private
-on_error(#rpblistkeysreq{}, {ReqId, Client},  ErrMsg, undefined) ->
-    Client ! { ReqId, fmt_err_msg(ErrMsg)};
-on_error(rpblistbucketsreq, {ReqId, Client}, ErrMsg, undefined) ->
-    Client ! { ReqId, fmt_err_msg(ErrMsg)};
-on_error(#rpbmapredreq{}, {ReqId, Client}, ErrMsg, undefined) ->
-    Client ! { ReqId, fmt_err_msg(ErrMsg)};
-on_error(_Req, _Ctx, ErrMsg, From) when From =/= undefined ->
-    gen_server:reply(From, fmt_err_msg(ErrMsg)).
+on_error(_Request, ErrMsg, State) ->
+    {reply, fmt_err_msg(ErrMsg), State}.
 
 %% Format the PB encoded error message
 fmt_err_msg(ErrMsg) ->
@@ -619,25 +633,24 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, ReqMsg, default_timeout(mapred), {ReqId, ClientPid}}).
 
+%% @private
+%% Make a new request that can be sent or queued
+new_request(Msg, From, _Timeout) ->
+    #request{ref = make_ref(), msg = Msg, from = From}.
+new_request(Msg, From, _Timeout, Context) ->
+    #request{ref = make_ref(), msg = Msg, from = From, ctx = Context}.
+
 %% Send a request to the server and prepare the state for the response
 %% @private
-send_request(Req, Ctx, From, State) ->
-    Pkt = riakc_pb:encode(Req),
+send_request(Request, State) when State#state.pending =:= undefined ->
+    Pkt = riakc_pb:encode(Request#request.msg),
     gen_tcp:send(State#state.sock, Pkt),
-    case after_send(Req, Ctx, State) of
-        {reply, Response, NewState} ->
-            %% Respond after send - process_response will use an alternate mechanism
-            %% to send additional information (callback or message)
-            gen_server:reply(From, Response),
-            NewState#state{req = Req, ctx = Ctx, from = undefined};
-        {noreply, NewState} ->
-            NewState#state{req = Req, ctx = Ctx, from = From}
-    end.
+    maybe_reply(after_send(Request, State#state{pending = Request})).
 
 %% Queue up a request if one is pending
 %% @private
-queue_request(Req, Ctx, From, State) ->
-    State#state{queue = queue:in({Req, Ctx, From}, State#state.queue)}.
+queue_request(Pending, State) ->
+    State#state{queue = queue:in(Pending, State#state.queue)}.
 
 %% Try and dequeue request and send onto the server if one is waiting
 %% @private
@@ -645,8 +658,8 @@ dequeue_request(State) ->
     case queue:out(State#state.queue) of
         {empty, _} ->
             State;
-        {{value, {Req, Ctx, From}}, Q2} ->
-            send_request(Req, Ctx, From, State#state{queue = Q2})
+        {{value, Request}, Q2} ->
+            send_request(Request, State#state{queue = Q2})
     end.
 
 %% @private
