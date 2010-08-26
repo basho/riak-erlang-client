@@ -682,18 +682,18 @@ process_response(#request{msg = rpblistbucketsreq},
     %% empty buckets generate an empty message
     {reply, {ok, []}, State};
 
-process_response(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, Client}},
+process_response(#request{msg = #rpblistkeysreq{}}=Request,
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
     case Keys of
         undefined ->
             ok;
         _ ->
-            Client ! {ReqId, {keys, Keys}}
+            %% Have to directly use send_caller as may want to reply with done below.
+            send_caller({keys, Keys}, Request)
     end,
     case Done of
         1 ->
-            Client ! {ReqId, done},
-            {noreply, State};
+            {reply, done, State};
         _ ->
             {pending, State}
     end;
@@ -707,20 +707,18 @@ process_response(#request{msg = #rpbsetbucketreq{}},
                  rpbsetbucketresp, State) ->
     {reply, ok, State};
 
-process_response(#request{msg = #rpbmapredreq{content_type = ContentType},
-                          ctx = {ReqId, Client}},
+process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Request,
                  #rpbmapredresp{done = Done, phase=PhaseId, response=Data}, State) ->
     case Data of
         undefined ->
             ok;
         _ ->
             Response = decode_mapred_resp(Data, ContentType),
-            Client ! {ReqId, {mapred, PhaseId, Response}}
+            send_caller({mapred, PhaseId, Response}, Request)
     end,
     case Done of
         1 ->
-            Client ! {ReqId, done},
-            {noreply, State};
+            {reply, done, State};
         _ ->
             {pending, State}
     end.
