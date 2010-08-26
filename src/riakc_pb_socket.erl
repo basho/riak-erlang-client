@@ -26,8 +26,8 @@
 -include("riakc_pb.hrl").
 -behaviour(gen_server).
 
--export([start_link/2,
-         start/2,
+-export([start_link/2, start_link/3,
+         start/2, start/3,
          stop/1,
          is_connected/1,
          ping/1, ping/2,
@@ -59,6 +59,7 @@
 
 -record(state, {address,    % address to connect to
                 port,       % port to connect to
+                queue_if_disconnected = false, % if true, add requests to queue if disconnected
                 sock,       % gen_tcp socket
                 active,     % active request
                 queue,      % queue of pending requests
@@ -70,6 +71,8 @@
 
 -type address() :: string() | atom() | ip_address().
 -type portnum() :: non_neg_integer().
+-type options() :: [option()].
+-type option()  :: queue_if_disconnected.
 -type client_id() :: binary().
 -type bucket() :: binary().
 -type key() :: binary().
@@ -88,13 +91,29 @@
 %%      Client id will be assigned by the server.
 -spec start_link(address(), portnum()) -> {ok, pid()} | {error, term()}.
 start_link(Address, Port) ->
-    gen_server:start_link(?MODULE, [Address, Port], []).
+    gen_server:start_link(?MODULE, [Address, Port, []], []).
+
+%% @doc Create a linked process to talk with the riak server on Address:Port with Options
+%%      Client id will be assigned by the server.
+%%      Options queue_if_disconnected adds requests to the queue when it is disconnected
+%%      rather than return {error, disconnected}.  If the server comes back the request
+%%      will be submitted if the timeout has not expired.
+%%      
+-spec start_link(address(), portnum(), options()) -> {ok, pid()} | {error, term()}.
+start_link(Address, Port, Options) when is_list(Options) ->
+    gen_server:start_link(?MODULE, [Address, Port, Options], []).
 
 %% @doc Create a process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
 -spec start(address(), portnum()) -> {ok, pid()} | {error, term()}.
 start(Address, Port) ->
-    gen_server:start(?MODULE, [Address, Port], []).
+    gen_server:start(?MODULE, [Address, Port, []], []).
+
+%% @doc Create a process to talk with the riak server on Address:Port with Options
+%%     See start_link/3.
+-spec start(address(), portnum(), options()) -> {ok, pid()} | {error, term()}.
+start(Address, Port, Options) when is_list(Options) ->
+    gen_server:start(?MODULE, [Address, Port, Options], []).
 
 %% @doc Disconnect the socket and stop the process
 stop(Pid) ->
@@ -255,8 +274,12 @@ list_keys(Pid, Bucket) ->
 %% @doc List all keys in a bucket specifying timeout
 -spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]}.
 list_keys(Pid, Bucket, Timeout) ->
-    {ok, ReqId} = stream_list_keys(Pid, Bucket, Timeout),
-    wait_for_listkeys(ReqId, Timeout).
+    case stream_list_keys(Pid, Bucket, Timeout) of
+        {ok, ReqId} ->
+            wait_for_listkeys(ReqId, Timeout);
+        Error ->
+            Error
+    end.
 
 %% @doc Stream list of keys in the bucket to the calling process.  The
 %%      process receives these messages.
@@ -322,8 +345,12 @@ mapred(Pid, Inputs, Query) ->
 %% @doc Perform a map/reduce job across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred(Pid, Inputs, Query, Timeout) ->
-    {ok, ReqId} = mapred_stream(Pid, Inputs, Query, self(), Timeout),
-    wait_for_mapred(ReqId, Timeout).
+    case mapred_stream(Pid, Inputs, Query, self(), Timeout) of
+        {ok, ReqId} ->
+            wait_for_mapred(ReqId, Timeout);
+        Error ->
+            Error
+    end.
 
 %% @spec mapred_stream(Pid :: pid(),
 %%                     Inputs :: list(),
@@ -373,8 +400,12 @@ mapred_bucket(Pid, Bucket, Query) ->
 %%      across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_bucket(Pid, Bucket, Query, Timeout) ->
-    {ok, ReqId} = mapred_bucket_stream(Pid, Bucket, Query, self(), Timeout),
-    wait_for_mapred(ReqId, Timeout).
+    case mapred_bucket_stream(Pid, Bucket, Query, self(), Timeout) of
+        {ok, ReqId} ->
+            wait_for_mapred(ReqId, Timeout);
+        Error ->
+            Error
+    end.
 
 %% @spec mapred_bucket_stream(Pid :: pid(),
 %%                            Bucket :: bucket(),
@@ -412,16 +443,32 @@ default_timeout(Op) ->
 %% ====================================================================
 
 %% @private
-init([Address, Port]) ->
+init([Address, Port, Options]) ->
+    %% Schedule a reconnect as the first action.  If the server is up then 
+    %% the handle_info(reconnect) will run before any requests can be sent.
     self() ! reconnect,
-    {ok, #state{address = Address, port = Port, queue = queue:new()}}.
+    {ok,  parse_options(Options, #state{address = Address, 
+                                        port = Port,
+                                        queue = queue:new()})}.
 
 %% @private
-handle_call({req, Msg, Timeout}, From, State) when State#state.active =/= undefined;
-                                                   State#state.sock =:= undefined ->
+handle_call({req, Msg, Timeout}, From, State) when State#state.sock =:= undefined ->
+    case State#state.queue_if_disconnected of
+        true ->
+            {noreply, queue_request(new_request(Msg, From, Timeout), State)};
+        false ->
+            {reply, {error, disconnected}, State}
+    end;
+handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.sock =:= undefined ->
+    case State#state.queue_if_disconnected of
+        true ->
+            {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
+        false ->
+            {reply, {error, disconnected}, State}
+    end;
+handle_call({req, Msg, Timeout}, From, State) when State#state.active =/= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.active =/= undefined;
-                                                        State#state.sock =:= undefined ->
+handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.active =/= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
 handle_call({req, Msg, Timeout}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout), State)};
@@ -517,6 +564,13 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 %% internal functions
 %% ====================================================================
+
+%% @private
+%% Parse options
+parse_options([], State) ->
+    State;
+parse_options([queue_if_disconnected|Options], State) ->
+    parse_options(Options, State#state{queue_if_disconnected = true}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -938,6 +992,39 @@ bad_connect_test() ->
     %% Start with an unlikely port number
     {ok, Pid} = start({127,0,0,1}, 65535),
     ?assertEqual({false, [{econnrefused,1}]}, is_connected(Pid)),
+    ?assertEqual({error, disconnected}, ping(Pid)),
+    ?assertEqual({error, disconnected}, list_keys(Pid, <<"b">>)),
+    stop(Pid).
+
+queue_disconnected_test() ->
+    %% Start with an unlikely port number
+    {ok, Pid} = start({127,0,0,1}, 65535, [queue_if_disconnected]),
+    ?assertEqual({error, timeout}, ping(Pid, 10)),    
+    ?assertEqual({error, timeout}, list_keys(Pid, <<"b">>, 10)),
+    stop(Pid).
+
+server_closes_socket_test() ->
+    %% Set up a dummy socket to send requests on
+    {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
+    {ok, Port} = inet:port(Listen),
+    {ok, Pid} = start_link("127.0.0.1", Port),
+    {ok, Sock} = gen_tcp:accept(Listen),
+    ?assertMatch(true, is_connected(Pid)),
+
+    %% Send a ping request in another process so the test doesn't block
+    Self = self(),
+    spawn(fun() -> Self ! ping(Pid, infinity) end),
+
+    %% Make sure request received then close the socket
+    {ok, _ReqMsg} = gen_tcp:recv(Sock, 0),
+    ok = gen_tcp:close(Sock),
+    ok = gen_tcp:close(Listen),
+    receive
+        Msg ->
+            ?assertEqual({error, disconnected}, Msg)
+    end,
+    %% Server will not have had a chance to reconnect yet, reason counters empty.
+    ?assertMatch({false, []}, is_connected(Pid)),
     stop(Pid).
 
 pb_socket_test_() ->
@@ -981,7 +1068,8 @@ live_node_tests() ->
     [{"ping",
       ?_test( begin
                   {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
-                  pong = ?MODULE:ping(Pid)
+                  ?assertEqual(pong, ?MODULE:ping(Pid)),
+                  ?assertEqual(true, is_connected(Pid))
               end)},
      {"set client id",
       ?_test(
@@ -1118,7 +1206,12 @@ live_node_tests() ->
                      end,
                  [F(K) || K <- Ks],
                  {ok, LKs} = ?MODULE:list_keys(Pid, Bucket),
-                 ?assertEqual(Ks, lists:sort(LKs))
+                 ?assertEqual(Ks, lists:sort(LKs)),
+
+                 %% Make sure it works with an infinite timeout (will reset the timeout
+                 %% timer after each packet)
+                 {ok, LKs2} = ?MODULE:list_keys(Pid, Bucket, infinity),
+                 ?assertEqual(Ks, lists:sort(LKs2))
              end)},
 
      {"get bucket properties test",
@@ -1428,6 +1521,7 @@ live_node_tests() ->
                  ?assertEqual({error,<<"{'query',{\"Query takes a list of step tuples\",undefined}}">>},
                               Res)
              end)}
+
      ].
 
 -endif.
