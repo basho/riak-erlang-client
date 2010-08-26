@@ -676,8 +676,6 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType},
 %% @private
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
-after_send(#request{msg = rpblistbucketsreq, ctx = {ReqId, _Client}}, State) ->
-    {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(_Request, State) ->
