@@ -1035,6 +1035,28 @@ server_closes_socket_test() ->
     ?assertMatch({false, []}, is_connected(Pid)),
     stop(Pid).
 
+dead_socket_pid_returns_to_caller_test() ->
+    %% Set up a dummy socket to send requests on
+    {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
+    {ok, Port} = inet:port(Listen),
+    {ok, Pid} = start("127.0.0.1", Port),
+    {ok, Sock} = gen_tcp:accept(Listen),
+    ?assertMatch(true, is_connected(Pid)),
+
+    %% Send a ping request in another process so the test doesn't block
+    Self = self(),
+    spawn(fun() -> Self ! (catch ping(Pid, infinity)) end),
+
+    %% Make sure request received then kill the process
+    exit(Pid, kill),
+    receive
+        Msg ->
+            ?assertMatch({'EXIT', {killed, _}}, Msg)
+    end,
+    %% Cleanup
+    ok = gen_tcp:close(Sock),
+    ok = gen_tcp:close(Listen).
+
 pb_socket_test_() ->
     {setup,
      fun() ->
