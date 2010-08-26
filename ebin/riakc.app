@@ -1,6 +1,6 @@
 {application, riakc,
  [{description, "Riak Client"},
-  {vsn, "0.2.0"},
+  {vsn, "1.0.0"},
   {modules, [
              riakc_pb,
              riakc_pb_socket,
