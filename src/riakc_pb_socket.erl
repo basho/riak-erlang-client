@@ -310,7 +310,7 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 %%      See the map/reduce documentation for explanation of behavior.
 %% @equiv mapred(Inputs, Query, default_timeout(mapred))
 mapred(Pid, Inputs, Query) ->
-    mapred(Pid, Inputs, Query, ?DEFAULT_TIMEOUT).
+    mapred(Pid, Inputs, Query, default_timeout(mapred)).
 
 %% @spec mapred(Pid :: pid(),
 %%              Inputs :: list(),
@@ -335,7 +335,7 @@ mapred(Pid, Inputs, Query, Timeout) ->
 %%      to ClientPid.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_stream(Pid, Inputs, Query, ClientPid) ->
-    mapred_stream(Pid, Inputs, Query, ClientPid,?DEFAULT_TIMEOUT).
+    mapred_stream(Pid, Inputs, Query, ClientPid, default_timeout(mapred_stream)).
 
 %% @spec mapred_stream(Pid :: pid(),
 %%                     Inputs :: list(),
@@ -361,7 +361,7 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
 %% @doc Perform a map/reduce job against a bucket across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_bucket(Pid, Bucket, Query) ->
-    mapred_bucket(Pid, Bucket, Query, ?DEFAULT_TIMEOUT).
+    mapred_bucket(Pid, Bucket, Query, default_timeout(mapred_bucket)).
 
 %% @spec mapred_bucket(Pid :: pid(),
 %%                     Bucket :: bucket(),
@@ -712,7 +712,10 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
     ReqMsg = #rpbmapredreq{request = encode_mapred_req(MapRed),
                            content_type = <<"application/x-erlang-binary">>},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, default_timeout(mapred), {ReqId, ClientPid}}).
+    %% Add an extra 100ms to the mapred timeout and use that for the 
+    %% socket timeout.  This should give the map/reduce a chance to fail and let us know.
+    Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred)) + 100,
+    gen_server:call(Pid, {req, ReqMsg, Timeout, {ReqId, ClientPid}}).
 
 %% @private
 %% Make a new request that can be sent or queued
@@ -1012,6 +1015,17 @@ live_node_tests() ->
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
+     {"get should read put with timeout",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 O0 = riakc_obj:new(<<"b">>, <<"k">>),
+                 O = riakc_obj:update_value(O0, <<"v">>),
+                 {ok, PO} = ?MODULE:put(Pid, O, [{w, 1}, {dw, 1}, return_body]),
+                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>, 500),
+                 ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
+             end)},
+
      {"get should read put with options",
       ?_test(begin
                  reset_riak(),
@@ -1021,6 +1035,18 @@ live_node_tests() ->
                  {ok, PO} = ?MODULE:put(Pid, O, [{w, 1}, {dw, 1}, return_body]),
                  {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>, [{r, 1}]),
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
+             end)},
+
+     {"put and delete with timeout",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 PO = riakc_obj:new(<<"b">>, <<"puttimeouttest">>, <<"value">>),
+                 ok = ?MODULE:put(Pid, PO, 500),
+                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"puttimeouttest">>, 500),
+                 ?assertEqual(<<"value">>, riakc_obj:get_value(GO)),
+                 ok = ?MODULE:delete(Pid, <<"b">>, <<"puttimeouttest">>, 500),
+                 {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"puttimeouttest">>)
              end)},
 
      {"update_should_change_value_test()",
