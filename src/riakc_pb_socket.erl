@@ -29,7 +29,7 @@
 -export([start_link/2, start_link/3,
          start/2, start/3,
          stop/1,
-         is_connected/1,
+         is_connected/1, is_connected/2,
          ping/1, ping/2,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
@@ -91,7 +91,7 @@
 %%      Client id will be assigned by the server.
 -spec start_link(address(), portnum()) -> {ok, pid()} | {error, term()}.
 start_link(Address, Port) ->
-    gen_server:start_link(?MODULE, [Address, Port, []], []).
+    start_link(Address, Port, []).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port with Options
 %%      Client id will be assigned by the server.
@@ -107,7 +107,7 @@ start_link(Address, Port, Options) when is_list(Options) ->
 %%      Client id will be assigned by the server.
 -spec start(address(), portnum()) -> {ok, pid()} | {error, term()}.
 start(Address, Port) ->
-    gen_server:start(?MODULE, [Address, Port, []], []).
+    start(Address, Port, []).
 
 %% @doc Create a process to talk with the riak server on Address:Port with Options
 %%     See start_link/3.
@@ -122,7 +122,11 @@ stop(Pid) ->
 %% @doc Return true if connected to the remote server and {false, [{Reason,integer()}]}
 %%      with a list of failed connect reasons
 is_connected(Pid) ->
-    gen_server:call(Pid, is_connected).
+    is_connected(Pid, infinity).
+
+%% @doc See is_connected/1 with gen_server timeout
+is_connected(Pid, Timeout) ->
+    gen_server:call(Pid, is_connected, Timeout).
 
 %% @doc Ping the server
 -spec ping(pid()) -> ok | {error, term()}.
@@ -494,7 +498,10 @@ handle_info({tcp_error, _Socket, Reason}, State) ->
 handle_info({tcp_closed, _Socket}, State) ->
     {noreply, disconnect(State)};
 
-handle_info({tcp, _Socket, Data}, State=#state{sock = Sock, active = Active}) ->
+%% Make sure the two Sock's match.  If a request timed out, but there was
+%% a response queued up behind it we do not want to process it.  Instead
+%% it should drop through and be ignored.
+handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
     [MsgCode|MsgData] = Data,
     Resp = riakc_pb:decode(MsgCode, MsgData),
     case Resp of
@@ -570,8 +577,10 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% Parse options
 parse_options([], State) ->
     State;
+parse_options([{queue_if_disconnected,Bool}|Options], State) when Bool =:= true; Bool =:= false ->
+    parse_options(Options, State#state{queue_if_disconnected = Bool});
 parse_options([queue_if_disconnected|Options], State) ->
-    parse_options(Options, State#state{queue_if_disconnected = true}).
+    parse_options([{queue_if_disconnected, true}|Options], State).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
