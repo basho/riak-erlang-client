@@ -12,8 +12,12 @@
                   stdlib
                  ]},
   {registered, []},
-  {env, [{{timeout, get}, 30000},
-         {{timeout, put}, 30000},
-         {timeout,        60000}]}
+  {env, [
+         %% Set default timeout for operations.
+         %% Individual operation timeouts can be supplied,
+         %% e.g. get_timeout, put_timeout that will 
+         %% override the default.
+         {timeout, 60000}
+        ]}
  ]}.
 

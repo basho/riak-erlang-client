@@ -79,9 +79,9 @@
 -type riakc_obj() :: tuple().
 -type riak_pbc_options() :: list().
 -type req_id() :: non_neg_integer().
--type rpb_req() :: tuple().
+-type rpb_req() :: atom() | tuple().
 -type ctx() :: any().
--type rpb_resp() :: tuple().
+-type rpb_resp() :: atom() | tuple().
 -type server_prop() :: {node, binary()} | {server_version, binary()}.
 -type server_info() :: [server_prop()].
 -type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
@@ -127,7 +127,7 @@ is_connected(Pid) ->
 %% @doc Ping the server
 -spec ping(pid()) -> ok | {error, term()}.
 ping(Pid) ->
-    ping(Pid, default_timeout(ping)).
+    ping(Pid, default_timeout(ping_timeout)).
 
 %% @doc Ping the server specifying timeout
 -spec ping(pid(), timeout()) -> ok | {error, term()}.
@@ -137,7 +137,7 @@ ping(Pid, Timeout) ->
 %% @doc Get the client id for this connection
 -spec get_client_id(pid()) -> {ok, client_id()} | {error, term()}.
 get_client_id(Pid) ->
-    get_client_id(Pid, default_timeout(get_client_id)).
+    get_client_id(Pid, default_timeout(get_client_id_timeout)).
 
 %% @doc Get the client id for this connection specifying timeout
 -spec get_client_id(pid(), timeout()) -> {ok, client_id()} | {error, term()}.
@@ -147,7 +147,7 @@ get_client_id(Pid, Timeout) ->
 %% @doc Set the client id for this connection
 -spec set_client_id(pid(), client_id()) -> {ok, client_id()} | {error, term()}.
 set_client_id(Pid, ClientId) ->
-    set_client_id(Pid, ClientId, default_timeout(set_client_id)).
+    set_client_id(Pid, ClientId, default_timeout(set_client_id_timeout)).
 
 %% @doc Set the client id for this connection specifying timeout
 -spec set_client_id(pid(), client_id(), timeout()) -> {ok, client_id()} | {error, term()}.
@@ -157,7 +157,7 @@ set_client_id(Pid, ClientId, Timeout) ->
 %% @doc Get the server information for this connection
 -spec get_server_info(pid()) -> {ok, server_info()} | {error, term()}.
 get_server_info(Pid) ->
-    get_server_info(Pid, default_timeout(get_server_info)).
+    get_server_info(Pid, default_timeout(get_server_info_timeout)).
 
 %% @doc Get the server information for this connection specifying timeout
 -spec get_server_info(pid(), timeout()) -> {ok, server_info()} | {error, term()}.
@@ -168,7 +168,7 @@ get_server_info(Pid, Timeout) ->
 %%      Will return {error, notfound} if the key is not on the server
 -spec get(pid(), bucket() | string(), key() | string()) -> {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key) ->
-    get(Pid, Bucket, Key, [], default_timeout(get)).
+    get(Pid, Bucket, Key, [], default_timeout(get_timeout)).
 
 %% @doc Get bucket/key from the server specifying timeout
 %%      Will return {error, notfound} if the key is not on the server
@@ -181,7 +181,7 @@ get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
 %% @doc Get bucket/key from the server supplying options
 %%      [{r, 1}] would set r=1 for the request
 get(Pid, Bucket, Key, Options) ->
-    get(Pid, Bucket, Key, Options, default_timeout(get)).
+    get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
  
 %% @doc Get bucket/key from the server supplying options and timeout
 %%      [{r, 1}] would set r=1 for the request
@@ -211,7 +211,7 @@ put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
 %%      that have not been resolved by calling select_sibling/2 or 
 %%      update_value/2 and update_metadata/2.
 put(Pid, Obj, Options) ->
-    put(Pid, Obj, Options, default_timeout(put)).
+    put(Pid, Obj, Options, default_timeout(put_timeout)).
 
 %% @doc Put the metadata/value in the object under bucket/key with options and timeout
 %%      [{w,2}] sets w=2,
@@ -246,7 +246,7 @@ delete(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity
 %% @doc Delete the key/value with options
 %%      [{rw,2}] sets rw=2
 delete(Pid, Bucket, Key, Options) ->
-    delete(Pid, Bucket, Key, Options, default_timeout(delete)).
+    delete(Pid, Bucket, Key, Options, default_timeout(delete_timeout)).
 
 %% @doc Delete the key/value with options and timeout
 %%      [{rw,2}] sets rw=2
@@ -269,7 +269,7 @@ list_buckets(Pid, Timeout) ->
 %% @doc List all keys in a bucket
 -spec list_keys(pid(), bucket()) -> {ok, [key()]}.
 list_keys(Pid, Bucket) ->
-    list_keys(Pid, Bucket, default_timeout(list_keys)).
+    list_keys(Pid, Bucket, default_timeout(list_keys_timeout)).
 
 %% @doc List all keys in a bucket specifying timeout
 -spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]}.
@@ -287,7 +287,7 @@ list_keys(Pid, Bucket, Timeout) ->
 %%        {ReqId, done}
 -spec stream_list_keys(pid(), bucket()) -> {ok, req_id()} | {error, term()}.
 stream_list_keys(Pid, Bucket) ->
-    stream_list_keys(Pid, Bucket, default_timeout(stream_list_keys)).
+    stream_list_keys(Pid, Bucket, default_timeout(stream_list_keys_timeout)).
 
 %% @doc Stream list of keys in the bucket to the calling process specifying timeout.
 %%      The process receives these messages.
@@ -302,7 +302,7 @@ stream_list_keys(Pid, Bucket, Timeout) ->
 %% @doc Get bucket properties
 -spec get_bucket(pid(), bucket()) -> {ok, bucket_props()} | {error, term()}.
 get_bucket(Pid, Bucket) ->
-    get_bucket(Pid, Bucket, default_timeout(get_bucket)).
+    get_bucket(Pid, Bucket, default_timeout(get_bucket_timeout)).
 
 %% @doc Get bucket properties specifying a timeout
 -spec get_bucket(pid(), bucket(), timeout()) -> {ok, bucket_props()} | {error, term()}.
@@ -313,7 +313,7 @@ get_bucket(Pid, Bucket, Timeout) ->
 %% @doc Set bucket properties
 -spec set_bucket(pid(), bucket(), bucket_props()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps) ->
-    set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket)).
+    set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket_timeout)).
 
 %% @doc Set bucket properties specifying a timeout
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout()) -> ok | {error, term()}.
@@ -333,7 +333,7 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 %%      See the map/reduce documentation for explanation of behavior.
 %% @equiv mapred(Inputs, Query, default_timeout(mapred))
 mapred(Pid, Inputs, Query) ->
-    mapred(Pid, Inputs, Query, default_timeout(mapred)).
+    mapred(Pid, Inputs, Query, default_timeout(mapred_timeout)).
 
 %% @spec mapred(Pid :: pid(),
 %%              Inputs :: list(),
@@ -362,7 +362,7 @@ mapred(Pid, Inputs, Query, Timeout) ->
 %%      to ClientPid.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_stream(Pid, Inputs, Query, ClientPid) ->
-    mapred_stream(Pid, Inputs, Query, ClientPid, default_timeout(mapred_stream)).
+    mapred_stream(Pid, Inputs, Query, ClientPid, default_timeout(mapred_stream_timeout)).
 
 %% @spec mapred_stream(Pid :: pid(),
 %%                     Inputs :: list(),
@@ -388,7 +388,7 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
 %% @doc Perform a map/reduce job against a bucket across the cluster.
 %%      See the map/reduce documentation for explanation of behavior.
 mapred_bucket(Pid, Bucket, Query) ->
-    mapred_bucket(Pid, Bucket, Query, default_timeout(mapred_bucket)).
+    mapred_bucket(Pid, Bucket, Query, default_timeout(mapred_bucket_timeout)).
 
 %% @spec mapred_bucket(Pid :: pid(),
 %%                     Bucket :: bucket(),
@@ -423,10 +423,11 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
               {'timeout', Timeout}],
     send_mapred_req(Pid, MapRed, ClientPid).
 
-%% @spec default_timeout(Operation) -> timeout()
-%% @doc Return the default timeout for an operation if none is specified.
-default_timeout(Op) ->
-    case application:get_env(riakc, {timeout, Op}) of
+%% @spec default_timeout(OpTimeout) -> timeout()
+%% @doc Return the default timeout for an operation if none is provided.
+%%      Falls back to the default timeout.
+default_timeout(OpTimeout) ->
+    case application:get_env(riakc, OpTimeout) of
         {ok, OpTimeout} ->
             OpTimeout;
         undefined ->
@@ -766,7 +767,7 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
     ReqId = mk_reqid(),
     %% Add an extra 100ms to the mapred timeout and use that for the 
     %% socket timeout.  This should give the map/reduce a chance to fail and let us know.
-    Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred)) + 100,
+    Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred_timeout)) + 100,
     gen_server:call(Pid, {req, ReqMsg, Timeout, {ReqId, ClientPid}}).
 
 %% @private
