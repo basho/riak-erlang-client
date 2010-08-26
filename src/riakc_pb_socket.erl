@@ -59,6 +59,8 @@
 
 -record(state, {address,    % address to connect to
                 port,       % port to connect to
+                auto_reconnect = false, % if true, automatically reconnects to server
+                                        % if false, exits on connection failure/request timeout
                 queue_if_disconnected = false, % if true, add requests to queue if disconnected
                 sock,       % gen_tcp socket
                 active,     % active request
@@ -72,7 +74,8 @@
 -type address() :: string() | atom() | ip_address().
 -type portnum() :: non_neg_integer().
 -type options() :: [option()].
--type option()  :: queue_if_disconnected.
+-type option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
+                   auto_reconnect | {auto_reconnect, boolean()}.
 -type client_id() :: binary().
 -type bucket() :: binary().
 -type key() :: binary().
@@ -95,9 +98,13 @@ start_link(Address, Port) ->
 
 %% @doc Create a linked process to talk with the riak server on Address:Port with Options
 %%      Client id will be assigned by the server.
-%%      Options queue_if_disconnected adds requests to the queue when it is disconnected
-%%      rather than return {error, disconnected}.  If the server comes back the request
-%%      will be submitted if the timeout has not expired.
+%%      Options:
+%%        auto_reconnect automatically try and reconnenct the socket on dropped socket
+%%          or timeout.
+%%        queue_if_disconnected adds requests to the queue when it is disconnected
+%%          rather than return {error, disconnected}.  If the server comes back the
+%%          request will be submitted if the timeout has not expired.  Implies
+%%          {auto_reconnect, true}.
 %%      
 -spec start_link(address(), portnum(), options()) -> {ok, pid()} | {error, term()}.
 start_link(Address, Port, Options) when is_list(Options) ->
@@ -451,11 +458,22 @@ default_timeout(OpTimeout) ->
 init([Address, Port, Options]) ->
     %% Schedule a reconnect as the first action.  If the server is up then 
     %% the handle_info(reconnect) will run before any requests can be sent.
-    self() ! reconnect,
-    {ok,  parse_options(Options, #state{address = Address, 
-                                        port = Port,
-                                        queue = queue:new()})}.
-
+    State = parse_options(Options, #state{address = Address, 
+                                          port = Port,
+                                          queue = queue:new()}),
+    case State#state.auto_reconnect of
+        true ->
+            self() ! reconnect,
+            {ok, State};
+        false ->
+            case connect(State) of
+                {error, Reason} ->
+                    {stop, Reason};
+                Ok ->
+                    Ok
+            end
+    end.
+        
 %% @private
 handle_call({req, Msg, Timeout}, From, State) when State#state.sock =:= undefined ->
     case State#state.queue_if_disconnected of
@@ -487,16 +505,17 @@ handle_call(is_connected, _From, State) ->
             {reply, true, State}
     end;
 handle_call(stop, _From, State) ->
-    {stop, normal, ok, disconnect(State)}.
+    disconnect(State),
+    {stop, normal, ok, State}.
 
 %% @private
 handle_info({tcp_error, _Socket, Reason}, State) ->
     error_logger:error_msg("PBC client TCP error for ~p:~p - ~p\n",
                            [State#state.address, State#state.port, Reason]),
-    {noreply, disconnect(State)};
+    disconnect(State);
     
 handle_info({tcp_closed, _Socket}, State) ->
-    {noreply, disconnect(State)};
+    disconnect(State);
 
 %% Make sure the two Sock's match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
@@ -538,26 +557,22 @@ handle_info({req_timeout, Ref}, State) ->
             case Ref == Active#request.ref of
                 true ->  %% Matches the current operation
                     NewState = maybe_reply(on_timeout(State#state.active, State)),
-                    {noreply, disconnect(NewState#state{active = undefined})};
+                    disconnect(NewState#state{active = undefined});
                 false ->
                     {noreply, remove_queued_request(Ref, State)}
             end
     end;
 handle_info(reconnect, State) ->
-    #state{address = Address, port = Port, connects = Connects} = State,
-    case gen_tcp:connect(Address, Port,
-                         [binary, {active, once}, {packet, 4}, {header, 1}]) of
-        {ok, Sock} ->
-            NewState = State#state{sock = Sock, connects = Connects+1, 
-                                   reconnect_interval = ?FIRST_RECONNECT_INTERVAL},
+    case connect(State) of
+        {ok, NewState} ->
             {noreply, dequeue_request(NewState)};
         {error, Reason} ->
             %% Update the failed count and reschedule a reconnection
             NewState = State#state{failed = orddict:update_counter(Reason, 1, State#state.failed)},
-            {noreply, disconnect(NewState)}
+            disconnect(NewState)
     end;
 handle_info(_, State) ->
-    {noreply, State}.
+    {noreply, State}.            
 
 %% @private
 handle_cast(_Msg, State) ->
@@ -576,11 +591,24 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% @private
 %% Parse options
 parse_options([], State) ->
-    State;
-parse_options([{queue_if_disconnected,Bool}|Options], State) when Bool =:= true; Bool =:= false ->
+    %% Once all options are parsed, make sure auto_reconnect is enabled
+    %% if queue_if_disconnected is enabled.
+    case State#state.queue_if_disconnected of
+        true ->
+            State#state{auto_reconnect = true};
+        _ ->
+            State
+    end;
+parse_options([{queue_if_disconnected,Bool}|Options], State) when 
+      Bool =:= true; Bool =:= false ->
     parse_options(Options, State#state{queue_if_disconnected = Bool});
 parse_options([queue_if_disconnected|Options], State) ->
-    parse_options([{queue_if_disconnected, true}|Options], State).
+    parse_options([{queue_if_disconnected, true}|Options], State);
+parse_options([{auto_reconnect,Bool}|Options], State) when 
+      Bool =:= true; Bool =:= false ->
+    parse_options(Options, State#state{auto_reconnect = Bool});
+parse_options([auto_reconnect|Options], State) ->
+    parse_options([{auto_reconnect, true}|Options], State).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -820,9 +848,21 @@ restart_req_timer(Request) ->
     end.
 
 %% @private
+%% Connect the socket if disconnected
+connect(State) when State#state.sock =:= undefined ->
+    #state{address = Address, port = Port, connects = Connects} = State,
+    case gen_tcp:connect(Address, Port,
+                         [binary, {active, once}, {packet, 4}, {header, 1}]) of
+        {ok, Sock} ->
+            {ok, State#state{sock = Sock, connects = Connects+1, 
+                             reconnect_interval = ?FIRST_RECONNECT_INTERVAL}};
+        Error ->
+            Error
+    end.
+
+%% @private
 %% Disconnect socket if connected
 disconnect(State) ->
-
     %% Tell any pending requests we've disconnected
     case State#state.active of
         undefined ->
@@ -839,10 +879,17 @@ disconnect(State) ->
             gen_tcp:close(Sock)
     end,
 
-    %% Schedule the reconnect message and return state
-    erlang:send_after(State#state.reconnect_interval, self(), reconnect),
-    increase_reconnect_interval(State#state{sock = undefined, active = undefined}).
- 
+    %% Decide whether to reconnect or exit
+    NewState = State#state{sock = undefined, active = undefined},
+    case State#state.auto_reconnect of
+        true ->
+            %% Schedule the reconnect message and return state
+            erlang:send_after(State#state.reconnect_interval, self(), reconnect),
+            {noreply, increase_reconnect_interval(NewState)};
+        false ->
+            {stop, disconnected, NewState}
+    end.
+            
 %% Double the reconnect interval up to the maximum
 increase_reconnect_interval(State) ->
     case State#state.reconnect_interval of
@@ -998,11 +1045,7 @@ maybe_start_network() ->
 
 bad_connect_test() ->
     %% Start with an unlikely port number
-    {ok, Pid} = start({127,0,0,1}, 65535),
-    ?assertEqual({false, [{econnrefused,1}]}, is_connected(Pid)),
-    ?assertEqual({error, disconnected}, ping(Pid)),
-    ?assertEqual({error, disconnected}, list_keys(Pid, <<"b">>)),
-    stop(Pid).
+    ?assertEqual({error, econnrefused}, start({127,0,0,1}, 65535)).
 
 queue_disconnected_test() ->
     %% Start with an unlikely port number
@@ -1011,11 +1054,45 @@ queue_disconnected_test() ->
     ?assertEqual({error, timeout}, list_keys(Pid, <<"b">>, 10)),
     stop(Pid).
 
+auto_reconnect_bad_connect_test() ->
+    %% Start with an unlikely port number
+    {ok, Pid} = start({127,0,0,1}, 65535, [auto_reconnect]),
+    ?assertEqual({false, [{econnrefused,1}]}, is_connected(Pid)),
+    ?assertEqual({error, disconnected}, ping(Pid)),
+    ?assertEqual({error, disconnected}, list_keys(Pid, <<"b">>)),
+    stop(Pid).
+
 server_closes_socket_test() ->
     %% Set up a dummy socket to send requests on
     {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
     {ok, Port} = inet:port(Listen),
-    {ok, Pid} = start_link("127.0.0.1", Port),
+    {ok, Pid} = start("127.0.0.1", Port),
+    Mref = erlang:monitor(process, Pid),
+    {ok, Sock} = gen_tcp:accept(Listen),
+    ?assertMatch(true, is_connected(Pid)),
+
+    %% Send a ping request in another process so the test doesn't block
+    Self = self(),
+    spawn(fun() -> Self ! ping(Pid, infinity) end),
+
+    %% Make sure request received then close the socket
+    {ok, _ReqMsg} = gen_tcp:recv(Sock, 0),
+    ok = gen_tcp:close(Sock),
+    ok = gen_tcp:close(Listen),
+    receive
+        Msg1 ->
+            ?assertEqual({error, disconnected}, Msg1)
+    end,
+    receive
+        Msg2 ->
+            ?assertMatch({'DOWN', Mref, process, _, _}, Msg2)
+    end.
+
+auto_reconnect_server_closes_socket_test() ->
+    %% Set up a dummy socket to send requests on
+    {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
+    {ok, Port} = inet:port(Listen),
+    {ok, Pid} = start_link("127.0.0.1", Port, [auto_reconnect]),
     {ok, Sock} = gen_tcp:accept(Listen),
     ?assertMatch(true, is_connected(Pid)),
 
@@ -1048,6 +1125,7 @@ dead_socket_pid_returns_to_caller_test() ->
     spawn(fun() -> Self ! (catch ping(Pid, infinity)) end),
 
     %% Make sure request received then kill the process
+    {ok, _ReqMsg} = gen_tcp:recv(Sock, 0),
     exit(Pid, kill),
     receive
         Msg ->
@@ -1323,7 +1401,7 @@ live_node_tests() ->
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
                  pause_riak_pb_listener(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT, [queue_if_disconnected]),
                  Me = self(),
                  %% this request will block as
                  spawn(fun() -> Me ! {1, ping(Pid, 0)} end),
