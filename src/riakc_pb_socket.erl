@@ -60,7 +60,7 @@
 -record(state, {address,    % address to connect to
                 port,       % port to connect to
                 sock,       % gen_tcp socket
-                pending,    % active request
+                active,     % active request
                 queue,      % queue of pending requests
                 connects=0, % number of successful connects
                 failed=[],  % breakdown of failed connects
@@ -417,10 +417,10 @@ init([Address, Port]) ->
     {ok, #state{address = Address, port = Port, queue = queue:new()}}.
 
 %% @private
-handle_call({req, Msg, Timeout}, From, State) when State#state.pending =/= undefined;
+handle_call({req, Msg, Timeout}, From, State) when State#state.active =/= undefined;
                                                    State#state.sock =:= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.pending =/= undefined;
+handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.active =/= undefined;
                                                         State#state.sock =:= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
 handle_call({req, Msg, Timeout}, From, State) ->
@@ -446,44 +446,44 @@ handle_info({tcp_error, _Socket, Reason}, State) ->
 handle_info({tcp_closed, _Socket}, State) ->
     {noreply, disconnect(State)};
 
-handle_info({tcp, _Socket, Data}, State=#state{sock = Sock, pending = Pending}) ->
+handle_info({tcp, _Socket, Data}, State=#state{sock = Sock, active = Active}) ->
     [MsgCode|MsgData] = Data,
     Resp = riakc_pb:decode(MsgCode, MsgData),
     case Resp of
         #rpberrorresp{} ->
-            NewState1 = maybe_reply(on_error(Pending, Resp, State)),
-            NewState = dequeue_request(NewState1#state{pending = undefined});
+            NewState1 = maybe_reply(on_error(Active, Resp, State)),
+            NewState = dequeue_request(NewState1#state{active = undefined});
         _ ->
-            case process_response(Pending, Resp, State) of
+            case process_response(Active, Resp, State) of
                 {reply, Response, NewState0} ->
                     %% Send reply and get ready for the next request - send the next request
                     %% if one is queued up
-                    cancel_req_timer(Pending#request.tref),
-                    send_caller(Response, NewState0#state.pending),
-                    NewState = dequeue_request(NewState0#state{pending = undefined});
+                    cancel_req_timer(Active#request.tref),
+                    send_caller(Response, NewState0#state.active),
+                    NewState = dequeue_request(NewState0#state{active = undefined});
 
                 {noreply, NewState0} ->
                     %% Request has completed with no reply needed, send the next request 
                     %% if one is queued up
-                    cancel_req_timer(Pending#request.tref),
-                    NewState = dequeue_request(NewState0#state{pending = undefined});
+                    cancel_req_timer(Active#request.tref),
+                    NewState = dequeue_request(NewState0#state{active = undefined});
 
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
-                    NewPending = restart_req_timer(Pending),
-                    NewState = NewState0#state{pending = NewPending}
+                    NewActive = restart_req_timer(Active),
+                    NewState = NewState0#state{active = NewActive}
             end
     end,
     inet:setopts(Sock, [{active, once}]),
     {noreply, NewState};
 handle_info({req_timeout, Ref}, State) ->
-    case State#state.pending of %%
+    case State#state.active of %%
         undefined ->
             {noreply, remove_queued_request(Ref, State)};
-        Pending ->
-            case Ref == Pending#request.ref of
+        Active ->
+            case Ref == Active#request.ref of
                 true ->  %% Matches the current operation
-                    NewState = maybe_reply(on_timeout(State#state.pending, State)),
-                    {noreply, disconnect(NewState#state{pending = undefined})};
+                    NewState = maybe_reply(on_timeout(State#state.active, State)),
+                    {noreply, disconnect(NewState#state{active = undefined})};
                 false ->
                     {noreply, remove_queued_request(Ref, State)}
             end
@@ -519,9 +519,9 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 
 maybe_reply({reply, Reply, State}) ->
-    Request = State#state.pending,
+    Request = State#state.active,
     NewRequest = send_caller(Reply, Request),
-    State#state{pending = NewRequest};
+    State#state{active = NewRequest};
 maybe_reply({noreply, State}) ->
     State.
 
@@ -761,7 +761,7 @@ restart_req_timer(Request) ->
 disconnect(State) ->
 
     %% Tell any pending requests we've disconnected
-    case State#state.pending of
+    case State#state.active of
         undefined ->
             ok;
         Request ->
@@ -778,7 +778,7 @@ disconnect(State) ->
 
     %% Schedule the reconnect message and return state
     erlang:send_after(State#state.reconnect_interval, self(), reconnect),
-    increase_reconnect_interval(State#state{sock = undefined, pending = undefined}).
+    increase_reconnect_interval(State#state{sock = undefined, active = undefined}).
  
 %% Double the reconnect interval up to the maximum
 increase_reconnect_interval(State) ->
@@ -792,15 +792,15 @@ increase_reconnect_interval(State) ->
 
 %% Send a request to the server and prepare the state for the response
 %% @private
-send_request(Request, State) when State#state.pending =:= undefined ->
+send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riakc_pb:encode(Request#request.msg),
     gen_tcp:send(State#state.sock, Pkt),
-    maybe_reply(after_send(Request, State#state{pending = Request})).
+    maybe_reply(after_send(Request, State#state{active = Request})).
 
 %% Queue up a request if one is pending
 %% @private
-queue_request(Pending, State) ->
-    State#state{queue = queue:in(Pending, State#state.queue)}.
+queue_request(Request, State) ->
+    State#state{queue = queue:in(Request, State#state.queue)}.
 
 %% Try and dequeue request and send onto the server if one is waiting
 %% @private
