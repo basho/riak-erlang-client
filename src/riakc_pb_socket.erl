@@ -29,6 +29,7 @@
 -export([start_link/2, start_link/3,
          start/2, start/3,
          stop/1,
+         set_options/2, set_options/3,
          is_connected/1, is_connected/2,
          ping/1, ping/2,
          get_client_id/1, get_client_id/2,
@@ -125,6 +126,15 @@ start(Address, Port, Options) when is_list(Options) ->
 %% @doc Disconnect the socket and stop the process
 stop(Pid) ->
     gen_server:call(Pid, stop).
+
+%% @doc Change the options for this socket.  Allows you to connect with one 
+%%      set of optionsthen run with another (e.g. connect with no options to
+%%      make sure the server is there, then enable queue_if_disconnected)
+set_options(Pid, Options) ->
+    set_options(Pid, Options, infinity).
+%% @doc set_options/2 with a gen_server timeout
+set_options(Pid, Options, Timeout) ->
+    gen_server:call(Pid, {set_options, Options}, Timeout).
 
 %% @doc Return true if connected to the remote server and {false, [{Reason,integer()}]}
 %%      with a list of failed connect reasons
@@ -504,6 +514,8 @@ handle_call(is_connected, _From, State) ->
         _ ->
             {reply, true, State}
     end;
+handle_call({set_options, Options}, _From, State) ->
+    {reply, ok, parse_options(Options, State)};
 handle_call(stop, _From, State) ->
     disconnect(State),
     {stop, normal, ok, State}.
@@ -1030,6 +1042,17 @@ resume_riak_pb_listener() ->
     Pid = riak_pb_listener_pid(),
     rpc:call(?TEST_RIAK_NODE, sys, resume, [Pid]).
 
+kill_riak_pb_sockets() ->
+    case supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}) of
+        [] ->
+            ok;
+        Children ->
+            Pids = [Pid || {_,Pid,_,_} <- Children],
+            [rpc:call(?TEST_RIAK_NODE, erlang, exit, [Pid, kill]) || Pid <- Pids],
+            erlang:yield(),
+            kill_riak_pb_sockets()
+    end.
+
 maybe_start_network() ->
     %% Try to spin up net_kernel
     os:cmd("epmd -daemon"),
@@ -1177,8 +1200,23 @@ live_node_tests() ->
       ?_test( begin
                   {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
                   ?assertEqual(pong, ?MODULE:ping(Pid)),
-                  ?assertEqual(true, is_connected(Pid))
+                  ?assertEqual(true, is_connected(Pid)),
+                  stop(Pid)
               end)},
+     {"reconnect test",
+      ?_test( begin
+                  %% Make sure originally there
+                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                  
+                  %% Change the options to allow reconnection/queueing
+                  set_options(Pid, [queue_if_disconnected]),
+                  
+                  %% Kill the socket
+                  kill_riak_pb_sockets(),
+                  ?assertEqual(pong, ?MODULE:ping(Pid)),
+                  stop(Pid)
+              end)},
+
      {"set client id",
       ?_test(
          begin
