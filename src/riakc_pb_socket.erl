@@ -47,6 +47,7 @@
          mapred_stream/4, mapred_stream/5,
          mapred_bucket/3, mapred_bucket/4,
          mapred_bucket_stream/5,
+         search/3, search/5,
          default_timeout/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -443,6 +444,35 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
               {'query', Query},
               {'timeout', Timeout}],
     send_mapred_req(Pid, MapRed, ClientPid).
+
+
+%% @doc Execute a search query. This command will return an error 
+%%      unless executed against a Riak Search cluster.
+%% @spec search(rhc(), bucket(), string()) -> 
+%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+search(Pid, Bucket, SearchQuery) ->
+    %% Run a Map/Reduce operation using reduce_identity to get a list
+    %% of BKeys.
+    IdentityQuery = [{reduce, {modfun, riak_kv_mapreduce, reduce_identity}, none, true}],
+    case search(Pid, Bucket, SearchQuery, IdentityQuery, ?DEFAULT_TIMEOUT) of
+        {ok, [{_, Results}]} -> 
+            %% Unwrap the results.
+            {ok, Results};
+        Other -> Other
+    end.
+
+
+%% @doc Execute a search query and feed the results into a map/reduce
+%%      query. See {@link rhc_mapred:encode_mapred/2} for details of
+%%      the allowed formats for `MRQuery'. This command will return an error 
+%%      unless executed against a Riak Search cluster.
+%% @spec search(rhc(), bucket(), string(), 
+%%       [rhc_mapred:query_part()], integer() ->
+%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+search(Pid, Bucket, SearchQuery, MRQuery, Timeout) ->
+    Inputs = {modfun, riak_search, mapred_search, [Bucket, SearchQuery]},
+    mapred(Pid, Inputs, MRQuery, Timeout).
+
 
 %% @spec default_timeout(OpTimeout) -> timeout()
 %% @doc Return the default timeout for an operation if none is provided.
