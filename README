@@ -25,7 +25,7 @@ Table of Contents
 
   The official source code for this client can be retrieved from
 
-  [http://bitbucket.org/basho/riak-erlang-client]
+  [http://github.com/basho/riak-erlang-client]
 
   Riak can be obtained pre-built from
 
@@ -33,5 +33,5 @@ Table of Contents
 
   or as source from
 
-  [http://bitbucket.org/basho/riak]
+  [http://github.com/basho/riak]
 
