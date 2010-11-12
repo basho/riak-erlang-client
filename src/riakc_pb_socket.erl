@@ -467,7 +467,7 @@ search(Pid, Bucket, SearchQuery) ->
 %%      the allowed formats for `MRQuery'. This command will return an error 
 %%      unless executed against a Riak Search cluster.
 %% @spec search(rhc(), bucket(), string(), 
-%%       [rhc_mapred:query_part()], integer() ->
+%%       [rhc_mapred:query_part()], integer()) ->
 %%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
 search(Pid, Bucket, SearchQuery, MRQuery, Timeout) ->
     Inputs = {modfun, riak_search, mapred_search, [Bucket, SearchQuery]},
