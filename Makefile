@@ -21,5 +21,5 @@ dialyzer: compile
 	@dialyzer -Wno_return -c ebin
 
 doc :
-	erl -noshell -run edoc_run application riakc '"."' '[]'
+	@./rebar doc skip_deps=true
 
