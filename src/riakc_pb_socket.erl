@@ -69,6 +69,7 @@
                 queue,      % queue of pending requests
                 connects=0, % number of successful connects
                 failed=[],  % breakdown of failed connects
+                connect_timeout=infinity, % timeout of TCP connection
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL}).
 -record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: integer(),
                   tref :: reference() | undefined }).
@@ -508,7 +509,7 @@ init([Address, Port, Options]) ->
         false ->
             case connect(State) of
                 {error, Reason} ->
-                    {stop, Reason};
+                    {stop, {tcp, Reason}};
                 Ok ->
                     Ok
             end
@@ -641,6 +642,8 @@ parse_options([], State) ->
         _ ->
             State
     end;
+parse_options([{connect_timeout, T}|Options], State) when is_integer(T) ->
+    parse_options(Options, State#state{connect_timeout = T});
 parse_options([{queue_if_disconnected,Bool}|Options], State) when 
       Bool =:= true; Bool =:= false ->
     parse_options(Options, State#state{queue_if_disconnected = Bool});
@@ -894,7 +897,8 @@ restart_req_timer(Request) ->
 connect(State) when State#state.sock =:= undefined ->
     #state{address = Address, port = Port, connects = Connects} = State,
     case gen_tcp:connect(Address, Port,
-                         [binary, {active, once}, {packet, 4}, {header, 1}]) of
+                         [binary, {active, once}, {packet, 4}, {header, 1}],
+                         State#state.connect_timeout) of
         {ok, Sock} ->
             {ok, State#state{sock = Sock, connects = Connects+1, 
                              reconnect_interval = ?FIRST_RECONNECT_INTERVAL}};
@@ -1098,7 +1102,7 @@ maybe_start_network() ->
 
 bad_connect_test() ->
     %% Start with an unlikely port number
-    ?assertEqual({error, econnrefused}, start({127,0,0,1}, 65535)).
+    ?assertEqual({error, {tcp, econnrefused}}, start({127,0,0,1}, 65535)).
 
 queue_disconnected_test() ->
     %% Start with an unlikely port number
