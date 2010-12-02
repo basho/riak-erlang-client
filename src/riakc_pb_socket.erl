@@ -1124,7 +1124,6 @@ server_closes_socket_test() ->
     {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
     {ok, Port} = inet:port(Listen),
     {ok, Pid} = start("127.0.0.1", Port),
-    Mref = erlang:monitor(process, Pid),
     {ok, Sock} = gen_tcp:accept(Listen),
     ?assertMatch(true, is_connected(Pid)),
 
@@ -1137,9 +1136,11 @@ server_closes_socket_test() ->
     ok = gen_tcp:close(Sock),
     ok = gen_tcp:close(Listen),
     receive
-        Msg1 ->
+        Msg1 -> % result of ping from spawned process above
             ?assertEqual({error, disconnected}, Msg1)
     end,
+    %% Wait for spawned process to exit
+    Mref = erlang:monitor(process, Pid),
     receive
         Msg2 ->
             ?assertMatch({'DOWN', Mref, process, _, _}, Msg2)
