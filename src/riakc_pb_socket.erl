@@ -1039,11 +1039,57 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 -include_lib("eunit/include/eunit.hrl").
 -include("riakc_obj.hrl").
 
--define(TEST_IP, {127,0,0,1}).
--define(TEST_PORT, 8087).
--define(TEST_RIAK_NODE, 'riak@127.0.0.1').
--define(TEST_EUNIT_NODE, 'eunit@127.0.0.1').
--define(TEST_COOKIE, 'riak').
+%% Get the test host - check env RIAK_TEST_PB_HOST then env 'RIAK_TEST_HOST'
+%% falling back to 127.0.0.1
+test_ip() ->
+    case os:getenv("RIAK_TEST_PB_HOST") of
+        false ->
+            case os:getenv("RIAK_TEST_HOST") of
+                false ->
+                    "127.0.0.1";
+                Host ->
+                    Host
+            end;
+        Host ->
+            Host
+    end.
+
+%% Test port - check env RIAK_TEST_PB_PORT            
+test_port() ->
+    case os:getenv("RIAK_TEST_PB_PORT") of
+        false ->
+            8087;
+        PortStr ->
+            list_to_integer(PortStr)
+    end.
+
+%% Riak node under test - used to setup/configure/tweak it for tests
+test_riak_node() ->
+    case os:getenv("RIAK_TEST_NODE") of
+        false ->
+            'riak@127.0.0.1';
+        NodeStr ->
+            list_to_atom(NodeStr)
+    end.
+
+%% Node for the eunit node for distributed erlang 
+test_eunit_node() ->
+    case os:getenv("RIAK_EUNIT_NODE") of
+        false ->
+            'eunit@127.0.0.1';
+        EunitNodeStr ->
+            list_to_atom(EunitNodeStr)
+    end.
+
+%% Cookie for distributed erlang
+test_cookie() ->
+    case os:getenv("RIAK_TEST_COOKIE") of
+        false ->
+            'riak';
+        CookieStr ->
+            list_to_atom(CookieStr)
+    end.
+    
 
 reset_riak() ->
     ?assertEqual(ok, maybe_start_network()),
@@ -1051,38 +1097,38 @@ reset_riak() ->
     %% Until there is a good way to empty the vnodes, require the
     %% test to run with ETS and kill the vnode master/sup to empty all the ETS tables
     %% and the ring manager to remove any bucket properties
-    ok = rpc:call(?TEST_RIAK_NODE, application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
+    ok = rpc:call(test_riak_node(), application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
 
     %% Restart the vnodes so they come up with ETS
-    ok = supervisor:terminate_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master),
-    ok = supervisor:terminate_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_vnode_sup),
-    {ok, _} = supervisor:restart_child({riak_core_sup, ?TEST_RIAK_NODE}, riak_core_vnode_sup),
-    {ok, _} = supervisor:restart_child({riak_kv_sup, ?TEST_RIAK_NODE}, riak_kv_vnode_master),
+    ok = supervisor:terminate_child({riak_kv_sup, test_riak_node()}, riak_kv_vnode_master),
+    ok = supervisor:terminate_child({riak_core_sup, test_riak_node()}, riak_core_vnode_sup),
+    {ok, _} = supervisor:restart_child({riak_core_sup, test_riak_node()}, riak_core_vnode_sup),
+    {ok, _} = supervisor:restart_child({riak_kv_sup, test_riak_node()}, riak_kv_vnode_master),
     
     %% Now reset the ring so bucket properties are default
-    Ring = rpc:call(?TEST_RIAK_NODE, riak_core_ring, fresh, []),
-    ok = rpc:call(?TEST_RIAK_NODE, riak_core_ring_manager, set_my_ring, [Ring]).
+    Ring = rpc:call(test_riak_node(), riak_core_ring, fresh, []),
+    ok = rpc:call(test_riak_node(), riak_core_ring_manager, set_my_ring, [Ring]).
 
 
 riak_pb_listener_pid() ->
-    Children = supervisor:which_children({riak_kv_sup, ?TEST_RIAK_NODE}),
+    Children = supervisor:which_children({riak_kv_sup, test_riak_node()}),
     hd([Pid || {Mod,Pid,_,_} <- Children, Mod == riak_kv_pb_listener]).
 
 pause_riak_pb_listener() ->
     Pid = riak_pb_listener_pid(),
-    rpc:call(?TEST_RIAK_NODE, sys, suspend, [Pid]).
+    rpc:call(test_riak_node(), sys, suspend, [Pid]).
 
 resume_riak_pb_listener() ->
     Pid = riak_pb_listener_pid(),
-    rpc:call(?TEST_RIAK_NODE, sys, resume, [Pid]).
+    rpc:call(test_riak_node(), sys, resume, [Pid]).
 
 kill_riak_pb_sockets() ->
-    case supervisor:which_children({riak_kv_pb_socket_sup, ?TEST_RIAK_NODE}) of
+    case supervisor:which_children({riak_kv_pb_socket_sup, test_riak_node()}) of
         [] ->
             ok;
         Children ->
             Pids = [Pid || {_,Pid,_,_} <- Children],
-            [rpc:call(?TEST_RIAK_NODE, erlang, exit, [Pid, kill]) || Pid <- Pids],
+            [rpc:call(test_riak_node(), erlang, exit, [Pid, kill]) || Pid <- Pids],
             erlang:yield(),
             kill_riak_pb_sockets()
     end.
@@ -1090,9 +1136,9 @@ kill_riak_pb_sockets() ->
 maybe_start_network() ->
     %% Try to spin up net_kernel
     os:cmd("epmd -daemon"),
-    case net_kernel:start([?TEST_EUNIT_NODE]) of
+    case net_kernel:start([test_eunit_node()]) of
         {ok, _} ->
-            erlang:set_cookie(?TEST_RIAK_NODE, ?TEST_COOKIE),
+            erlang:set_cookie(test_riak_node(), test_cookie()),
             ok;
         {error, {already_started, _}} ->
             ok;
@@ -1202,7 +1248,7 @@ pb_socket_test_() ->
      end,
      {generator,
      fun() ->
-             case catch net_adm:ping(?TEST_RIAK_NODE) of
+             case catch net_adm:ping(test_riak_node()) of
                  pong ->
                      live_node_tests();
                  _ ->
@@ -1233,7 +1279,7 @@ increase_reconnect_interval_test(State) ->
 live_node_tests() ->
     [{"ping",
       ?_test( begin
-                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                  {ok, Pid} = start_link(test_ip(), test_port()),
                   ?assertEqual(pong, ?MODULE:ping(Pid)),
                   ?assertEqual(true, is_connected(Pid)),
                   stop(Pid)
@@ -1241,7 +1287,7 @@ live_node_tests() ->
      {"reconnect test",
       ?_test( begin
                   %% Make sure originally there
-                  {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                  {ok, Pid} = start_link(test_ip(), test_port()),
                   
                   %% Change the options to allow reconnection/queueing
                   set_options(Pid, [queue_if_disconnected]),
@@ -1255,7 +1301,7 @@ live_node_tests() ->
      {"set client id",
       ?_test(
          begin
-             {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+             {ok, Pid} = start_link(test_ip(), test_port()),
              {ok, <<OrigId:32>>} = ?MODULE:get_client_id(Pid),
 
              NewId = <<(OrigId+1):32>>,
@@ -1266,7 +1312,7 @@ live_node_tests() ->
      {"version",
       ?_test(
          begin
-             {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+             {ok, Pid} = start_link(test_ip(), test_port()),
              {ok, ServerInfo} = ?MODULE:get_server_info(Pid),
              [{node, _}, {server_version, _}] = lists:sort(ServerInfo)
          end)},
@@ -1274,7 +1320,7 @@ live_node_tests() ->
      {"get_should_read_put_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
@@ -1285,7 +1331,7 @@ live_node_tests() ->
      {"get should read put with timeout",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [{w, 1}, {dw, 1}, return_body]),
@@ -1296,7 +1342,7 @@ live_node_tests() ->
      {"get should read put with options",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [{w, 1}, {dw, 1}, return_body]),
@@ -1307,7 +1353,7 @@ live_node_tests() ->
      {"put and delete with timeout",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  PO = riakc_obj:new(<<"b">>, <<"puttimeouttest">>, <<"value">>),
                  ok = ?MODULE:put(Pid, PO, 500),
                  {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"puttimeouttest">>, 500),
@@ -1319,7 +1365,7 @@ live_node_tests() ->
      {"update_should_change_value_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
@@ -1332,7 +1378,7 @@ live_node_tests() ->
      {"key_should_be_missing_after_delete_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  %% Put key/value
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
@@ -1348,7 +1394,7 @@ live_node_tests() ->
     {"delete missing key test",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                   %% Delete and check no longer found
                  ok = ?MODULE:delete(Pid, <<"notabucket">>, <<"k">>, [{rw, 1}]),
                  {error, notfound} = ?MODULE:get(Pid, <<"notabucket">>, <<"k">>)
@@ -1357,14 +1403,14 @@ live_node_tests() ->
      {"empty_list_buckets_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  ?assertEqual({ok, []}, ?MODULE:list_buckets(Pid))
              end)},
 
      {"list_buckets_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Bs = lists:sort([list_to_binary(["b"] ++ integer_to_list(N)) || N <- lists:seq(1, 10)]),
                  F = fun(B) ->
                              O=riakc_obj:new(B, <<"key">>),
@@ -1378,7 +1424,7 @@ live_node_tests() ->
      {"list_keys_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Bucket = <<"listkeys">>,
                  Ks = lists:sort([list_to_binary(integer_to_list(N)) || N <- lists:seq(1, 10)]),
                  F = fun(K) ->
@@ -1398,7 +1444,7 @@ live_node_tests() ->
      {"get bucket properties test",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
                  ?assertEqual([{allow_mult,false},
                                {n_val,3}],
@@ -1408,7 +1454,7 @@ live_node_tests() ->
      {"get bucket properties test",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  ok = set_bucket(Pid, <<"b">>, [{n_val, 2}, {allow_mult, true}]),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
                  ?assertEqual([{allow_mult,true},
@@ -1419,8 +1465,8 @@ live_node_tests() ->
      {"allow_mult should allow dupes",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid1} = start_link(?TEST_IP, ?TEST_PORT),
-                 {ok, Pid2} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid1} = start_link(test_ip(), test_port()),
+                 {ok, Pid2} = start_link(test_ip(), test_port()),
                  ok = set_bucket(Pid1, <<"multibucket">>, [{allow_mult, true}]),
                  ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>),
                  {error, notfound} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
@@ -1442,7 +1488,7 @@ live_node_tests() ->
      {"update object test", 
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  O0 = riakc_obj:new(<<"b">>, <<"k">>, <<"d">>),
                  io:format("O0: ~p\n", [O0]),
                  {ok, O1} = riakc_pb_socket:put(Pid, O0, [return_body]),
@@ -1457,7 +1503,7 @@ live_node_tests() ->
       ?_test(begin
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  pause_riak_pb_listener(),
                  Me = self(),
                  %% this request will block as
@@ -1474,12 +1520,12 @@ live_node_tests() ->
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
                  pause_riak_pb_listener(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT, [queue_if_disconnected]),
+                 {ok, Pid} = start_link(test_ip(), test_port(), [queue_if_disconnected]),
                  Me = self(),
                  %% this request will block as
                  spawn(fun() -> Me ! {1, ping(Pid, 0)} end),
                  %% this request should be queued as socket will not be created
-                 spawn(fun() -> Me ! running, Me ! {2, ping(Pid, 0)} end),
+                 spawn(fun() -> Me ! {2, ping(Pid, 0)},  Me ! running end),
                  receive running -> ok end,
                  resume_riak_pb_listener(),
                  receive {1,Ping1} -> ?assertEqual({error, timeout}, Ping1) end,
@@ -1490,7 +1536,7 @@ live_node_tests() ->
       ?_test(begin
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Pid ! {req_timeout, make_ref()},
                  ?assertEqual(pong, ping(Pid))
              end)},
@@ -1499,7 +1545,7 @@ live_node_tests() ->
       ?_test(begin
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  ?assertEqual(pong, ping(Pid, infinity)),
                  ?assertEqual(pong, ping(Pid, undefined))
              end)},
@@ -1507,7 +1553,7 @@ live_node_tests() ->
      {"javascript_source_map_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  B = <<"bucket">>,
                  K = <<"foo">>,
                  O=riakc_obj:new(B, K),
@@ -1523,7 +1569,7 @@ live_node_tests() ->
      {"javascript_named_map_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  B = <<"bucket">>,
                  K = <<"foo">>,
                  O=riakc_obj:new(B, K),
@@ -1539,7 +1585,7 @@ live_node_tests() ->
      {"javascript_source_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Store = fun({K,V}) ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
@@ -1569,7 +1615,7 @@ live_node_tests() ->
      {"javascript_named_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Store = fun({K,V}) ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
@@ -1590,7 +1636,7 @@ live_node_tests() ->
      {"javascript_bucket_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Store = fun({K,V}) ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
@@ -1608,7 +1654,7 @@ live_node_tests() ->
      {"javascript_arg_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  O=riakc_obj:new(<<"bucket">>, <<"foo">>),
                  ?MODULE:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
                  ?assertEqual({ok, [{1, [10]}]},
@@ -1626,7 +1672,7 @@ live_node_tests() ->
      {"erlang_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Store = fun({K,V}) ->
                                  O=riakc_obj:new(<<"bucket">>, K),
                                  ?MODULE:put(Pid,riakc_obj:update_value(O, V, "application/json"))
@@ -1650,7 +1696,7 @@ live_node_tests() ->
      {"missing_key_erlang_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Results} = ?MODULE:mapred(Pid, [{<<"bucket">>, <<"foo">>},
                                                       {<<"bucket">>, <<"bar">>},
                                                       {<<"bucket">>, <<"baz">>}],
@@ -1664,7 +1710,7 @@ live_node_tests() ->
      {"missing_key_javascript_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
-                 {ok, Pid} = {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Results} = ?MODULE:mapred(Pid, [{<<"bucket">>, <<"foo">>},
                                                       {<<"bucket">>, <<"bar">>},
                                                       {<<"bucket">>, <<"baz">>}],
@@ -1675,7 +1721,7 @@ live_node_tests() ->
                  [{1, [{not_found, {_, _},<<"undefined">>}|_]}] = Results end)},
      {"map reduce bad inputs",
       ?_test(begin
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a list of target tuples, or a modfun tuple:\",\n         undefined}}">>},
                               ?MODULE:mapred(Pid, undefined,
                                              [{map, {jsfun, <<"Riak.mapValuesJson">>},
@@ -1685,7 +1731,7 @@ live_node_tests() ->
              end)},
      {"map reduce bad input keys",
       ?_test(begin
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Res = ?MODULE:mapred(Pid, [<<"b">>], % no {B,K} tuple
                                       [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                         undefined, false},
@@ -1696,7 +1742,7 @@ live_node_tests() ->
              end)},
      {"map reduce bad query",
       ?_test(begin
-                 {ok, Pid} = start_link(?TEST_IP, ?TEST_PORT),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
                  Res = ?MODULE:mapred(Pid, [{<<"b">>,<<"k">>}], % no {B,K} tuple
                                       undefined),
                  ?assertEqual({error,<<"{'query',{\"Query takes a list of step tuples\",undefined}}">>},
