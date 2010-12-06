@@ -59,6 +59,25 @@
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
+-type address() :: string() | atom() | ip_address().
+-type portnum() :: non_neg_integer().
+-type option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
+                   auto_reconnect | {auto_reconnect, boolean()}.
+-type options() :: [option()].
+-type client_id() :: binary().
+-type bucket() :: binary().
+-type key() :: binary().
+-type riakc_obj() :: tuple().
+-type riak_pbc_options() :: list().
+-type req_id() :: non_neg_integer().
+-type rpb_req() :: atom() | tuple().
+-type ctx() :: any().
+-type rpb_resp() :: atom() | tuple().
+-type server_prop() :: {node, binary()} | {server_version, binary()}.
+-type server_info() :: [server_prop()].
+-type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
+-type bucket_props() :: [bucket_prop()].
+
 -record(state, {address,    % address to connect to
                 port,       % port to connect to
                 auto_reconnect = false, % if true, automatically reconnects to server
@@ -74,24 +93,6 @@
 -record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: integer(),
                   tref :: reference() | undefined }).
 
--type address() :: string() | atom() | ip_address().
--type portnum() :: non_neg_integer().
--type options() :: [option()].
--type option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
-                   auto_reconnect | {auto_reconnect, boolean()}.
--type client_id() :: binary().
--type bucket() :: binary().
--type key() :: binary().
--type riakc_obj() :: tuple().
--type riak_pbc_options() :: list().
--type req_id() :: non_neg_integer().
--type rpb_req() :: atom() | tuple().
--type ctx() :: any().
--type rpb_resp() :: atom() | tuple().
--type server_prop() :: {node, binary()} | {server_version, binary()}.
--type server_info() :: [server_prop()].
--type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
--type bucket_props() :: [bucket_prop()].
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
