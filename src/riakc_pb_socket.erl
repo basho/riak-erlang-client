@@ -784,7 +784,7 @@ put_options([{w, W} | Rest], Req) ->
 put_options([{dw, DW} | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{dw = normalize_rw_value(DW)});
 put_options([return_body | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{return_body = 1}).
+    put_options(Rest, Req#rpbputreq{return_body = true}).
 
 delete_options([], Req) ->
     Req;
@@ -873,7 +873,7 @@ process_response(#request{msg = #rpblistkeysreq{}}=Request,
             send_caller({keys, Keys}, Request)
     end,
     case Done of
-        1 ->
+        true ->
             {reply, done, State};
         _ ->
             {pending, State}
@@ -898,7 +898,7 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
             send_caller({mapred, PhaseId, Response}, Request)
     end,
     case Done of
-        1 ->
+        true ->
             {reply, done, State};
         _ ->
             {pending, State}
