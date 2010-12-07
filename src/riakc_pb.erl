@@ -239,7 +239,7 @@ erlify_rpbbucketprops(Pb) ->
            undefined ->
                [];
            Flag ->
-               {allow_mult, erlify_bool(Flag)}
+               {allow_mult, Flag}
        end]).
 
 %% Convert a property list to an RpbBucketProps message
@@ -251,28 +251,10 @@ pbify_rpbbucketprops([], Pb) ->
 pbify_rpbbucketprops([{n_val, Nval} | Rest], Pb) ->
     pbify_rpbbucketprops(Rest, Pb#rpbbucketprops{n_val = Nval});
 pbify_rpbbucketprops([{allow_mult, Flag} | Rest], Pb) ->
-    pbify_rpbbucketprops(Rest, Pb#rpbbucketprops{allow_mult = pbify_bool(Flag)});
+    pbify_rpbbucketprops(Rest, Pb#rpbbucketprops{allow_mult = Flag});
 pbify_rpbbucketprops([_Ignore|Rest], Pb) ->
     %% Ignore any properties not explicitly part of the PB message
     pbify_rpbbucketprops(Rest, Pb).
-    
-%% Convert a true/false, 1/0 etc to a 1/0 for protocol buffers bool
-pbify_bool(true) ->
-    true;
-pbify_bool(false) ->
-    false;
-pbify_bool(N) when is_integer(N) ->
-    case N =:= 0 of
-        true ->
-            true;
-        false ->
-            false
-    end.
-
-erlify_bool(0) ->
-    false;
-erlify_bool(1) ->
-    true.
 
 %% Make sure an atom/string/binary is definitely a binary
 to_binary(A) when is_atom(A) ->
