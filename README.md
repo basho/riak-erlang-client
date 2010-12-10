@@ -253,15 +253,15 @@ Bucket properties can be retrieved and modified using `get_bucket/2` and `set_bu
 
 Here's an example of getting/setting properties
 
-    3> riakc_pb_socket:get_bucket(Pid, "groceries"). 
+    3> riakc_pb_socket:get_bucket(Pid, <<"groceries">>). 
     {ok,[{n_val,3},{allow_mult,false}]} 
-    4> riakc_pb_socket:set_bucket(Pid, "groceries", [{n_val, 5}]). 
+    4> riakc_pb_socket:set_bucket(Pid, <<"groceries">>, [{n_val, 5}]). 
     ok 
-    5> riakc_pb_socket:get_bucket(Pid, "groceries"). 
+    5> riakc_pb_socket:get_bucket(Pid, <<"groceries">>). 
     {ok,[{n_val,5},{allow_mult,false}]} 
-    6> riakc_pb_socket:set_bucket(Pid, "groceries", [{n_val, 7}, {allow_mult, true}]). 
+    6> riakc_pb_socket:set_bucket(Pid, <<"groceries">>, [{n_val, 7}, {allow_mult, true}]). 
     ok 
-    7> riakc_pb_socket:get_bucket(Pid, "groceries"). 
+    7> riakc_pb_socket:get_bucket(Pid, <<"groceries">>). 
     {ok,[{n_val,7},{allow_mult,true}]} 
 
 Troubleshooting
