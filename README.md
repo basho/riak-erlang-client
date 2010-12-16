@@ -1,4 +1,4 @@
-<p style="float:right;">
+<p align="right">
     <img src="http://www.basho.com/images/riaklogo.png">
 </p>
 # Riak Protocol Buffers Client Introduction 
