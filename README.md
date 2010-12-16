@@ -1,42 +1,53 @@
 <p align="right">
     <img src="http://www.basho.com/images/riaklogo.png">
 </p>
-# Riak Protocol Buffers Client Introduction 
+# Riak Protocol Buffers Client Introduction
 
-This document assumes that you have already started your Riak cluster. 
-For instructions on that prerequisite, refer to [Installation and Setup](https://wiki.basho.com/display/RIAK/Installation+and+Setup) in the [Riak Wiki](https://wiki.basho.com/display/RIAK/Riak). 
+This document assumes that you have already started your Riak cluster.
+For instructions on that prerequisite, refer to
+[Installation and Setup](https://wiki.basho.com/display/RIAK/Installation+and+Setup)
+in the [Riak Wiki](https://wiki.basho.com/display/RIAK/Riak).
 
-Overview
+Dependencies
 =========
 
-To talk to riak, all you need is an Erlang node with the riak-erlang-client library (riakc) in its code path. 
+To build the riak-erlang-client you will need Erlang OTP R13B04 or later, and Git.
 
-    $ erl -pa $PATH_TO_RIAKC/ebin 
 
-You'll know you've done this correctly if you can execute the following commands and get a path to a beam file, instead of the atom 'non_existing': 
-
-    1> code:which(riakc_pb_socket). 
-    ".../riak-erlang-client/ebin/riakc_pb_socket.beam" 
-
-Or you can install the library into your code path using rebar 
-
-    $ cd riak-erlang-client 
-    $ ./rebar install 
-
-Connecting 
+Installing
 =========
 
-Once you have your node running, pass your Riak server nodename to `riakc_pb_socket:start_link/2` to connect and get a client. This can be as simple as: 
+        $ git clone git://github.com/basho/riak-erlang-client.git
+        $ cd riak-erlang-client
+        $ make
 
-    1> {ok, Pid} = riakc_pb_socket:start_link("127.0.0.1", 8087). 
-    {ok,<0.56.0>} 
 
-Verify connectivity with the server using {{ping/1}}. 
+Connecting
+=======
 
-    2> riakc_pb_socket:ping(Pid). 
-    pong 
+To talk to riak, all you need is an Erlang node with the riak-erlang-client library (riakc) in its code path.
 
-Storing New Data 
+        $ erl -pa $PATH_TO_RIAKC/ebin $PATH_TO_RIAKC/deps/*/ebin
+
+
+You'll know you've done this correctly if you can execute the following commands and get a path to a beam file, instead of the atom 'non_existing':
+
+       1> code:which(riakc_pb_socket).
+       ".../riak-erlang-client/ebin/riakc_pb_socket.beam"
+
+
+Once you have your node running, pass your Riak server nodename to `riakc_pb_socket:start_link/2` to connect and get a client. This can be as simple as:
+
+       1> {ok, Pid} = riakc_pb_socket:start_link("127.0.0.1", 8087).
+       {ok,<0.56.0>}
+
+Verify connectivity with the server using {{ping/1}}.
+
+       2> riakc_pb_socket:ping(Pid).
+       pong
+
+
+Storing New Data
 =========
 
 Each bit of data in Riak is stored in a "bucket" at a "key" that is unique to that bucket. The bucket is intended as an organizational aid, for example to help segregate data by type, but Riak doesn't care what values it stores, so choose whatever scheme suits you. Buckets, 
