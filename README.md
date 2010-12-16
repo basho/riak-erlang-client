@@ -41,7 +41,7 @@ Once you have your node running, pass your Riak server nodename to `riakc_pb_soc
        1> {ok, Pid} = riakc_pb_socket:start_link("127.0.0.1", 8087).
        {ok,<0.56.0>}
 
-Verify connectivity with the server using {{ping/1}}.
+Verify connectivity with the server using `ping/1`.
 
        2> riakc_pb_socket:ping(Pid).
        pong
