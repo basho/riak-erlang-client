@@ -1,6 +1,6 @@
-<div style="float:right;">
+<p style="float:right;">
     <img src="http://www.basho.com/images/riaklogo.png">
-</div>
+</p>
 # Riak Protocol Buffers Client Introduction 
 
 This document assumes that you have already started your Riak cluster. 
