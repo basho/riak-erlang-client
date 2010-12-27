@@ -5,8 +5,8 @@
 
 This document assumes that you have already started your Riak cluster.
 For instructions on that prerequisite, refer to
-[Installation and Setup](https://wiki.basho.com/display/RIAK/Installation+and+Setup)
-in the [Riak Wiki](https://wiki.basho.com/display/RIAK/Riak).
+[Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html)
+in the [Riak Wiki](https://wiki.basho.com).
 
 Dependencies
 =========
