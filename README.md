@@ -50,27 +50,27 @@ Verify connectivity with the server using `ping/1`.
 Storing New Data
 =========
 
-Each bit of data in Riak is stored in a "bucket" at a "key" that is unique to that bucket. The bucket is intended as an organizational aid, for example to help segregate data by type, but Riak doesn't care what values it stores, so choose whatever scheme suits you. Buckets, 
-keys and values are all binaries. 
+Each bit of data in Riak is stored in a "bucket" at a "key" that is unique to that bucket. The bucket is intended as an organizational aid, for example to help segregate data by type, but Riak doesn't care what values it stores, so choose whatever scheme suits you. Buckets,
+keys and values are all binaries.
 
-Before storing your data, you must wrap it in a riakc_obj: 
+Before storing your data, you must wrap it in a riakc_obj:
 
-    3> Object = riakc_obj:new(<<"groceries">>, <<"mine">>, <<"eggs & bacon">>). 
-    {riakc_obj,<<"groceries">>,<<"mine">>,undefined,undefined, 
-    {dict,0,16,16,8,80,48, 
-    {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...}, 
-    {{[],[],[],[],[],[],[],[],[],[],[],[],[],...}}}, 
-    <<"eggs & bacon">>}      
+    3> Object = riakc_obj:new(<<"groceries">>, <<"mine">>, <<"eggs & bacon">>).
+    {riakc_obj,<<"groceries">>,<<"mine">>,undefined,undefined,
+    {dict,0,16,16,8,80,48,
+    {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+    {{[],[],[],[],[],[],[],[],[],[],[],[],[],...}}},
+    <<"eggs & bacon">>}
 
-The Object refers to a key `<<"mine">>` in a bucket named `<<"groceries">>` with 
-the value `<<"eggs & bacon">>`. Using the client you opened earlier, store the object: 
+The Object refers to a key `<<"mine">>` in a bucket named `<<"groceries">>` with
+the value `<<"eggs & bacon">>`. Using the client you opened earlier, store the object:
 
-    5> riakc_pb_socket:put(Pid, Object). 
-    ok 
+    5> riakc_pb_socket:put(Pid, Object).
+    ok
 
-If the return value of the last command was anything but the atom `'ok'}, then the store failed. The return value may give you a clue as to why the store failed, but check the Troubleshooting section below if not. 
+If the return value of the last command was anything but the atom `'ok'}, then the store failed. The return value may give you a clue as to why the store failed, but check the Troubleshooting section below if not.
 
-The object is now stored in Riak. `put/2` uses default parameters for storing the object. There is also a `put/3` call that takes a proplist of options. 
+The object is now stored in Riak. `put/2` uses default parameters for storing the object. There is also a `put/3` call that takes a proplist of options.
 
 <table border="1">
     <th>Option</th>
@@ -85,49 +85,49 @@ The object is now stored in Riak. `put/2` uses default parameters for storing th
     </tr>
     <tr>
         <td><code>returnbody </code></td>
-        <td> immediately do a get after the put and return a 
+        <td> immediately do a get after the put and return a
         riakc_obj.</td>
     </tr>
 </table>
 
-    6> riakc_pb_socket:put(Pid, AnotherObject, 
-    [{w, 2}, {dw, 1}, returnbody]). 
-    {ok,{riakc_obj,<<"my bucket">>,<<"my key">>, 
-    <<107,206,97,96,96,96,206,96,202,5,82,44,140,62,169,115, 
-    50,152,18,25,243,88,25,...>>, 
-    [{{dict,2,16,16,8,80,48, 
-    {[],[],[],[],[],[],[],[],[],[],[],[],...}, 
-    {{[],[],[],[],[],[],[],[],[],[],...}}}, 
-    <<"my binary data">>}], 
-    {dict,0,16,16,8,80,48, 
-    {[],[],[],[],[],[],[],[],[],[],[],[],[],...}, 
-    {{[],[],[],[],[],[],[],[],[],[],[],...}}}, 
-    undefined}} 
+    6> riakc_pb_socket:put(Pid, AnotherObject,
+    [{w, 2}, {dw, 1}, returnbody]).
+    {ok,{riakc_obj,<<"my bucket">>,<<"my key">>,
+    <<107,206,97,96,96,96,206,96,202,5,82,44,140,62,169,115,
+    50,152,18,25,243,88,25,...>>,
+    [{{dict,2,16,16,8,80,48,
+    {[],[],[],[],[],[],[],[],[],[],[],[],...},
+    {{[],[],[],[],[],[],[],[],[],[],...}}},
+    <<"my binary data">>}],
+    {dict,0,16,16,8,80,48,
+    {[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+    {{[],[],[],[],[],[],[],[],[],[],[],...}}},
+    undefined}}
 
-Would make sure at least two nodes responded successfully to the put and at least one node has durably stored the value and an updated object is returned. 
+Would make sure at least two nodes responded successfully to the put and at least one node has durably stored the value and an updated object is returned.
 
-See [riak/doc/architecture.txt](https://github.com/basho/riak/blob/master/doc/architecture.txt) for more information about W and DW 
-values. 
+See [riak/doc/architecture.txt](https://github.com/basho/riak/blob/master/doc/architecture.txt) for more information about W and DW
+values.
 
 
-Fetching Data 
+Fetching Data
 ==================
 
-At some point you'll want that data back. Using the same bucket and key you used before: 
+At some point you'll want that data back. Using the same bucket and key you used before:
 
-    7> {ok, O} = riakc_pb_socket:get(Pid, <<"groceries">>, 
-    <<"mine">>). 
-    {ok,{riakc_obj,<<"groceries">>,<<"mine">>, 
-    <<107,206,97,96,96,96,204,96,202,5,82,44,12,143,167,115, 
-    103,48,37,50,230,177,50,...>>, 
-    [{{dict,2,16,16,8,80,48, 
-    {[],[],[],[],[],[],[],[],[],[],[],[],...}, 
-    {{[],[],[],[],[],[],[],[],[],[],...}}}, 
-    <<"eggs & bacon">>}], 
-    {dict,0,16,16,8,80,48, 
-    {[],[],[],[],[],[],[],[],[],[],[],[],[],...}, 
-    {{[],[],[],[],[],[],[],[],[],[],[],...}}}, 
-    undefined}} 
+    7> {ok, O} = riakc_pb_socket:get(Pid, <<"groceries">>,
+    <<"mine">>).
+    {ok,{riakc_obj,<<"groceries">>,<<"mine">>,
+    <<107,206,97,96,96,96,204,96,202,5,82,44,12,143,167,115,
+    103,48,37,50,230,177,50,...>>,
+    [{{dict,2,16,16,8,80,48,
+    {[],[],[],[],[],[],[],[],[],[],[],[],...},
+    {{[],[],[],[],[],[],[],[],[],[],...}}},
+    <<"eggs & bacon">>}],
+    {dict,0,16,16,8,80,48,
+    {[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+    {{[],[],[],[],[],[],[],[],[],[],[],...}}},
+    undefined}}
 
 Like 'put', there is a 'get' functions that takes options, `get/3`.
 
@@ -140,39 +140,39 @@ Like 'put', there is a 'get' functions that takes options, `get/3`.
     </tr>
 </table>
 
-Modifying Data 
+Modifying Data
 ==================
 
-Say you had the "grocery list" from the examples above, reminding you to get `<<"eggs & bacon">>`, and you want to add `<<"milk">>` to it. The easiest way is: 
-     
-    8> {ok, Oa} = riakc_pb_socket:get(Pid, <<"groceries">>, <<"mine">>). 
-    ... 
-    9> Ob = riakc_obj:update_value(Oa, <<"milk, ", (riakc_obj:get_value(Oa))/binary>>). 
-    11> {ok, Oc} = riakc_pb_socket:put(Pid, Ob, [return_body]). 
-    {ok,{riakc_obj,<<"groceries">>,<<"mine">>, 
-    <<107,206,97,96,96,96,206,96,202,5,82,44,12,143,167,115, 
-    103,48,37,50,230,177,50,...>>, 
-    [{{dict,2,16,16,8,80,48, 
-    {[],[],[],[],[],[],[],[],[],[],[],[],...}, 
-    {{[],[],[],[],[],[],[],[],[],[],...}}}, 
-    <<"milk, eggs & bacon">>}], 
-    {dict,0,16,16,8,80,48, 
-    {[],[],[],[],[],[],[],[],[],[],[],[],[],...}, 
-    {{[],[],[],[],[],[],[],[],[],[],[],...}}}, 
-    undefined}} 
-     
+Say you had the "grocery list" from the examples above, reminding you to get `<<"eggs & bacon">>`, and you want to add `<<"milk">>` to it. The easiest way is:
 
-That is, fetch the object from Riak, modify its value with `riakc_obj:update_value/2`, then store the modified object back in Riak. You can get your updated object to convince yourself that your list is updated: 
+    8> {ok, Oa} = riakc_pb_socket:get(Pid, <<"groceries">>, <<"mine">>).
+    ...
+    9> Ob = riakc_obj:update_value(Oa, <<"milk, ", (riakc_obj:get_value(Oa))/binary>>).
+    11> {ok, Oc} = riakc_pb_socket:put(Pid, Ob, [return_body]).
+    {ok,{riakc_obj,<<"groceries">>,<<"mine">>,
+    <<107,206,97,96,96,96,206,96,202,5,82,44,12,143,167,115,
+    103,48,37,50,230,177,50,...>>,
+    [{{dict,2,16,16,8,80,48,
+    {[],[],[],[],[],[],[],[],[],[],[],[],...},
+    {{[],[],[],[],[],[],[],[],[],[],...}}},
+    <<"milk, eggs & bacon">>}],
+    {dict,0,16,16,8,80,48,
+    {[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+    {{[],[],[],[],[],[],[],[],[],[],[],...}}},
+    undefined}}
 
-Deleting Data 
+
+That is, fetch the object from Riak, modify its value with `riakc_obj:update_value/2`, then store the modified object back in Riak. You can get your updated object to convince yourself that your list is updated:
+
+Deleting Data
 ==================
 
-Throwing away data is quick and simple: just use the {{delete/3}} function. 
+Throwing away data is quick and simple: just use the {{delete/3}} function.
 
-    10> riakc_pb_socket:delete(Pid, <<"groceries">>, <<"mine">>). 
-    ok 
+    10> riakc_pb_socket:delete(Pid, <<"groceries">>, <<"mine">>).
+    ok
 
-As with get and put, delete can also take options 
+As with get and put, delete can also take options
 
 <table border="1">
     <th>Option</th>
@@ -183,91 +183,91 @@ As with get and put, delete can also take options
     </tr>
 </table>
 
-Issuing a delete for an object that does not exist returns just returns ok. 
+Issuing a delete for an object that does not exist returns just returns ok.
 
-Encoding 
+Encoding
 ==================
 
-The initial release of the erlang protocol buffers client treats all values as binaries. The caller needs to make sure data is serialized and deserialized correctly. The content type stored along with the object may be used to store the encoding. For example 
-     
-    decode_term(Object) -> 
-    case riakc_obj:get_content_type(Object) of 
-    <<"application/x-erlang-term">> -> 
-    try 
-    {ok, binary_to_term(riakc_obj:get_value(Object))} 
-    catch 
-    _:Reason -> 
-    {error, Reason} 
-    end; 
-    Ctype -> 
-    {error, {unknown_ctype, Ctype}} 
-    end. 
+The initial release of the erlang protocol buffers client treats all values as binaries. The caller needs to make sure data is serialized and deserialized correctly. The content type stored along with the object may be used to store the encoding. For example
 
-    encode_term(Object, Term) -> 
-    riakc_obj:update_value(Object, term_to_binary(Term, [compressed]), 
-    <<"application/x-erlang-term">>). 
-     
+    decode_term(Object) ->
+    case riakc_obj:get_content_type(Object) of
+    <<"application/x-erlang-term">> ->
+    try
+    {ok, binary_to_term(riakc_obj:get_value(Object))}
+    catch
+    _:Reason ->
+    {error, Reason}
+    end;
+    Ctype ->
+    {error, {unknown_ctype, Ctype}}
+    end.
 
-Siblings 
+    encode_term(Object, Term) ->
+    riakc_obj:update_value(Object, term_to_binary(Term, [compressed]),
+    <<"application/x-erlang-term">>).
+
+
+Siblings
 ==================
 
-If a bucket is configured to allow conflicts (allow_mult=true) then the result object may contain more than one result. The number of values can be returned with 
-     
-    1> riakc_obj:value_count(Obj). 
-    2 
+If a bucket is configured to allow conflicts (allow_mult=true) then the result object may contain more than one result. The number of values can be returned with
 
-The values can be listed with 
-     
-    2> riakc_obj:get_values(Obj). 
-    \[<<"{\"k1\":\"v1\"}">>,<<"{\"k1\":\"v1\"}">>\] 
-    
-And the content types as 
-     
-    3> riakc_obj:get_content_types(Obj). 
-    [] 
-     
-Siblings are resolved by calling `riakc_obj:update_value` with the winning value on an object returned by get or put with return_body. 
+    1> riakc_obj:value_count(Obj).
+    2
 
-Listing Keys 
+The values can be listed with
+
+    2> riakc_obj:get_values(Obj).
+    \[<<"{\"k1\":\"v1\"}">>,<<"{\"k1\":\"v1\"}">>\]
+
+And the content types as
+
+    3> riakc_obj:get_content_types(Obj).
+    []
+
+Siblings are resolved by calling `riakc_obj:update_value` with the winning value on an object returned by get or put with return_body.
+
+Listing Keys
 =============
 
-Most uses of key-value stores are structured in such a way that requests know which keys they want in a bucket. Sometimes, though, it's necessary to find out what keys are available (when debugging, for example). For that, there is list_keys: 
+Most uses of key-value stores are structured in such a way that requests know which keys they want in a bucket. Sometimes, though, it's necessary to find out what keys are available (when debugging, for example). For that, there is list_keys:
 
-    riakc_pb_socket:list_keys(Pid, <<"groceries">>). 
-    {ok,[<<"mine">>]} 
+    riakc_pb_socket:list_keys(Pid, <<"groceries">>).
+    {ok,[<<"mine">>]}
 
-Note that keylist updates are asynchronous to the object storage primitives, and may not be updated immediately after a put or delete. This function is primarily intended as a debugging aid. 
+Note that keylist updates are asynchronous to the object storage primitives, and may not be updated immediately after a put or delete. This function is primarily intended as a debugging aid.
 
-`list_keys/2` is just a convenience function around the streaming version of the call `stream_list_keys(Pid, Bucket)`. 
+`list_keys/2` is just a convenience function around the streaming version of the call `stream_list_keys(Pid, Bucket)`.
 
-    2> riakc_pb_socket:stream_list_keys(Pid, <<"groceries">>). 
-    {ok,87009603} 
-    3> receive Msg1 \-> Msg1 end. 
-    {87009603,{keys,[]}} 
-    4> receive Msg2 \-> Msg2 end. 
-    {87009603,done} 
+    2> riakc_pb_socket:stream_list_keys(Pid, <<"groceries">>).
+    {ok,87009603}
+    3> receive Msg1 \-> Msg1 end.
+    {87009603,{keys,[]}}
+    4> receive Msg2 \-> Msg2 end.
+    {87009603,done}
 
-See [`riakc_pb_socket:wait_for_listkeys`](https://github.com/basho/riak-erlang-client/blob/master/src/riakc_pb_socket.erl#L1087) for an example of receiving. 
+See [`riakc_pb_socket:wait_for_listkeys`](https://github.com/basho/riak-erlang-client/blob/master/src/riakc_pb_socket.erl#L1087) for an example of receiving.
 
-Bucket Properties 
+Bucket Properties
 ==================
 
-Bucket properties can be retrieved and modified using `get_bucket/2` and `set_bucket/3`. The bucket properties are represented as a proplist. Only a subset of the properties can be retrieved and set using the protocol buffers interface - currently only n_val and allow_mult. 
+Bucket properties can be retrieved and modified using `get_bucket/2` and `set_bucket/3`. The bucket properties are represented as a proplist. Only a subset of the properties can be retrieved and set using the protocol buffers interface - currently only n_val and allow_mult.
 
-Here's an example of getting/setting properties 
+Here's an example of getting/setting properties
 
-    3> riakc_pb_socket:get_bucket(Pid, "transcripts"). 
-    {ok,[{n_val,3},{allow_mult,false}]} 
-    4> riakc_pb_socket:set_bucket(Pid, "transcripts", [{n_val, 5}]). 
-    ok 
-    5> riakc_pb_socket:get_bucket(Pid, "transcripts"). 
-    {ok,[{n_val,5},{allow_mult,false}]} 
-    6> riakc_pb_socket:set_bucket(Pid, "transcripts", [{n_val, 7}, {allow_mult, true}]). 
-    ok 
-    7> riakc_pb_socket:get_bucket(Pid, "transcripts"). 
-    {ok,[{n_val,7},{allow_mult,true}]} 
+    3> riakc_pb_socket:get_bucket(Pid, <<"transcripts">>).
+    {ok,[{n_val,3},{allow_mult,false}]}
+    4> riakc_pb_socket:set_bucket(Pid, <<"transcripts">>, [{n_val, 5}]).
+    ok
+    5> riakc_pb_socket:get_bucket(Pid, <<"transcripts">>).
+    {ok,[{n_val,5},{allow_mult,false}]}
+    6> riakc_pb_socket:set_bucket(Pid, <<"transcripts">>, [{n_val, 7}, {allow_mult, true}]).
+    ok
+    7> riakc_pb_socket:get_bucket(Pid, <<"transcripts">>).
+    {ok,[{n_val,7},{allow_mult,true}]}
 
-Troubleshooting 
+Troubleshooting
 ==================
 
 If `start/2` or `start_link/2` return `{error,econnrefused}` the client could not connect to the server - make sure the protocol buffers interface is enabled on the server and the address/port is correct.
