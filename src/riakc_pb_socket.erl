@@ -1846,8 +1846,31 @@ live_node_tests() ->
                                       undefined),
                  ?assertEqual({error,<<"{'query',{\"Query takes a list of step tuples\",undefined}}">>},
                               Res)
-             end)}
+             end)},
+     {"get should convert erlang terms",
+      ?_test(begin
+                 reset_riak(),
+                 TestNode = test_riak_node(),
+                 MyBin = <<"some binary">>,
+                 MyTerm = [<<"b">>,<<"a_term">>,{some_term, ['full', "of", 123, 654.321]}],
+                 BinObj = rpc:call(TestNode, riak_object, new,
+                                   [<<"b">>, <<"a_bin">>, MyBin]),
+                 TermObj = rpc:call(TestNode, riak_object, new,
+                                    [<<"b">>, <<"a_term">>, MyTerm]),
+                 {ok, C} = rpc:call(TestNode, riak, local_client, []),
+                 %% parameterized module trickery - stick it as the last argument
+                 ok = rpc:call(TestNode, riak_client, put, [BinObj, 1, C]),
+                 ok = rpc:call(TestNode, riak_client, put, [TermObj, 1, C]),
 
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 {ok, GotBinObj} = ?MODULE:get(Pid, <<"b">>, <<"a_bin">>),
+                 {ok, GotTermObj} = ?MODULE:get(Pid, <<"b">>, <<"a_term">>),
+  
+                 ?assertEqual(riakc_obj:get_value(GotBinObj), MyBin),
+                 ?assertEqual(riakc_obj:get_content_type(GotTermObj),
+                              "application/x-erlang-binary"),
+                 ?assertEqual(binary_to_term(riakc_obj:get_value(GotTermObj)), MyTerm)
+             end)}
      ].
 
 -endif.

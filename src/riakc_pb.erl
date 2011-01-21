@@ -121,7 +121,21 @@ pbify_rpbcontents([Content | Rest], Acc) ->
     pbify_rpbcontents(Rest, [pbify_rpbcontent(Content) | Acc]).
 
 %% Convert a metadata/value pair into an #rpbcontent{} record    
-pbify_rpbcontent({Metadata, Value}) ->
+pbify_rpbcontent({MetadataIn, ValueIn}=C) ->
+    {Metadata, Value} = 
+        case is_binary(ValueIn) of
+            true ->
+                C;
+            false ->
+                %% If the riak object was created using
+                %% the native erlang interface, it is possible
+                %% for the value to consist of arbitrary terms.  
+                %% PBC needs to send a binary, so replace the content type
+                %% to mark it as an erlang binary and encode
+                %% the term as a binary.
+                {dict:store(?MD_CTYPE, ?CTYPE_ERLANG_BINARY, MetadataIn),
+             term_to_binary(ValueIn)}
+        end,
     dict:fold(fun pbify_rpbcontent_entry/3, #rpbcontent{value = Value}, Metadata).
 
 %% Convert the metadata dictionary entries to protocol buffers
