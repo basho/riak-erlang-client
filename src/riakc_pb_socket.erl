@@ -488,7 +488,8 @@ mapred_bucket(Pid, Bucket, Query, Timeout) ->
 %% @spec mapred_bucket(Pid :: pid(),
 %%                     Bucket :: bucket(),
 %%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     TimeoutMillisecs :: integer() | 'infinity') ->
+%%                     TimeoutMillisecs :: integer() | 'infinity',
+%%                     CallTimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
 %% @doc Perform a map/reduce job against a bucket with a timeout
@@ -520,7 +521,8 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
 %%                            Bucket :: bucket(),
 %%                            Query :: [riak_kv_mapred_query:mapred_queryterm()],
 %%                            ClientPid :: pid(),
-%%                            TimeoutMillisecs :: integer() | 'infinity') ->
+%%                            TimeoutMillisecs :: integer() | 'infinity',
+%%                            CallTimeoutMillisecs :: integer() | 'infinity') ->
 %%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
 %%       {error, Err :: term()}
 %% @doc Perform a streaming map/reduce job against a bucket with a server timeout
