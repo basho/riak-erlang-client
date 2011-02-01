@@ -137,6 +137,12 @@ Like `put/3`, there is a `get/3` function that takes options.
     </tr>
 </table>
 
+If the data was originally stored using the distributed erlang client (riak_client), the server
+will automatically term_to_binary/1 the value before sending it, with the content
+type set to application/x-erlang-binary (replacing any user-set value).  The application is
+responsible for calling binary_to_term to access the content and calling term_to_binary
+when modifying it.
+
 Modifying Data
 ==================
 
