@@ -31,3 +31,4 @@
 -define(MD_LASTMOD,  <<"X-Riak-Last-Modified">>).
 -define(MD_USERMETA, <<"X-Riak-Meta">>).
 
+-define(CTYPE_ERLANG_BINARY, "application/x-erlang-binary").
