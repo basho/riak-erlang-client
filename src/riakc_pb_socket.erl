@@ -1206,6 +1206,9 @@ reset_riak() ->
     {ok, _} = supervisor:restart_child({riak_core_sup, test_riak_node()}, riak_core_vnode_sup),
     {ok, _} = supervisor:restart_child({riak_kv_sup, test_riak_node()}, riak_kv_vnode_master),
     
+    %% Clear the map/reduce cache 
+    ok = rpc:call(test_riak_node(), riak_kv_mapred_cache, clear, []),
+
     %% Now reset the ring so bucket properties are default
     Ring = rpc:call(test_riak_node(), riak_core_ring, fresh, []),
     ok = rpc:call(test_riak_node(), riak_core_ring_manager, set_my_ring, [Ring]).
@@ -1803,11 +1806,11 @@ live_node_tests() ->
                                                       {<<"bucket">>, <<"baz">>}],
                                                 [{map, {modfun, riak_kv_mapreduce,
                                                         map_object_value},
-                                                  undefined, false},
+                                                  <<"include_notfound">>, false},
                                                  {reduce, {modfun, riak_kv_mapreduce,
                                                            reduce_set_union},
                                                   undefined, true}]),
-                 [{1, [{not_found, {_, _},undefined}|_]}] = Results end)},
+                 [{1, [{error, notfound}|_]}] = Results end)},
      {"missing_key_javascript_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
@@ -1823,7 +1826,7 @@ live_node_tests() ->
      {"map reduce bad inputs",
       ?_test(begin
                  {ok, Pid} = start_link(test_ip(), test_port()),
-                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a list of target tuples, or a modfun tuple:\",\n         undefined}}">>},
+                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a tuple of bucket and key-filters, a list of target tuples, or a modfun tuple:\",\n         undefined}}">>},
                               ?MODULE:mapred(Pid, undefined,
                                              [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                                undefined, false},
