@@ -1350,6 +1350,9 @@ pb_socket_test_() ->
              code:add_pathz("../ebin"),
              ok = maybe_start_network()
      end,
+     fun(_) ->
+             net_kernel:stop()
+     end,
      {generator,
      fun() ->
              case catch net_adm:ping(test_riak_node()) of
