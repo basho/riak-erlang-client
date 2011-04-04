@@ -875,6 +875,8 @@ process_response(#request{msg = #rpblistkeysreq{}}=Request,
             send_caller({keys, Keys}, Request)
     end,
     case Done of
+        true ->
+            {reply, done, State};
         1 ->
             {reply, done, State};
         _ ->
@@ -900,6 +902,8 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
             send_caller({mapred, PhaseId, Response}, Request)
     end,
     case Done of
+        true ->
+            {reply, done, State};
         1 ->
             {reply, done, State};
         _ ->
