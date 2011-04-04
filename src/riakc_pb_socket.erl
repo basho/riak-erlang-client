@@ -679,13 +679,6 @@ handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
                     cancel_req_timer(Active#request.tref),
                     send_caller(Response, NewState0#state.active),
                     NewState = dequeue_request(NewState0#state{active = undefined});
-
-                {noreply, NewState0} ->
-                    %% Request has completed with no reply needed, send the next request 
-                    %% if one is queued up
-                    cancel_req_timer(Active#request.tref),
-                    NewState = dequeue_request(NewState0#state{active = undefined});
-
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
                     NewActive = restart_req_timer(Active),
                     NewState = NewState0#state{active = NewActive}
@@ -808,7 +801,6 @@ normalize_rw_value(N) -> N.
 %%        pending if the request has not completed yet (streaming op)
 %% @private
 -spec process_response(#request{}, rpb_resp(), #state{}) ->
-                              {noreply, #state{}} |
                               {reply, term(), #state{}} |
                               {pending, #state{}}.
 process_response(#request{msg = rpbpingreq}, rpbpingresp, State) ->
