@@ -252,6 +252,8 @@ erlify_rpbbucketprops(Pb) ->
        case Pb#rpbbucketprops.allow_mult of
            undefined ->
                [];
+           Flag when is_boolean(Flag) ->
+               {allow_mult, Flag};
            Flag ->
                {allow_mult, erlify_bool(Flag)}
        end]).
