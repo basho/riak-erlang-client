@@ -58,7 +58,7 @@
 -endif.
 
 -type bucket() :: binary().
--type key() :: binary().
+-type key() :: binary() | 'undefined'.
 -type vclock() :: binary().
 -type metadata() :: dict().
 -type content_type() :: string().

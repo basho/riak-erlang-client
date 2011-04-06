@@ -61,12 +61,14 @@ Before storing your data, you must wrap it in a riakc_obj:
     {{[],[],[],[],[],[],[],[],[],[],[],[],[],...}}},
     <<"eggs & bacon">>}
 
+If you want to have the server generate you a key (similar to the REST API) pass the atom `undefined` as the second parameter to new().
+
 The Object refers to a key `<<"mine">>` in a bucket named `<<"groceries">>` with the value `<<"eggs & bacon">>`. Using the client you opened earlier, store the object:
 
     5> riakc_pb_socket:put(Pid, Object).
     ok
 
-If the return value of the last command was anything but the atom `ok`, then the store failed. The return value may give you a clue as to why the store failed, but check the Troubleshooting section below if not.
+If the return value of the last command was anything but the atom `ok` (or `{ok, Key}` when you instruct the server to generate the key), then the store failed. The return value may give you a clue as to why the store failed, but check the Troubleshooting section below if not.
 
 The object is now stored in Riak. `put/2` uses default parameters for storing the object. There is also a `put/3` call that takes a proplist of options.
 

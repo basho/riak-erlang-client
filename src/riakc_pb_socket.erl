@@ -217,13 +217,14 @@ get(Pid, Bucket, Key, Options, Timeout) ->
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 %% @doc Put the metadata/value in the object under bucket/key
--spec put(pid(), riakc_obj()) -> ok | {ok, riakc_obj()} | {error, term()}.
+-spec put(pid(), riakc_obj()) ->
+                 ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj) ->
     put(Pid, Obj, []).
 
 %% @doc Put the metadata/value in the object under bucket/key
 -spec put(pid(), riakc_obj(), timeout() | riak_pbc_options()) ->
-                 ok | {ok, riakc_obj()} | {error, term()}.
+                 ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     put(Pid, Obj, [], Timeout);
 
@@ -245,7 +246,7 @@ put(Pid, Obj, Options) ->
 %%      that have not been resolved by calling select_sibling/2 or 
 %%      update_value/2 and update_metadata/2.
 -spec put(pid(), riakc_obj(), riak_pbc_options(), timeout()) -> 
-                 ok | {ok, riakc_obj()} | {error, term()}.
+                 ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj, Options, Timeout) ->
     Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
                                          riakc_obj:get_update_value(Obj)}),
