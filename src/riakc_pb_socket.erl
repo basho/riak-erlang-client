@@ -230,7 +230,7 @@ put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
 %% @doc Put the metadata/value in the object under bucket/key with options
 %%      [{w,2}] sets w=2,
 %%      [{dw,1}] set dw=1,
-%%      [{return_body, true}] returns the updated metadata/value
+%%      [return_body] returns the updated metadata/value
 %%      Put throws siblings if the riakc_obj contains siblings
 %%      that have not been resolved by calling select_sibling/2 or 
 %%      update_value/2 and update_metadata/2.
@@ -240,7 +240,7 @@ put(Pid, Obj, Options) ->
 %% @doc Put the metadata/value in the object under bucket/key with options and timeout
 %%      [{w,2}] sets w=2,
 %%      [{dw,1}] set dw=1,
-%%      [{return_body, true}] returns the updated metadata/value
+%%      [return_body] returns the updated metadata/value
 %%      Put throws siblings if the riakc_obj contains siblings
 %%      that have not been resolved by calling select_sibling/2 or 
 %%      update_value/2 and update_metadata/2.
