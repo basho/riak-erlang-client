@@ -185,8 +185,10 @@ update_metadata(Object=#riakc_obj{}, M) ->
     Object#riakc_obj{updatemetadata=M}.
 
 %% @doc  Set the updated content-type of an object to CT.
--spec update_content_type(#riakc_obj{}, content_type()) -> #riakc_obj{}.
-update_content_type(Object=#riakc_obj{}, CT) ->
+-spec update_content_type(#riakc_obj{},content_type()|binary()) -> #riakc_obj{}.
+update_content_type(Object=#riakc_obj{}, CT) when is_binary(CT) ->
+    update_content_type(Object, binary_to_list(CT));
+update_content_type(Object=#riakc_obj{}, CT) when is_list(CT) ->
     M1 = get_update_metadata(Object),
     Object#riakc_obj{updatemetadata=dict:store(?MD_CTYPE, CT, M1)}.
 
@@ -339,6 +341,12 @@ update_content_type_test() ->
     undefined = get_update_content_type(O),
     O1 = update_content_type(O, "application/json"),
     ?assertEqual("application/json", get_update_content_type(O1)).
+
+binary_content_type_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>, <<"v">>, <<"application/x-foo">>),
+    ?assertEqual("application/x-foo", get_update_content_type(O)),
+    O1 = update_content_type(O, <<"application/x-bar">>),
+    ?assertEqual("application/x-bar", get_update_content_type(O1)).
 
 get_update_data_test() ->
     MD0 = dict:from_list([{?MD_CTYPE, "text/plain"}]),
