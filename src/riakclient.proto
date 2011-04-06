@@ -133,7 +133,7 @@ message RpbGetResp {
 //               the key will be returned.
 message RpbPutReq {
     required bytes bucket = 1;
-    required bytes key = 2;
+    optional bytes key = 2;
     optional bytes vclock = 3;
     required RpbContent content = 4;
     optional uint32 w = 5;
@@ -141,10 +141,11 @@ message RpbPutReq {
     optional bool return_body = 7;
 }
 
-// Put response - same as get response
+// Put response - same as get response with optional key if one was generated
 message RpbPutResp {
     repeated RpbContent content = 1;
     optional bytes vclock = 2;        // the opaque vector clock for the object
+    optional bytes key = 3;           // the key generated, if any
 }
 
 

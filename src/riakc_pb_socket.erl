@@ -838,10 +838,21 @@ process_response(#request{msg = #rpbputreq{}},
                  rpbputresp, State) ->
     %% server just returned the rpbputresp code - no message was encoded
     {reply, ok, State};
+process_response(#request{ msg = #rpbputreq{}},
+                 #rpbputresp{key = Key, content=undefined, vclock=undefined},
+                 State) when is_binary(Key) ->
+    %% server generated a key and the client didn't request return_body, but
+    %% the created key is returned
+    {reply, {ok, Key}, State};
 process_response(#request{msg = #rpbputreq{bucket = Bucket, key = Key}},
-                 #rpbputresp{content = RpbContents, vclock = Vclock}, State) ->
+                 #rpbputresp{content = RpbContents, vclock = Vclock,
+                     key = NewKey}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
-    {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
+    ReturnKey = case NewKey of
+        undefined -> Key;
+        _ -> NewKey
+    end,
+    {reply, {ok, riakc_obj:new_obj(Bucket, ReturnKey, Vclock, Contents)}, State};
 
 process_response(#request{msg = #rpbdelreq{}},
                  rpbdelresp, State) ->
