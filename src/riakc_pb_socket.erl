@@ -1886,6 +1886,17 @@ live_node_tests() ->
                  ?assertEqual(riakc_obj:get_content_type(GotTermObj),
                               "application/x-erlang-binary"),
                  ?assertEqual(binary_to_term(riakc_obj:get_value(GotTermObj)), MyTerm)
+             end)},
+     {"putting without a key should generate one",
+         ?_test(begin
+                     reset_riak(),
+                     {ok, Pid} = start_link(test_ip(), test_port()),
+                     PO = riakc_obj:new(<<"b">>, undefined, <<"value">>),
+                     Res1 = ?MODULE:put(Pid, PO),
+                     Res2 = ?MODULE:put(Pid, PO),
+                     ?assertMatch({ok, _Key}, Res1),
+                     % Make sure the same key isn't generated twice
+                     ?assert(Res1 =/= Res2)
              end)}
      ].
 
