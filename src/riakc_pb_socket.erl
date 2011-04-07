@@ -1897,7 +1897,20 @@ live_node_tests() ->
                      ?assertMatch({ok, _Key}, Res1),
                      % Make sure the same key isn't generated twice
                      ?assert(Res1 =/= Res2)
+             end)},
+     {"putting without a key should generate one with return_body",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, undefined, <<"value">>),
+                    {ok, Obj1} = ?MODULE:put(Pid, PO, [return_body]),
+                    {ok, Obj2} = ?MODULE:put(Pid, PO, [return_body]),
+                    %% Make sure the same key isn't generated twice
+                    ?assertEqual(element(1, Obj1), riakc_obj),
+                    ?assertEqual(element(1, Obj2), riakc_obj),
+                    ?assert(riakc_obj:key(Obj1) /= riakc_obj:key(Obj2))
              end)}
+
      ].
 
 -endif.
