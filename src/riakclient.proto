@@ -120,6 +120,9 @@ message RpbGetReq {
     required bytes bucket = 1;
     required bytes key = 2;
     optional uint32 r = 3;
+    optional uint32 pr = 4;
+    optional bool basic_quorum = 5;
+    optional bool notfound_ok = 6;
 }
 
 // Get Response - if the record was not found there will be no content/vclock

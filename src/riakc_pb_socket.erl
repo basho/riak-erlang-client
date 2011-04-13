@@ -770,8 +770,15 @@ send_caller(Msg, #request{from = From}=Request) when From /= undefined ->
 
 get_options([], Req) ->
     Req;
+get_options([{basic_quorum, BQ} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{basic_quorum = BQ});
+get_options([{notfound_ok, NFOk} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{notfound_ok = NFOk});
 get_options([{r, R} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{r = normalize_rw_value(R)}).
+    get_options(Rest, Req#rpbgetreq{r = normalize_rw_value(R)});
+get_options([{pr, PR} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)}).
+
 
 put_options([], Req) ->
     Req;
