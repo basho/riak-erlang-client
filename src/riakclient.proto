@@ -142,6 +142,7 @@ message RpbPutReq {
     optional uint32 w = 5;
     optional uint32 dw = 6;
     optional bool return_body = 7;
+    optional uint32 pw = 8;
 }
 
 // Put response - same as get response with optional key if one was generated
