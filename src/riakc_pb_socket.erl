@@ -198,20 +198,22 @@ get(Pid, Bucket, Key) ->
 %%      Will return {error, notfound} if the key is not on the server
 -spec get(pid(), bucket() | string(), key() | string(),
           timeout() |  riak_pbc_options()) ->
-                 {ok, riakc_obj()} | {error, term()}.
+                 {ok, riakc_obj()} | {error, term() | unchanged}.
 get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get(Pid, Bucket, Key, [], Timeout);
 
 %% @doc Get bucket/key from the server supplying options
 %%      [{r, 1}] would set r=1 for the request
+%%      [{if_vclock_different, VClock}] will return unchanged if the object's vclock matches
 get(Pid, Bucket, Key, Options) ->
     get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
  
 %% @doc Get bucket/key from the server supplying options and timeout
 %%      [{r, 1}] would set r=1 for the request
+%%      [{if_vclock_different, VClock}] will return unchanged if the object's vclock matches
 -spec get(pid(), bucket() | string(), key() | string(),
           riak_pbc_options(), timeout()) ->
-                 {ok, riakc_obj()} | {error, term()}.
+                 {ok, riakc_obj()} | {error, term() | unchanged}.
 get(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
@@ -779,7 +781,9 @@ get_options([{notfound_ok, NFOk} | Rest], Req) ->
 get_options([{r, R} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{r = normalize_rw_value(R)});
 get_options([{pr, PR} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)}).
+    get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)});
+get_options([{if_vclock_different, VClock} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{if_vclock_different = VClock}).
 
 
 put_options([], Req) ->
@@ -841,6 +845,9 @@ process_response(#request{msg = rpbgetserverinforeq},
 process_response(#request{msg = #rpbgetreq{}}, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};
+process_response(#request{msg = #rpbgetreq{}}, #rpbgetresp{unchanged=true}, State) ->
+    %% object was unchanged
+    {reply, unchanged, State};
 process_response(#request{msg = #rpbgetreq{bucket = Bucket, key = Key}},
                  #rpbgetresp{content = RpbContents, vclock = Vclock}, State) ->
     Contents = riakc_pb:erlify_rpbcontents(RpbContents),
@@ -1920,6 +1927,23 @@ live_node_tests() ->
                     ?assertEqual(element(1, Obj1), riakc_obj),
                     ?assertEqual(element(1, Obj2), riakc_obj),
                     ?assert(riakc_obj:key(Obj1) /= riakc_obj:key(Obj2))
+             end)},
+     {"conditional gets should return unchanged if the vclock matches",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
+                    ?MODULE:put(Pid, PO),
+                    {ok, Obj} = ?MODULE:get(Pid, <<"b">>, <<"key">>),
+                    VClock = riakc_obj:vclock(Obj),
+                    %% object hasn't changed
+                    ?assertEqual(unchanged, ?MODULE:get(Pid, <<"b">>, <<"key">>,
+                            [{if_vclock_different, VClock}])),
+                    %% change the object and make sure unchanged isn't returned
+                    P1 = riakc_obj:update_value(Obj, <<"newvalue">>),
+                    ?MODULE:put(Pid, P1),
+                    ?assertMatch({ok, _}, ?MODULE:get(Pid, <<"b">>, <<"key">>,
+                            [{if_vclock_different, VClock}]))
              end)}
 
      ].

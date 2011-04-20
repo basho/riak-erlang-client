@@ -123,12 +123,14 @@ message RpbGetReq {
     optional uint32 pr = 4;
     optional bool basic_quorum = 5;
     optional bool notfound_ok = 6;
+    optional bytes if_vclock_different = 7; // pass a vclock to do a 'conditional get'
 }
 
 // Get Response - if the record was not found there will be no content/vclock
 message RpbGetResp {
     repeated RpbContent content = 1;
     optional bytes vclock = 2;        // the opaque vector clock for the object
+    optional bool unchanged = 3;
 }
 
 
