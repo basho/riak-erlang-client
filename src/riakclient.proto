@@ -146,6 +146,8 @@ message RpbPutReq {
     optional uint32 dw = 6;
     optional bool return_body = 7;
     optional uint32 pw = 8;
+    optional bool if_not_modified = 9;
+    optional bool if_none_match = 10;
 }
 
 // Put response - same as get response with optional key if one was generated

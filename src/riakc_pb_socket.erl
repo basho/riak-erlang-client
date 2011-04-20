@@ -784,9 +784,8 @@ get_options([{pr, PR} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)});
 get_options([{if_vclock_different, VClock} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{if_vclock_different = VClock});
-get_options([{head, Head} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{head = Head}).
-
+get_options([head | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{head = true}).
 
 put_options([], Req) ->
     Req;
@@ -797,13 +796,17 @@ put_options([{dw, DW} | Rest], Req) ->
 put_options([{pw, PW} | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{pw = normalize_rw_value(PW)});
 put_options([return_body | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{return_body = 1}).
+    put_options(Rest, Req#rpbputreq{return_body = 1});
+put_options([if_not_modified | Rest], Req) ->
+    put_options(Rest, Req#rpbputreq{if_not_modified = true});
+put_options([if_none_match | Rest], Req) ->
+    put_options(Rest, Req#rpbputreq{if_none_match = true}).
+
 
 delete_options([], Req) ->
     Req;
 delete_options([{rw, RW} | Rest], Req) ->
     delete_options(Rest, Req#rpbdelreq{rw = normalize_rw_value(RW)}).
-
 
 normalize_rw_value(one) -> ?RIAKC_RW_ONE;
 normalize_rw_value(quorum) -> ?RIAKC_RW_QUORUM;
@@ -1946,6 +1949,42 @@ live_node_tests() ->
                     ?MODULE:put(Pid, P1),
                     ?assertMatch({ok, _}, ?MODULE:get(Pid, <<"b">>, <<"key">>,
                             [{if_vclock_different, VClock}]))
+             end)},
+     {"the head get option should return the object metadata without the value",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
+                    ?MODULE:put(Pid, PO),
+                    {ok, Obj} = ?MODULE:get(Pid, <<"b">>, <<"key">>, [head]),
+                    ?assertEqual(<<>>, riakc_obj:get_value(Obj)),
+                    {ok, Obj2} = ?MODULE:get(Pid, <<"b">>, <<"key">>, []),
+                    ?assertEqual(<<"value">>, riakc_obj:get_value(Obj2))
+             end)},
+     {"conditional put should allow you to avoid overwriting a value if it already exists",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
+                    ?assertEqual(ok, ?MODULE:put(Pid, PO, [if_none_match])),
+                    ?assertEqual({error, <<"match_found">>}, ?MODULE:put(Pid, PO, [if_none_match]))
+             end)},
+     {"conditional put should allow you to avoid overwriting a value if its been updated",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
+                    {ok, Obj} = ?MODULE:put(Pid, PO, [return_body]),
+                    Obj2 = riakc_obj:update_value(Obj, <<"newvalue">>),
+                    ?assertEqual(ok, ?MODULE:put(Pid, Obj2, [if_not_modified])),
+                    ?assertEqual({error, <<"modified">>}, ?MODULE:put(Pid, Obj2, [if_not_modified]))
+             end)},
+     {"if_not_modified should fail if the object is not found",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
+                    ?assertEqual({error, <<"notfound">>}, ?MODULE:put(Pid, PO, [if_not_modified]))
              end)}
 
      ].
