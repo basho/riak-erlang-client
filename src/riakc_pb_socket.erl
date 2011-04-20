@@ -783,7 +783,9 @@ get_options([{r, R} | Rest], Req) ->
 get_options([{pr, PR} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)});
 get_options([{if_vclock_different, VClock} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{if_vclock_different = VClock}).
+    get_options(Rest, Req#rpbgetreq{if_vclock_different = VClock});
+get_options([{head, Head} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{head = Head}).
 
 
 put_options([], Req) ->

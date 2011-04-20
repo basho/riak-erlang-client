@@ -124,6 +124,7 @@ message RpbGetReq {
     optional bool basic_quorum = 5;
     optional bool notfound_ok = 6;
     optional bytes if_vclock_different = 7; // pass a vclock to do a 'conditional get'
+    optional bool head = 8;                 // return everything but the value
 }
 
 // Get Response - if the record was not found there will be no content/vclock
