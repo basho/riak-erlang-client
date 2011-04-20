@@ -123,7 +123,7 @@ message RpbGetReq {
     optional uint32 pr = 4;
     optional bool basic_quorum = 5;
     optional bool notfound_ok = 6;
-    optional bytes if_not_modified = 7; // fail if the supplied vclock does not match
+    optional bytes if_modified = 7; // fail if the supplied vclock does not match
     optional bool head = 8;             // return everything but the value
 }
 

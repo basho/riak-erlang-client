@@ -204,13 +204,13 @@ get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
 
 %% @doc Get bucket/key from the server supplying options
 %%      [{r, 1}] would set r=1 for the request
-%%      [{if_not_modified, VClock}] will return unchanged if the object's vclock matches
+%%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
 get(Pid, Bucket, Key, Options) ->
     get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
  
 %% @doc Get bucket/key from the server supplying options and timeout
 %%      [{r, 1}] would set r=1 for the request
-%%      [{if_not_modified, VClock}] will return unchanged if the object's vclock matches
+%%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
 -spec get(pid(), bucket() | string(), key() | string(),
           riak_pbc_options(), timeout()) ->
                  {ok, riakc_obj()} | {error, term() | unchanged}.
@@ -782,8 +782,8 @@ get_options([{r, R} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{r = normalize_rw_value(R)});
 get_options([{pr, PR} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)});
-get_options([{if_not_modified, VClock} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{if_not_modified = VClock});
+get_options([{if_modified, VClock} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{if_modified = VClock});
 get_options([head | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{head = true}).
 
@@ -1943,12 +1943,12 @@ live_node_tests() ->
                     VClock = riakc_obj:vclock(Obj),
                     %% object hasn't changed
                     ?assertEqual(unchanged, ?MODULE:get(Pid, <<"b">>, <<"key">>,
-                            [{if_not_modified, VClock}])),
+                            [{if_modified, VClock}])),
                     %% change the object and make sure unchanged isn't returned
                     P1 = riakc_obj:update_value(Obj, <<"newvalue">>),
                     ?MODULE:put(Pid, P1),
                     ?assertMatch({ok, _}, ?MODULE:get(Pid, <<"b">>, <<"key">>,
-                            [{if_not_modified, VClock}]))
+                            [{if_modified, VClock}]))
              end)},
      {"the head get option should return the object metadata without the value",
          ?_test(begin
