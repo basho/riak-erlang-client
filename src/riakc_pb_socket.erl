@@ -205,12 +205,14 @@ get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
 %% @doc Get bucket/key from the server supplying options
 %%      [{r, 1}] would set r=1 for the request
 %%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
+%%      [head] only return the object's metadata, the value is set to <<>>
 get(Pid, Bucket, Key, Options) ->
     get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
  
 %% @doc Get bucket/key from the server supplying options and timeout
 %%      [{r, 1}] would set r=1 for the request
 %%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
+%%      [head] only return the object's metadata, the value is set to <<>>
 -spec get(pid(), bucket() | string(), key() | string(),
           riak_pbc_options(), timeout()) ->
                  {ok, riakc_obj()} | {error, term() | unchanged}.
@@ -235,6 +237,9 @@ put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
 %%      [{dw,1}] set dw=1,
 %%      [{pw,1}] set pw=1,
 %%      [return_body] returns the updated metadata/value
+%%      [return_head] returns the updated metadata with the values set as <<>>
+%%      [if_not_modified] the put fails unless riakc_obj and database vclocks match
+%%      [if_none_match] the put fails if the key already exist
 %%      Put throws siblings if the riakc_obj contains siblings
 %%      that have not been resolved by calling select_sibling/2 or 
 %%      update_value/2 and update_metadata/2.
@@ -246,6 +251,9 @@ put(Pid, Obj, Options) ->
 %%      [{dw,1}] set dw=1,
 %%      [{pw,1}] set pw=1,
 %%      [return_body] returns the updated metadata/value
+%%      [return_head] returns the updated metadata with the values set as <<>>
+%%      [if_not_modified] the put fails unless riakc_obj and database vclocks match
+%%      [if_none_match] the put fails if the key already exist
 %%      Put throws siblings if the riakc_obj contains siblings
 %%      that have not been resolved by calling select_sibling/2 or 
 %%      update_value/2 and update_metadata/2.
@@ -797,6 +805,8 @@ put_options([{pw, PW} | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{pw = normalize_rw_value(PW)});
 put_options([return_body | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{return_body = 1});
+put_options([return_head | Rest], Req) ->
+    put_options(Rest, Req#rpbputreq{return_head = true});
 put_options([if_not_modified | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{if_not_modified = true});
 put_options([if_none_match | Rest], Req) ->
@@ -1985,6 +1995,25 @@ live_node_tests() ->
                     {ok, Pid} = start_link(test_ip(), test_port()),
                     PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
                     ?assertEqual({error, <<"notfound">>}, ?MODULE:put(Pid, PO, [if_not_modified]))
+             end)},
+     {"return_head should empty out the value in the riak object",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
+                    {ok, Obj} = ?MODULE:put(Pid, PO, [return_head]),
+                    ?assertEqual(<<>>, riakc_obj:get_value(Obj))
+             end)},
+     {"return_head should empty out all values when there's siblings",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = set_bucket(Pid, <<"b">>, [{allow_mult, true}]),
+                    PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
+                    {ok, Obj} = ?MODULE:put(Pid, PO, [return_head]),
+                    ?assertEqual(<<>>, riakc_obj:get_value(Obj)),
+                    {ok, Obj2} = ?MODULE:put(Pid, PO, [return_head]),
+                    ?assertEqual([<<>>, <<>>], riakc_obj:get_values(Obj2))
              end)}
 
      ].
