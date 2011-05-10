@@ -206,6 +206,7 @@ get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
 %%      [{r, 1}] would set r=1 for the request
 %%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
 %%      [head] only return the object's metadata, the value is set to <<>>
+%%      [deletedvclock] return a vclock if a tombstone is encountered
 get(Pid, Bucket, Key, Options) ->
     get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
  
@@ -213,6 +214,7 @@ get(Pid, Bucket, Key, Options) ->
 %%      [{r, 1}] would set r=1 for the request
 %%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
 %%      [head] only return the object's metadata, the value is set to <<>>
+%%      [deletedvclock] return a vclock if a tombstone is encountered
 -spec get(pid(), bucket() | string(), key() | string(),
           riak_pbc_options(), timeout()) ->
                  {ok, riakc_obj()} | {error, term() | unchanged}.
@@ -793,7 +795,10 @@ get_options([{pr, PR} | Rest], Req) ->
 get_options([{if_modified, VClock} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{if_modified = VClock});
 get_options([head | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{head = true}).
+    get_options(Rest, Req#rpbgetreq{head = true});
+get_options([deletedvclock | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{deletedvclock = true}).
+
 
 put_options([], Req) ->
     Req;
@@ -860,6 +865,10 @@ process_response(#request{msg = rpbgetserverinforeq},
 process_response(#request{msg = #rpbgetreq{}}, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};
+process_response(#request{msg = #rpbgetreq{deletedvclock=true}},
+                 #rpbgetresp{vclock=VC, content=undefined}, State) ->
+    %% server returned a notfound with a vector clock, meaning a tombstone
+    {reply, {error, notfound, VC}, State};
 process_response(#request{msg = #rpbgetreq{}}, #rpbgetresp{unchanged=true}, State) ->
     %% object was unchanged
     {reply, unchanged, State};
