@@ -47,7 +47,8 @@
          get_update_metadata/1,
          get_update_content_type/1,
          get_update_value/1,
-         md_ctype/1
+         md_ctype/1,
+         set_vclock/2
         ]).
 %% Internal library use only
 -export([new_obj/4]).
@@ -242,6 +243,10 @@ md_ctype(MetaData) ->
             Ctype
     end.
 
+%% @doc  Set the vector clock of an object
+-spec set_vclock(#riakc_obj{}, vclock()) -> #riakc_obj{}.
+set_vclock(Object=#riakc_obj{}, Vclock) ->
+    Object#riakc_obj{vclock=Vclock}.
 
 %% @doc  INTERNAL USE ONLY.  Set the contents of riak_object to the
 %%       {Metadata, Value} pairs in MVs. Normal clients should use the
