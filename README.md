@@ -13,6 +13,13 @@ Dependencies
 
 To build the riak-erlang-client you will need Erlang OTP R13B04 or later, and Git.
 
+Debian
+------
+
+On a Debian based system (Debian, Ubuntu, ...) you will need to make sure that certain packages are installed:
+
+    # apt-get install erlang-parsetools erlang-dev erlang-syntax-tools
+
 
 Installing
 =========
