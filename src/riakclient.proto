@@ -165,6 +165,7 @@ message RpbDelReq {
     required bytes bucket = 1;
     required bytes key = 2;
     optional uint32 rw = 3;
+    optional bytes vclock = 4;
 }
 
 // Delete response - not defined, will return a RpbDelResp on success or RpbErrorResp on failure

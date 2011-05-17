@@ -38,6 +38,7 @@
          get/3, get/4, get/5,
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
+         delete_vclock/4, delete_vclock/5, delete_vclock/6,
          list_buckets/1, list_buckets/2, list_buckets/3,
          list_keys/2, list_keys/3,
          stream_list_keys/2, stream_list_keys/3, stream_list_keys/4,
@@ -294,6 +295,32 @@ delete(Pid, Bucket, Key, Options) ->
 delete(Pid, Bucket, Key, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
+
+%% @doc Delete the key/value
+-spec delete_vclock(pid(), bucket() | string(), key() | string(), vclock:vclock()) -> ok | {error, term()}.
+delete_vclock(Pid, Bucket, Key, VClock) ->
+    delete_vclock(Pid, Bucket, Key, VClock, []).
+
+%% @doc Delete the key/value specifying timeout
+-spec delete_vclock(pid(), bucket() | string(), key() | string(), vclock:vclock(),
+             timeout() | riak_pbc_options()) -> ok | {error, term()}.
+delete_vclock(Pid, Bucket, Key, VClock, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    delete_vclock(Pid, Bucket, Key, VClock, [], Timeout);
+
+%% @doc Delete the key/value with options
+%%      [{rw,2}] sets rw=2
+delete_vclock(Pid, Bucket, Key, VClock, Options) ->
+    delete_vclock(Pid, Bucket, Key, VClock, Options, default_timeout(delete_timeout)).
+
+%% @doc Delete the key/value with options and timeout
+%%      [{rw,2}] sets rw=2
+-spec delete_vclock(pid(), bucket() | string(), key() | string(), vclock:vclock(),
+             riak_pbc_options(), timeout()) -> ok | {error, term()}.
+delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
+    Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
+            vclock=VClock}),
+    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+
 
 %% @doc List all buckets on the server
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
