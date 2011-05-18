@@ -39,7 +39,7 @@
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
-         delete_obj/4,
+         delete_obj/2, delete_obj/3, delete_obj/4,
          list_buckets/1, list_buckets/2, list_buckets/3,
          list_keys/2, list_keys/3,
          stream_list_keys/2, stream_list_keys/3, stream_list_keys/4,
@@ -321,6 +321,21 @@ delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
             vclock=VClock}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
+
+
+%% @doc Delete the riak object 
+%%      [{rw,2}] sets rw=2
+-spec delete_obj(pid(), riakc_obj()) -> ok | {error, term()}.
+delete_obj(Pid, Obj) ->
+    delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
+        riakc_obj:vclock(Obj), [], default_timeout(delete_timeout)).
+
+%% @doc Delete the riak object with options
+%%      [{rw,2}] sets rw=2
+-spec delete_obj(pid(), riakc_obj(), riak_pbc_options()) -> ok | {error, term()}.
+delete_obj(Pid, Obj, Options) ->
+    delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
+        riakc_obj:vclock(Obj), Options, default_timeout(delete_timeout)).
 
 %% @doc Delete the riak object with options and timeout
 %%      [{rw,2}] sets rw=2
