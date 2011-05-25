@@ -61,7 +61,7 @@
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
--type address() :: string() | atom() | ip_address().
+-type address() :: string() | atom() | inet:ip_address().
 -type portnum() :: non_neg_integer().
 -type option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
                    auto_reconnect | {auto_reconnect, boolean()}.
