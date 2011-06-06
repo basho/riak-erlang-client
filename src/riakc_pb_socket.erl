@@ -285,12 +285,22 @@ delete(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity
     delete(Pid, Bucket, Key, [], Timeout);
 
 %% @doc Delete the key/value with options
-%%      [{rw,2}] sets rw=2
+%%      [{rw,2}] sets rw=2 - this is deprecated
+%%      [{r,1}] sets r=1
+%%      [{w,all}] sets w=all
+%%      [{pr,quorum}] sets pr=quorum
+%%      [{pw,2}] sets pw=2
+%%      [{dw,2}] sets dw=2
 delete(Pid, Bucket, Key, Options) ->
     delete(Pid, Bucket, Key, Options, default_timeout(delete_timeout)).
 
 %% @doc Delete the key/value with options and timeout
-%%      [{rw,2}] sets rw=2
+%%      [{rw,2}] sets rw=2 - this is deprecated
+%%      [{r,1}] sets r=1
+%%      [{w,all}] sets w=all
+%%      [{pr,quorum}] sets pr=quorum
+%%      [{pw,2}] sets pw=2
+%%      [{dw,2}] sets dw=2
 -spec delete(pid(), bucket() | string(), key() | string(), 
              riak_pbc_options(), timeout()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key, Options, Timeout) ->
@@ -309,12 +319,22 @@ delete_vclock(Pid, Bucket, Key, VClock, Timeout) when is_integer(Timeout); Timeo
     delete_vclock(Pid, Bucket, Key, VClock, [], Timeout);
 
 %% @doc Delete the key/value with options
-%%      [{rw,2}] sets rw=2
+%%      [{rw,2}] sets rw=2 - this is deprecated
+%%      [{r,1}] sets r=1
+%%      [{w,all}] sets w=all
+%%      [{pr,quorum}] sets pr=quorum
+%%      [{pw,2}] sets pw=2
+%%      [{dw,2}] sets dw=2
 delete_vclock(Pid, Bucket, Key, VClock, Options) ->
     delete_vclock(Pid, Bucket, Key, VClock, Options, default_timeout(delete_timeout)).
 
 %% @doc Delete the key/value with options and timeout
-%%      [{rw,2}] sets rw=2
+%%      [{rw,2}] sets rw=2 - this is deprecated
+%%      [{r,1}] sets r=1
+%%      [{w,all}] sets w=all
+%%      [{pr,quorum}] sets pr=quorum
+%%      [{pw,2}] sets pw=2
+%%      [{dw,2}] sets dw=2
 -spec delete_vclock(pid(), bucket() | string(), key() | string(), vclock:vclock(),
              riak_pbc_options(), timeout()) -> ok | {error, term()}.
 delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
@@ -324,21 +344,30 @@ delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
 
 
 %% @doc Delete the riak object 
-%%      [{rw,2}] sets rw=2
--spec delete_obj(pid(), riakc_obj()) -> ok | {error, term()}.
+spec delete_obj(pid(), riakc_obj()) -> ok | {error, term()}.
 delete_obj(Pid, Obj) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), [], default_timeout(delete_timeout)).
 
 %% @doc Delete the riak object with options
-%%      [{rw,2}] sets rw=2
+%%      [{rw,2}] sets rw=2 - this is deprecated
+%%      [{r,1}] sets r=1
+%%      [{w,all}] sets w=all
+%%      [{pr,quorum}] sets pr=quorum
+%%      [{pw,2}] sets pw=2
+%%      [{dw,2}] sets dw=2
 -spec delete_obj(pid(), riakc_obj(), riak_pbc_options()) -> ok | {error, term()}.
 delete_obj(Pid, Obj, Options) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), Options, default_timeout(delete_timeout)).
 
 %% @doc Delete the riak object with options and timeout
-%%      [{rw,2}] sets rw=2
+%%      [{rw,2}] sets rw=2 - this is deprecated
+%%      [{r,1}] sets r=1
+%%      [{w,all}] sets w=all
+%%      [{pr,quorum}] sets pr=quorum
+%%      [{pw,2}] sets pw=2
+%%      [{dw,2}] sets dw=2
 -spec delete_obj(pid(), riakc_obj(), riak_pbc_options(), timeout()) -> ok | {error, term()}.
 delete_obj(Pid, Obj, Options, Timeout) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
