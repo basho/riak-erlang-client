@@ -166,6 +166,11 @@ message RpbDelReq {
     required bytes key = 2;
     optional uint32 rw = 3;
     optional bytes vclock = 4;
+    optional uint32 r = 5;
+    optional uint32 w = 6;
+    optional uint32 pr = 7;
+    optional uint32 pw = 8;
+    optional uint32 dw = 9;
 }
 
 // Delete response - not defined, will return a RpbDelResp on success or RpbErrorResp on failure

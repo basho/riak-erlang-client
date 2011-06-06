@@ -870,7 +870,17 @@ put_options([if_none_match | Rest], Req) ->
 delete_options([], Req) ->
     Req;
 delete_options([{rw, RW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{rw = normalize_rw_value(RW)}).
+    delete_options(Rest, Req#rpbdelreq{rw = normalize_rw_value(RW)});
+delete_options([{r, R} | Rest], Req) ->
+    delete_options(Rest, Req#rpbdelreq{r = normalize_rw_value(R)});
+delete_options([{w, W} | Rest], Req) ->
+    delete_options(Rest, Req#rpbdelreq{w = normalize_rw_value(W)});
+delete_options([{pr, PR} | Rest], Req) ->
+    delete_options(Rest, Req#rpbdelreq{pr = normalize_rw_value(PR)});
+delete_options([{pw, PW} | Rest], Req) ->
+    delete_options(Rest, Req#rpbdelreq{pw = normalize_rw_value(PW)});
+delete_options([{dw, DW} | Rest], Req) ->
+    delete_options(Rest, Req#rpbdelreq{dw = normalize_rw_value(DW)}).
 
 normalize_rw_value(one) -> ?RIAKC_RW_ONE;
 normalize_rw_value(quorum) -> ?RIAKC_RW_QUORUM;
