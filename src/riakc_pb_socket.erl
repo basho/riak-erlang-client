@@ -344,7 +344,7 @@ delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
 
 
 %% @doc Delete the riak object 
-spec delete_obj(pid(), riakc_obj()) -> ok | {error, term()}.
+-spec delete_obj(pid(), riakc_obj()) -> ok | {error, term()}.
 delete_obj(Pid, Obj) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), [], default_timeout(delete_timeout)).
