@@ -1136,8 +1136,8 @@ restart_req_timer(Request) ->
 connect(State) when State#state.sock =:= undefined ->
     #state{address = Address, port = Port, connects = Connects} = State,
     case gen_tcp:connect(Address, Port,
-                         [binary, {active, once}, {packet, 4}, {header, 1}],
-                         State#state.connect_timeout) of
+                         [binary, {active, once}, {packet, 4}, {header, 1},
+                          {reuseaddr, true}], State#state.connect_timeout) of
         {ok, Sock} ->
             {ok, State#state{sock = Sock, connects = Connects+1, 
                              reconnect_interval = ?FIRST_RECONNECT_INTERVAL}};
