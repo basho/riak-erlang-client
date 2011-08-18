@@ -1412,7 +1412,7 @@ reset_riak() ->
     %% Until there is a good way to empty the vnodes, require the
     %% test to run with ETS and kill the vnode master/sup to empty all the ETS tables
     %% and the ring manager to remove any bucket properties
-    ok = rpc:call(test_riak_node(), application, set_env, [riak_kv, storage_backend, riak_kv_ets_backend]),
+    ok = rpc:call(test_riak_node(), application, set_env, [riak_kv, storage_backend, riak_kv_memory_backend]),
 
     %% Restart the vnodes so they come up with ETS
     ok = supervisor:terminate_child({riak_kv_sup, test_riak_node()}, riak_kv_vnode_master),
