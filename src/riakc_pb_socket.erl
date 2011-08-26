@@ -636,7 +636,10 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, CallTimeout) ->
 search(Pid, Bucket, SearchQuery) ->
     %% Run a Map/Reduce operation using reduce_identity to get a list
     %% of BKeys.
-    IdentityQuery = [{reduce, {modfun, riak_kv_mapreduce, reduce_identity}, none, true}],
+    IdentityQuery = [{reduce,
+                      {modfun, riak_kv_mapreduce, reduce_identity},
+                      [{reduce_phase_only_1, true}],
+                      true}],
     case search(Pid, Bucket, SearchQuery, IdentityQuery,
                 default_timeout(search_timeout)) of
         {ok, [{_, Results}]} ->
@@ -675,7 +678,10 @@ get_index(Pid, Bucket, Index, Key) ->
     %% Run a Map/Reduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, Key},
-    IdentityQuery = [{reduce, {modfun, riak_kv_mapreduce, reduce_identity}, none, true}],
+    IdentityQuery = [{reduce,
+                      {modfun, riak_kv_mapreduce, reduce_identity},
+                      [{reduce_phase_only_1, true}],
+                      true}],
     case mapred(Pid, Input, IdentityQuery) of
         {ok, [{_, Results}]} ->
             %% Unwrap the results.
@@ -690,7 +696,10 @@ get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
     %% Run a Map/Reduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, Key},
-    IdentityQuery = [{reduce, {modfun, riak_kv_mapreduce, reduce_identity}, none, true}],
+    IdentityQuery = [{reduce,
+                      {modfun, riak_kv_mapreduce, reduce_identity},
+                      [{reduce_phase_only_1, true}],
+                      true}],
     case mapred(Pid, Input, IdentityQuery, Timeout, CallTimeout) of
         {ok, [{_, Results}]} ->
             %% Unwrap the results.
@@ -706,7 +715,10 @@ get_index(Pid, Bucket, Index, StartKey, EndKey) ->
     %% Run a Map/Reduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, StartKey, EndKey},
-    IdentityQuery = [{reduce, {modfun, riak_kv_mapreduce, reduce_identity}, none, true}],
+    IdentityQuery = [{reduce,
+                      {modfun, riak_kv_mapreduce, reduce_identity},
+                      [{reduce_phase_only_1, true}],
+                      true}],
     case mapred(Pid, Input, IdentityQuery) of
         {ok, [{_, Results}]} ->
             %% Unwrap the results.
@@ -721,7 +733,10 @@ get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
     %% Run a Map/Reduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, StartKey, EndKey},
-    IdentityQuery = [{reduce, {modfun, riak_kv_mapreduce, reduce_identity}, none, true}],
+    IdentityQuery = [{reduce,
+                      {modfun, riak_kv_mapreduce, reduce_identity},
+                      [{reduce_phase_only_1, true}],
+                      true}],
     case mapred(Pid, Input, IdentityQuery, Timeout, CallTimeout) of
         {ok, [{_, Results}]} ->
             %% Unwrap the results.
