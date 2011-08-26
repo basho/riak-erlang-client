@@ -153,6 +153,8 @@ pbify_rpbcontent_entry(?MD_LASTMOD, {MS,S,US}, PbContent) ->
     PbContent#rpbcontent{last_mod = 1000000*MS+S, last_mod_usecs = US};
 pbify_rpbcontent_entry(?MD_USERMETA, UserMeta, PbContent) when is_list(UserMeta) ->
     PbContent#rpbcontent{usermeta = [pbify_rpbpair(E) || E <- UserMeta]};
+pbify_rpbcontent_entry(?MD_INDEX, Indexes, PbContent) when is_list(Indexes) ->
+    PbContent#rpbcontent{indexes = [pbify_rpbpair(E) || E <- Indexes]};
 pbify_rpbcontent_entry(_Key, _Value, PbContent) ->
     %% Ignore unknown metadata - need to add to RpbContent if it needs to make it
     %% to/from the client
@@ -212,23 +214,39 @@ erlify_rpbcontent(PbC) ->
     end,
     case PbC#rpbcontent.usermeta of
         undefined ->
-            ErlMd = ErlMd6;
+            ErlMd7 = ErlMd6;
         PbUserMeta ->
             UserMeta = [erlify_rpbpair(E) || E <- PbUserMeta],
-            ErlMd = orddict:store(?MD_USERMETA, UserMeta, ErlMd6)
+            ErlMd7 = orddict:store(?MD_USERMETA, UserMeta, ErlMd6)
+    end,
+    case PbC#rpbcontent.indexes of
+        undefined ->
+            ErlMd = ErlMd7;
+        PbIndexes ->
+            Indexes = [erlify_rpbpair(E) || E <- PbIndexes],
+            ErlMd = orddict:store(?MD_INDEX, Indexes, ErlMd7)
     end,
 
     {dict:from_list(orddict:to_list(ErlMd)), PbC#rpbcontent.value}.
-    
+
 
 %% Convert {K,V} tuple to protocol buffers
 pbify_rpbpair({K,V}) ->
-    #rpbpair{key = K, value = V}.
+    #rpbpair{key = K, value = any_to_list(V)}.
+
+any_to_list(V) when is_list(V) ->
+    V;
+any_to_list(V) when is_atom(V) ->
+    atom_to_list(V);
+any_to_list(V) when is_binary(V) ->
+    binary_to_list(V);
+any_to_list(V) when is_integer(V) ->
+    integer_to_list(V).
 
 %% Convert RpbPair PB message to erlang {K,V} tuple
 erlify_rpbpair(#rpbpair{key = K, value = V}) ->
     {binary_to_list(K), binary_to_list(V)}.
-    
+
 %% Covnert erlang link tuple to RpbLink PB message
 pbify_rpblink({{B,K},T}) ->
     #rpblink{bucket = B, key = K, tag = T}.
