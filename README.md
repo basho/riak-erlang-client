@@ -135,7 +135,7 @@ At some point you'll want that data back. Using the same bucket and key you used
     {{[],[],[],[],[],[],[],[],[],[],[],...}}},
     undefined}}
 
-Like `put/3`, there is a `get/3` function that takes options.
+Like `put/3`, there is a `get/4` function that takes options.
 
 <table border="1">
     <th>Option</th>
