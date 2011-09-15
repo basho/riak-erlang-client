@@ -1354,12 +1354,12 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 -include_lib("eunit/include/eunit.hrl").
 -include("riakc_obj.hrl").
 
-%% Get the test host - check env RIAK_TEST_PB_HOST then env 'RIAK_TEST_HOST'
+%% Get the test host - check env RIAK_TEST_PB_HOST then env 'RIAK_TEST_HOST_1'
 %% falling back to 127.0.0.1
 test_ip() ->
     case os:getenv("RIAK_TEST_PB_HOST") of
         false ->
-            case os:getenv("RIAK_TEST_HOST") of
+            case os:getenv("RIAK_TEST_HOST_1") of
                 false ->
                     "127.0.0.1";
                 Host ->
@@ -1369,9 +1369,9 @@ test_ip() ->
             Host
     end.
 
-%% Test port - check env RIAK_TEST_PB_PORT
+%% Test port - check env RIAK_TEST_PBC_1
 test_port() ->
-    case os:getenv("RIAK_TEST_PB_PORT") of
+    case os:getenv("RIAK_TEST_PBC_1") of
         false ->
             8087;
         PortStr ->
@@ -1380,7 +1380,7 @@ test_port() ->
 
 %% Riak node under test - used to setup/configure/tweak it for tests
 test_riak_node() ->
-    case os:getenv("RIAK_TEST_NODE") of
+    case os:getenv("RIAK_TEST_NODE_1") of
         false ->
             'riak@127.0.0.1';
         NodeStr ->
