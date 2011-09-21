@@ -1407,6 +1407,11 @@ test_cookie() ->
 
 
 reset_riak() ->
+    %% sleep because otherwise we're going to kill the vnodes too fast
+    %% for the supervisor's maximum restart frequency, which will bring
+    %% down the entire node
+    timer:sleep(500),
+
     ?assertEqual(ok, maybe_start_network()),
 
     %% Until there is a good way to empty the vnodes, require the
