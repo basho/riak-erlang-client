@@ -2048,12 +2048,13 @@ live_node_tests() ->
      {"map reduce bad inputs",
       ?_test(begin
                  {ok, Pid} = start_link(test_ip(), test_port()),
-                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a tuple of bucket and key-filters, a list of target tuples, or a modfun tuple:\",\n         undefined}}">>},
-                              ?MODULE:mapred(Pid, undefined,
+                 Res = ?MODULE:mapred(Pid, undefined,
                                              [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                                undefined, false},
                                               {reduce, {jsfun, <<"Riak.reduceSum">>},
-                                               undefined, true}]))
+                                               undefined, true}]),
+                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a tuple of bucket and key-filters, a list of target tuples, or a search, index, or modfun tuple:\",\n         undefined}}">>},
+                              Res )
              end)},
      {"map reduce bad input keys",
       ?_test(begin
