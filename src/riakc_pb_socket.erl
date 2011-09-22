@@ -1407,6 +1407,11 @@ test_cookie() ->
 
 
 reset_riak() ->
+    %% sleep because otherwise we're going to kill the vnodes too fast
+    %% for the supervisor's maximum restart frequency, which will bring
+    %% down the entire node
+    timer:sleep(500),
+
     ?assertEqual(ok, maybe_start_network()),
 
     %% Until there is a good way to empty the vnodes, require the
@@ -2043,12 +2048,13 @@ live_node_tests() ->
      {"map reduce bad inputs",
       ?_test(begin
                  {ok, Pid} = start_link(test_ip(), test_port()),
-                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a tuple of bucket and key-filters, a list of target tuples, or a modfun tuple:\",\n         undefined}}">>},
-                              ?MODULE:mapred(Pid, undefined,
+                 Res = ?MODULE:mapred(Pid, undefined,
                                              [{map, {jsfun, <<"Riak.mapValuesJson">>},
                                                undefined, false},
                                               {reduce, {jsfun, <<"Riak.reduceSum">>},
-                                               undefined, true}]))
+                                               undefined, true}]),
+                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a tuple of bucket and key-filters, a list of target tuples, or a search, index, or modfun tuple:\",\n         undefined}}">>},
+                              Res )
              end)},
      {"map reduce bad input keys",
       ?_test(begin
