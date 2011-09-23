@@ -82,6 +82,8 @@ msg_type(21) -> rpbsetbucketreq;
 msg_type(22) -> rpbsetbucketresp;
 msg_type(23) -> rpbmapredreq;
 msg_type(24) -> rpbmapredresp;
+msg_type(25) -> rpbstatsreq;
+msg_type(26) -> rpbstatsresp;
 msg_type(_) -> undefined.
     
 msg_code(rpberrorresp)           -> 0;
@@ -108,7 +110,9 @@ msg_code(rpbgetbucketresp)       -> 20;
 msg_code(rpbsetbucketreq)        -> 21;
 msg_code(rpbsetbucketresp)       -> 22;
 msg_code(rpbmapredreq)           -> 23;
-msg_code(rpbmapredresp)          -> 24.
+msg_code(rpbmapredresp)          -> 24;
+msg_code(rpbstatsreq)            -> 25;
+msg_code(rpbstatsresp)           -> 26.
 
 %% ===================================================================
 %% Encoding/Decoding
