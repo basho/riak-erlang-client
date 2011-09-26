@@ -1655,6 +1655,14 @@ live_node_tests() ->
                   stop(Pid)
               end)},
 
+     {"stats",
+      ?_test(
+         begin
+             {ok, Pid} = start_link(test_ip(), test_port()),
+             {ok, _Stats} = ?MODULE:get_stats(Pid),
+             stop(Pid)
+         end)},
+
      {"set client id",
       ?_test(
          begin
