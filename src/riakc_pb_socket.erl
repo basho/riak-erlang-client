@@ -51,6 +51,7 @@
          mapred_bucket_stream/5, mapred_bucket_stream/6,
          search/3, search/5, search/6,
          get_index/4, get_index/5, get_index/6, get_index/7,
+         get_stats/1, get_stats/2,
          default_timeout/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -80,6 +81,8 @@
 -type server_info() :: [server_prop()].
 -type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
 -type bucket_props() :: [bucket_prop()].
+-type node_stat() :: {atom(),any()}.
+-type node_stats() :: [node_stat()].
 
 -record(state, {address,    % address to connect to
                 port,       % port to connect to
@@ -745,6 +748,17 @@ get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
     end.
 
 
+%% @doc Get the stats for this node
+-spec get_stats(pid()) -> {ok, node_stats()} | {error, term()}.
+get_stats(Pid) ->
+    get_stats(Pid, default_timeout(get_stats_timeout)).
+
+%% @doc Get the server information for this connection specifying timeout
+-spec get_stats(pid(), timeout()) -> {ok, node_stats()} | {error, term()}.
+get_stats(Pid, Timeout) ->
+    gen_server:call(Pid, {req, rpbstatsreq, Timeout}, infinity).
+
+
 %% @spec default_timeout(OpTimeout) -> timeout()
 %% @doc Return the default timeout for an operation if none is provided.
 %%      Falls back to the default timeout.
@@ -1118,7 +1132,24 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
             {reply, done, State};
         _ ->
             {pending, State}
-    end.
+    end;
+
+process_response(#request{msg = rpbstatsreq},
+                 #rpbstatsresp{node = NodeResp, stats = StatsResp}, State) ->
+    case NodeResp of
+        undefined ->
+            Node = [];
+        NodeInfo ->
+            Node = [{node, NodeInfo}]
+    end,
+    case StatsResp of
+        undefined ->
+            Stats = [];
+        StatsInfo ->
+            Stats = [{stats, StatsInfo}]
+    end,
+    {reply, {ok, Node++Stats}, State}.
+
 
 %%
 %% Called after sending a message - supports returning a
@@ -1623,6 +1654,14 @@ live_node_tests() ->
                   ?assertEqual(pong, ?MODULE:ping(Pid)),
                   stop(Pid)
               end)},
+
+     {"stats",
+      ?_test(
+         begin
+             {ok, Pid} = start_link(test_ip(), test_port()),
+             {ok, _Stats} = ?MODULE:get_stats(Pid),
+             stop(Pid)
+         end)},
 
      {"set client id",
       ?_test(
