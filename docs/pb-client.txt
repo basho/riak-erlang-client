@@ -109,11 +109,11 @@ a proplist of options.
                with success *after durably storing* the object for the
                write to be considered successful
                The default is currently set on the server at 0.
-  returnbody - immediately do a get after the put and return a
+  return_body - immediately do a get after the put and return a
                riakc_obj.
 
 6> riakc_pb_socket:put(Pid, AnotherObject, 
-                       [{w, 2}, {dw, 1}, returnbody]).
+                       [{w, 2}, {dw, 1}, return_body]).
 {ok,{riakc_obj,<<"my bucket">>,<<"my key">>,
                <<107,206,97,96,96,96,206,96,202,5,82,44,140,62,169,115,
                  50,152,18,25,243,88,25,...>>,
