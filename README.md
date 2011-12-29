@@ -11,7 +11,7 @@ in the [Riak Wiki](https://wiki.basho.com).
 Dependencies
 =========
 
-To build the riak-erlang-client you will need Erlang OTP R13B04 or later, and Git.
+To build the riak-erlang-client you will need Erlang OTP R13B04 or later, Git, Make.
 
 Debian
 ------
