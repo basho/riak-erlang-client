@@ -41,6 +41,7 @@
          get_value/1,
          get_values/1,
          update_metadata/2,
+         update_index/2,
          update_value/2,
          update_value/3,
          update_content_type/2,
@@ -65,6 +66,9 @@
 -type content_type() :: string().
 -type value() :: binary().
 -type contents() :: [{metadata(), value()}].
+-type indexname() :: binary().
+-type indexvalue() :: binary() | integer().
+-type indexes() :: [{indexname(), indexvalue()}].
 
 -record(riakc_obj, {
           bucket :: bucket(),
@@ -72,6 +76,7 @@
           vclock :: vclock(),
           contents :: contents(),
           updatemetadata :: dict(),
+          updateindex :: indexes(),
           updatevalue :: value()
          }).
 
@@ -185,6 +190,11 @@ get_values(#riakc_obj{contents=Contents}) ->
 update_metadata(Object=#riakc_obj{}, M) ->
     Object#riakc_obj{updatemetadata=M}.
 
+%% @doc  Set the update index on an object to I.
+-spec update_index(#riakc_obj{}, indexes()) -> #riakc_obj{}.
+update_index(Object, Indexes) ->
+    update_metadata(Object, dict:store(?MD_INDEX, Indexes, dict:new())).
+
 %% @doc  Set the updated content-type of an object to CT.
 -spec update_content_type(#riakc_obj{},content_type()|binary()) -> #riakc_obj{}.
 update_content_type(Object=#riakc_obj{}, CT) when is_binary(CT) ->
@@ -217,7 +227,7 @@ get_update_metadata(#riakc_obj{updatemetadata=UM}=Object) ->
         UM ->
             UM
     end.
-           
+
 %% @doc Return the content type of the update value
 get_update_content_type(Object=#riakc_obj{}) ->
     UM = get_update_metadata(Object),
@@ -322,6 +332,16 @@ update_metadata_test() ->
     UM = riakc_obj:get_update_metadata(O),
     ?assertEqual([], dict:to_list(UM)).
 
+update_index_test() ->
+    Indexes = [{<<"test_index_bin">>, <<"test_value">>}],
+    ExpectedIndexes = dict:store(?MD_INDEX, Indexes, dict:new()),
+    Object = riakc_obj:new(<<"bucket">>, <<"key">>),
+    UpdatedObject = riakc_obj:update_index(Object, Indexes),
+    
+    UpdatedMetadata = get_update_metadata(UpdatedObject),
+    
+    ?assertEqual(ExpectedIndexes, UpdatedMetadata).
+
 update_value_test() ->
     O = riakc_obj:new(<<"b">>, <<"k">>),
     ?assertThrow(no_value, get_update_value(O)),
@@ -384,23 +404,6 @@ get_update_data_test() ->
     MD5 = get_update_metadata(Oboth),
     ?assertEqual("application/json", md_ctype(MD5)).
    
-%% get_update_data_sibs_test() ->
-%%     MD0 = dict:from_list([{?MD_CTYPE, "text/plain"}]),
-%%     MD1 = dict:from_list([{?MD_CTYPE, "application/json"}]),
-%%     O = new_obj(<<"b">>, <<"k">>, <<"">>, 
-%%                 [{MD0, <<"v">>},{MD1, <<"sibling">>}]),
-%%     %% Create an updated metadata object
-%%     Oumd = update_metadata(O, MD1),
-%%     %% Create an updated value object
-%%     Ouv = update_value(O, <<"valueonly">>),
-%%     %% Create updated both object
-%%     Oboth = update_value(Oumd, <<"both">>),
-    
-%%     ?assertThrow({error, siblings}, get_update_data(O)),
-%%     ?assertThrow({error, siblings}, get_update_data(Oumd)),
-%%     ?assertEqual({error, siblings}, get_update_data(Ouv)),
-%%     ?assertEqual({ok, {MD1, <<"both">>}}, get_update_data(Oboth)).
-                              
 select_sibling_test() ->
     MD0 = dict:from_list([{?MD_CTYPE, "text/plain"}]),
     MD1 = dict:from_list([{?MD_CTYPE, "application/json"}]),
@@ -413,8 +416,5 @@ select_sibling_test() ->
     ?assertEqual(<<"sib_one">>, get_update_value(O1)),
     ?assertEqual("application/json", get_update_content_type(O2)),
     ?assertEqual(<<"sib_two">>, get_update_value(O2)).
-   
-    
-    
 
 -endif.
