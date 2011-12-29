@@ -76,7 +76,6 @@
           vclock :: vclock(),
           contents :: contents(),
           updatemetadata :: dict(),
-          updateindex :: indexes(),
           updatevalue :: value()
          }).
 
