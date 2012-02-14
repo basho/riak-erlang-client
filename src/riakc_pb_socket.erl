@@ -20,6 +20,12 @@
 %%
 %% -------------------------------------------------------------------
 
+
+%% @doc Manages a connection to Riak via the Protocol Buffers
+%% transport and executes the commands that can be performed over that
+%% connection.
+%% @end
+
 -module(riakc_pb_socket).
 -include_lib("kernel/include/inet.hrl").
 -include("riakclient_pb.hrl").
@@ -62,39 +68,116 @@
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
--type address() :: string() | atom() | inet:ip_address().
--type portnum() :: non_neg_integer().
--type option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
+-type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
+-type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
+-type client_option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
                    auto_reconnect | {auto_reconnect, boolean()}.
--type options() :: [option()].
--type client_id() :: binary().
--type bucket() :: binary().
--type key() :: binary().
--type riakc_obj() :: tuple().
--type riak_pbc_options() :: list().
--type req_id() :: non_neg_integer().
+%% Options for starting or modifying the connection:
+%% `queue_if_disconnected' when present or true will cause requests to
+%% be queued while the connection is down. `auto_reconnect' when
+%% present or true will automatically attempt to reconnect to the
+%% server if the connection fails or is lost.
+-type client_options() :: [client_option()]. %% A list of client options.
+-type client_id() :: binary(). %% A client identifier, used for differentiating client processes
+-type bucket() :: binary(). %% A bucket name.
+-type key() :: binary(). %% A key name.
+-type riakc_obj() :: riakc_obj:riakc_obj(). %% An object (bucket, key, metadata, value) stored in Riak.
+-type req_id() :: non_neg_integer(). %% Request identifier for streaming requests.
 -type rpb_req() :: atom() | tuple().
 -type ctx() :: any().
 -type rpb_resp() :: atom() | tuple().
--type server_prop() :: {node, binary()} | {server_version, binary()}.
--type server_info() :: [server_prop()].
--type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
--type bucket_props() :: [bucket_prop()].
-
--record(state, {address,    % address to connect to
-                port,       % port to connect to
-                auto_reconnect = false, % if true, automatically reconnects to server
-                                        % if false, exits on connection failure/request timeout
-                queue_if_disconnected = false, % if true, add requests to queue if disconnected
-                sock,       % gen_tcp socket
-                active,     % active request
-                queue,      % queue of pending requests
-                connects=0, % number of successful connects
-                failed=[],  % breakdown of failed connects
-                connect_timeout=infinity, % timeout of TCP connection
-                reconnect_interval=?FIRST_RECONNECT_INTERVAL}).
--record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: integer(),
+-type server_prop() :: {node, binary()} | {server_version, binary()}. %% Server properties, as returned by the `get_server_info/1' call.
+-type server_info() :: [server_prop()]. %% A response from the `get_server_info/1' call.
+-type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}. %% Bucket property definitions.
+-type bucket_props() :: [bucket_prop()]. %% Bucket properties
+-type quorum() :: non_neg_integer() | one | all | quorum | default.  %% A quorum setting for get/put/delete requests.
+-type read_quorum() :: {r, ReadQuorum::quorum()} |
+                       {pr, PrimaryReadQuorum::quorum()}. %% Valid quorum options for get requests.
+-type write_quorum() :: {w, WriteQuorum::quorum()} |
+                        {dw, DurableWriteQuorum::quorum()} |
+                        {pw, PrimaryWriteQuorum::quorum()}. %% Valid quorum options for write requests.
+-type delete_quorum() :: read_quorum() |
+                         write_quorum() |
+                         {rw, ReadWriteQuorum::quorum()}. %% Valid quorum options for delete requests. Note that `rw' is deprecated in Riak 1.0 and later.
+-type get_option() :: read_quorum() |
+                      {if_modified, riakc_obj:vclock()} |
+                      head | deletedvclock.
+%% Valid request options for get requests. When `if_modified' is
+%% specified with a vclock, the request will fail if the object has
+%% not changed. When `head' is specified, only the metadata will be
+%% returned. When `deletedvclock' is specified, the vector clock of
+%% the tombstone will be returned if the object has been recently
+%% deleted.
+-type put_option() :: write_quorum() | return_body | return_head | if_not_modified | if_none_match.
+%% Valid request options for put requests. `return_body' returns the
+%% entire result of storing the object. `return_head' returns the
+%% metadata from the result of storing the object. `if_not_modified'
+%% will cause the request to fail if the local and remote vclocks do
+%% not match. `if_none_match' will cause the request to fail if the
+%% object already exists in Riak.
+-type get_options() :: [get_option()]. %% A list of options for a get request.
+-type put_options() :: [put_option()]. %% A list of options for a put request.
+-type delete_options() :: [delete_quorum()]. %% A list of options for a delete request.
+-type mapred_queryterm() ::  {map, mapred_funterm(), Arg::term(), Accumulate :: boolean()} |
+                             {reduce, mapred_funterm(), Arg::term(),Accumulate :: boolean()} |
+                             {link, Bucket :: riakc_obj:bucket(), Tag :: term(), Accumulate :: boolean()}.
+%% A MapReduce phase specification. `map' functions operate on single
+%% K/V objects. `reduce' functions operate across collections of
+%% inputs from other phases. `link' is a special type of map phase
+%% that matches links in the fetched objects. The `Arg' parameter will
+%% be passed as the last argument to the phase function. The
+%% `Accumulate' param determines whether results from this phase will
+%% be returned to the client.
+-type mapred_funterm() :: {modfun, Module :: atom(), Function :: atom()} |
+                          {qfun, function()} |
+                          {strfun, list() | binary()}.
+%% A MapReduce phase function specification. `modfun' requires that
+%% the compiled module be available on all Riak nodes. `qfun' will
+%% only work from the shell (compiled fun() terms refer to compiled
+%% code only). `strfun' contains the textual source of an Erlang
+%% function but the functionality must be enabled on the Riak cluster.
+-type mapred_result() :: [term()].
+%% The results of a MapReduce job.
+-type mapred_inputs() :: [{bucket(), key()} | {bucket(), key(), term()}] |
+                         {modfun, module(), function(), [term()]} |
+                         bucket() |
+                         {index, bucket(), Index::binary(), key()} |
+                         {index, bucket(), Index::binary(), StartKey::key(), EndKey::key()}.
+%% Inputs for a MapReduce job.
+-type connection_failure() :: {Reason::term(), FailureCount::integer()}.
+%% The reason for connection failure and how many times that type of
+%% failure has occurred since startup.
+-type timeout_name() :: ping_timeout | get_client_id_timeout |
+                           set_client_id_timeout | get_server_info_timeout |
+                           get_timeout | put_timeout | delete_timeout |
+                           list_buckets_timeout | list_buckets_call_timeout |
+                           list_keys_timeout | stream_list_keys_timeout |
+                           stream_list_keys_call_timeout | get_bucket_timeout |
+                           get_bucket_call_timeout | set_bucket_timeout |
+                           set_bucket_call_timeout | mapred_timeout |
+                           mapred_call_timeout | mapred_stream_timeout |
+                           mapred_stream_call_timeout | mapred_bucket_timeout |
+                           mapred_bucket_call_timeout | mapred_bucket_stream_call_timeout |
+                           search_timeout | search_call_timeout | timeout.
+%% Which client operation the default timeout is being requested
+%% for. `timeout' is the global default timeout. Any of these defaults
+%% can be overridden by setting the application environment variable
+%% of the same name on the `riakc' application, for example:
+%% `application:set_env(riakc, ping_timeout, 5000).'
+-record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
                   tref :: reference() | undefined }).
+-record(state, {address :: address(),    % address to connect to
+                port :: portnum(),       % port to connect to
+                auto_reconnect = false :: boolean(), % if true, automatically reconnects to server
+                                        % if false, exits on connection failure/request timeout
+                queue_if_disconnected = false :: boolean(), % if true, add requests to queue if disconnected
+                sock :: port(),       % gen_tcp socket
+                active :: #request{} | undefined,     % active request
+                queue :: queue() | undefined,      % queue of pending requests
+                connects=0 :: non_neg_integer(), % number of successful connects
+                failed=[] :: [connection_failure()],  % breakdown of failed connects
+                connect_timeout=infinity :: timeout(), % timeout of TCP connection
+                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
@@ -103,55 +186,61 @@
 start_link(Address, Port) ->
     start_link(Address, Port, []).
 
-%% @doc Create a linked process to talk with the riak server on Address:Port with Options
+%% @doc Create a linked process to talk with the riak server on Address:Port with Options.
 %%      Client id will be assigned by the server.
-%%      Options:
-%%        auto_reconnect automatically try and reconnenct the socket on dropped socket
-%%          or timeout.
-%%        queue_if_disconnected adds requests to the queue when it is disconnected
-%%          rather than return {error, disconnected}.  If the server comes back the
-%%          request will be submitted if the timeout has not expired.  Implies
-%%          {auto_reconnect, true}.
-%%
--spec start_link(address(), portnum(), options()) -> {ok, pid()} | {error, term()}.
+-spec start_link(address(), portnum(), client_options()) -> {ok, pid()} | {error, term()}.
 start_link(Address, Port, Options) when is_list(Options) ->
     gen_server:start_link(?MODULE, [Address, Port, Options], []).
 
-%% @doc Create a process to talk with the riak server on Address:Port
+%% @doc Create a process to talk with the riak server on Address:Port.
 %%      Client id will be assigned by the server.
 -spec start(address(), portnum()) -> {ok, pid()} | {error, term()}.
 start(Address, Port) ->
     start(Address, Port, []).
 
-%% @doc Create a process to talk with the riak server on Address:Port with Options
-%%     See start_link/3.
--spec start(address(), portnum(), options()) -> {ok, pid()} | {error, term()}.
+%% @doc Create a process to talk with the riak server on Address:Port with Options.
+-spec start(address(), portnum(), client_options()) -> {ok, pid()} | {error, term()}.
 start(Address, Port, Options) when is_list(Options) ->
     gen_server:start(?MODULE, [Address, Port, Options], []).
 
-%% @doc Disconnect the socket and stop the process
+%% @doc Disconnect the socket and stop the process.
+-spec stop(pid()) -> ok.
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
 %% @doc Change the options for this socket.  Allows you to connect with one
 %%      set of options then run with another (e.g. connect with no options to
-%%      make sure the server is there, then enable queue_if_disconnected)
+%%      make sure the server is there, then enable queue_if_disconnected).
+%% @equiv set_options(Pid, Options, infinity)
+%% @see start_link/3
+-spec set_options(pid(), client_options()) -> ok.
 set_options(Pid, Options) ->
     set_options(Pid, Options, infinity).
-%% @doc set_options/2 with a gen_server timeout
+
+%% @doc Like set_options/2, but with a gen_server timeout.
+%% @see start_link/3
+-spec set_options(pid(), client_options(), timeout()) -> ok.
 set_options(Pid, Options, Timeout) ->
     gen_server:call(Pid, {set_options, Options}, Timeout).
 
-%% @doc Return true if connected to the remote server and {false, [{Reason,integer()}]}
-%%      with a list of failed connect reasons
+%% @doc Determines whether the client is connected. Returns true if
+%% connected, or false and a list of connection failures and frequencies if
+%% disconnected.
+%% @equiv is_connected(Pid, infinity)
+-spec is_connected(pid()) -> true | {false, [connection_failure()]}.
 is_connected(Pid) ->
     is_connected(Pid, infinity).
 
-%% @doc See is_connected/1 with gen_server timeout
+%% @doc Determines whether the client is connected, with the specified
+%% timeout to the client process. Returns true if connected, or false
+%% and a list of connection failures and frequencies if disconnected.
+%% @see is_connected/1
+-spec is_connected(pid(), timeout()) -> true | {false, [connection_failure()]}.
 is_connected(Pid, Timeout) ->
     gen_server:call(Pid, is_connected, Timeout).
 
 %% @doc Ping the server
+%% @equiv ping(Pid, default_timeout(ping_timeout))
 -spec ping(pid()) -> ok | {error, term()}.
 ping(Pid) ->
     ping(Pid, default_timeout(ping_timeout)).
@@ -162,6 +251,7 @@ ping(Pid, Timeout) ->
     gen_server:call(Pid, {req, rpbpingreq, Timeout}, infinity).
 
 %% @doc Get the client id for this connection
+%% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
 -spec get_client_id(pid()) -> {ok, client_id()} | {error, term()}.
 get_client_id(Pid) ->
     get_client_id(Pid, default_timeout(get_client_id_timeout)).
@@ -172,6 +262,7 @@ get_client_id(Pid, Timeout) ->
     gen_server:call(Pid, {req, rpbgetclientidreq, Timeout}, infinity).
 
 %% @doc Set the client id for this connection
+%% @equiv set_client_id(Pid, ClientId, default_timeout(set_client_id_timeout))
 -spec set_client_id(pid(), client_id()) -> {ok, client_id()} | {error, term()}.
 set_client_id(Pid, ClientId) ->
     set_client_id(Pid, ClientId, default_timeout(set_client_id_timeout)).
@@ -182,6 +273,7 @@ set_client_id(Pid, ClientId, Timeout) ->
     gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}, Timeout}, infinity).
 
 %% @doc Get the server information for this connection
+%% @equiv get_server_info(Pid, default_timeout(get_server_info_timeout))
 -spec get_server_info(pid()) -> {ok, server_info()} | {error, term()}.
 get_server_info(Pid) ->
     get_server_info(Pid, default_timeout(get_server_info_timeout)).
@@ -191,78 +283,63 @@ get_server_info(Pid) ->
 get_server_info(Pid, Timeout) ->
     gen_server:call(Pid, {req, rpbgetserverinforeq, Timeout}, infinity).
 
-%% @doc Get bucket/key from the server
-%%      Will return {error, notfound} if the key is not on the server
--spec get(pid(), bucket() | string(), key() | string()) -> {ok, riakc_obj()} | {error, term()}.
+%% @doc Get bucket/key from the server.
+%%      Will return {error, notfound} if the key is not on the serverk.
+%% @equiv get(Pid, Bucket, Key, [], default_timeout(get_timeout))
+-spec get(pid(), bucket(), key()) -> {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key) ->
     get(Pid, Bucket, Key, [], default_timeout(get_timeout)).
 
-%% @doc Get bucket/key from the server specifying timeout
-%%      Will return {error, notfound} if the key is not on the server
--spec get(pid(), bucket() | string(), key() | string(),
-          timeout() |  riak_pbc_options()) ->
+%% @doc Get bucket/key from the server specifying timeout.
+%%      Will return {error, notfound} if the key is not on the server.
+%% @equiv get(Pid, Bucket, Key, Options, Timeout)
+-spec get(pid(), bucket(), key(), TimeoutOrOptions::timeout() |  get_options()) ->
                  {ok, riakc_obj()} | {error, term() | unchanged}.
 get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get(Pid, Bucket, Key, [], Timeout);
-
-%% @doc Get bucket/key from the server supplying options
-%%      [{r, 1}] would set r=1 for the request
-%%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
-%%      [head] only return the object's metadata, the value is set to <<>>
-%%      [deletedvclock] return a vclock if a tombstone is encountered
 get(Pid, Bucket, Key, Options) ->
     get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
 
-%% @doc Get bucket/key from the server supplying options and timeout
-%%      [{r, 1}] would set r=1 for the request
-%%      [{if_modified, VClock}] will return unchanged if the object's vclock matches
-%%      [head] only return the object's metadata, the value is set to <<>>
-%%      [deletedvclock] return a vclock if a tombstone is encountered
--spec get(pid(), bucket() | string(), key() | string(),
-          riak_pbc_options(), timeout()) ->
+%% @doc Get bucket/key from the server supplying options and timeout.
+%%      <code>{error, unchanged}</code> will be returned when the
+%%      <code>{if_modified, Vclock}</code> option is specified and the
+%%      object is unchanged.
+-spec get(pid(), bucket(), key(), get_options(), timeout()) ->
                  {ok, riakc_obj()} | {error, term() | unchanged}.
 get(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 %% @doc Put the metadata/value in the object under bucket/key
+%% @equiv put(Pid, Obj, [])
+%% @see put/4
 -spec put(pid(), riakc_obj()) ->
                  ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj) ->
     put(Pid, Obj, []).
 
-%% @doc Put the metadata/value in the object under bucket/key
--spec put(pid(), riakc_obj(), timeout() | riak_pbc_options()) ->
+%% @doc Put the metadata/value in the object under bucket/key with options or timeout.
+%% @equiv put(Pid, Obj, Options, Timeout)
+%% @see put/4
+-spec put(pid(), riakc_obj(), TimeoutOrOptions::timeout() | put_options()) ->
                  ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     put(Pid, Obj, [], Timeout);
-
-%% @doc Put the metadata/value in the object under bucket/key with options
-%%      [{w,2}] sets w=2,
-%%      [{dw,1}] set dw=1,
-%%      [{pw,1}] set pw=1,
-%%      [return_body] returns the updated metadata/value
-%%      [return_head] returns the updated metadata with the values set as <<>>
-%%      [if_not_modified] the put fails unless riakc_obj and database vclocks match
-%%      [if_none_match] the put fails if the key already exist
-%%      Put throws siblings if the riakc_obj contains siblings
-%%      that have not been resolved by calling select_sibling/2 or
-%%      update_value/2 and update_metadata/2.
 put(Pid, Obj, Options) ->
     put(Pid, Obj, Options, default_timeout(put_timeout)).
 
-%% @doc Put the metadata/value in the object under bucket/key with options and timeout
-%%      [{w,2}] sets w=2,
-%%      [{dw,1}] set dw=1,
-%%      [{pw,1}] set pw=1,
-%%      [return_body] returns the updated metadata/value
-%%      [return_head] returns the updated metadata with the values set as <<>>
-%%      [if_not_modified] the put fails unless riakc_obj and database vclocks match
-%%      [if_none_match] the put fails if the key already exist
-%%      Put throws siblings if the riakc_obj contains siblings
-%%      that have not been resolved by calling select_sibling/2 or
-%%      update_value/2 and update_metadata/2.
--spec put(pid(), riakc_obj(), riak_pbc_options(), timeout()) ->
+%% @doc Put the metadata/value in the object under bucket/key with
+%%      options and timeout. Put throws `siblings' if the
+%%      riakc_obj contains siblings that have not been resolved by
+%%      calling {@link riakc_obj:select_sibling/2.} or {@link
+%%      riakc_obj:update_value/2} and {@link
+%%      riakc_obj:update_metadata/2}.  If the object has no key and
+%%      the Riak node supports it, `{ok, Key::key()}' will be returned
+%%      when the object is created, or `{ok, Obj::riakc_obj()}' if
+%%      `return_body' was specified.
+%% @throws siblings
+%% @end
+-spec put(pid(), riakc_obj(), put_options(), timeout()) ->
                  ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj, Options, Timeout) ->
     Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
@@ -275,128 +352,110 @@ put(Pid, Obj, Options, Timeout) ->
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 %% @doc Delete the key/value
--spec delete(pid(), bucket() | string(), key() | string()) -> ok | {error, term()}.
+%% @equiv delete(Pid, Bucket, Key, [])
+-spec delete(pid(), bucket(), key()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key) ->
     delete(Pid, Bucket, Key, []).
 
-%% @doc Delete the key/value specifying timeout
--spec delete(pid(), bucket() | string(), key() | string(),
-             timeout() | riak_pbc_options()) -> ok | {error, term()}.
+%% @doc Delete the key/value specifying timeout or options. <em>Note that the rw quorum is deprecated, use r and w.</em>
+%% @equiv delete(Pid, Bucket, Key, Options, Timeout)
+-spec delete(pid(), bucket(), key(), TimeoutOrOptions::timeout() | delete_options()) ->
+                    ok | {error, term()}.
 delete(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     delete(Pid, Bucket, Key, [], Timeout);
-
-%% @doc Delete the key/value with options
-%%      [{rw,2}] sets rw=2 - this is deprecated
-%%      [{r,1}] sets r=1
-%%      [{w,all}] sets w=all
-%%      [{pr,quorum}] sets pr=quorum
-%%      [{pw,2}] sets pw=2
-%%      [{dw,2}] sets dw=2
 delete(Pid, Bucket, Key, Options) ->
     delete(Pid, Bucket, Key, Options, default_timeout(delete_timeout)).
 
-%% @doc Delete the key/value with options and timeout
-%%      [{rw,2}] sets rw=2 - this is deprecated
-%%      [{r,1}] sets r=1
-%%      [{w,all}] sets w=all
-%%      [{pr,quorum}] sets pr=quorum
-%%      [{pw,2}] sets pw=2
-%%      [{dw,2}] sets dw=2
--spec delete(pid(), bucket() | string(), key() | string(),
-             riak_pbc_options(), timeout()) -> ok | {error, term()}.
+%% @doc Delete the key/value with options and timeout. <em>Note that the rw quorum is deprecated, use r and w.</em>
+-spec delete(pid(), bucket(), key(), delete_options(), timeout()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
-%% @doc Delete the key/value
--spec delete_vclock(pid(), bucket() | string(), key() | string(), vclock:vclock()) -> ok | {error, term()}.
+%% @doc Delete the object at Bucket/Key, giving the vector clock.
+%% @equiv delete_vclock(Pid, Bucket, Key, VClock, [])
+-spec delete_vclock(pid(), bucket(), key(), riakc_obj:vclock()) -> ok | {error, term()}.
 delete_vclock(Pid, Bucket, Key, VClock) ->
     delete_vclock(Pid, Bucket, Key, VClock, []).
 
-%% @doc Delete the key/value specifying timeout
--spec delete_vclock(pid(), bucket() | string(), key() | string(), vclock:vclock(),
-             timeout() | riak_pbc_options()) -> ok | {error, term()}.
+%% @doc Delete the object at Bucket/Key, specifying timeout or options and giving the vector clock.
+%% @equiv delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout)
+-spec delete_vclock(pid(), bucket(), key(), riakc_obj:vclock(), TimeoutOrOptions::timeout() | delete_options()) ->
+                           ok | {error, term()}.
 delete_vclock(Pid, Bucket, Key, VClock, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     delete_vclock(Pid, Bucket, Key, VClock, [], Timeout);
-
-%% @doc Delete the key/value with options
-%%      [{rw,2}] sets rw=2 - this is deprecated
-%%      [{r,1}] sets r=1
-%%      [{w,all}] sets w=all
-%%      [{pr,quorum}] sets pr=quorum
-%%      [{pw,2}] sets pw=2
-%%      [{dw,2}] sets dw=2
 delete_vclock(Pid, Bucket, Key, VClock, Options) ->
     delete_vclock(Pid, Bucket, Key, VClock, Options, default_timeout(delete_timeout)).
 
-%% @doc Delete the key/value with options and timeout
-%%      [{rw,2}] sets rw=2 - this is deprecated
-%%      [{r,1}] sets r=1
-%%      [{w,all}] sets w=all
-%%      [{pr,quorum}] sets pr=quorum
-%%      [{pw,2}] sets pw=2
-%%      [{dw,2}] sets dw=2
--spec delete_vclock(pid(), bucket() | string(), key() | string(), vclock:vclock(),
-             riak_pbc_options(), timeout()) -> ok | {error, term()}.
+%% @doc Delete the key/value with options and timeout and giving the
+%% vector clock. This form of delete ensures that subsequent get and
+%% put requests will be correctly ordered with the delete.
+%% @see delete_obj/4
+-spec delete_vclock(pid(), bucket(), key(), riakc_obj:vclock(), delete_options(), timeout()) ->
+                           ok | {error, term()}.
 delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
             vclock=VClock}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 
-%% @doc Delete the riak object
+%% @doc Delete the riak object.
+%% @equiv delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj), riakc_obj:vclock(Obj))
+%% @see delete_vclock/6
 -spec delete_obj(pid(), riakc_obj()) -> ok | {error, term()}.
 delete_obj(Pid, Obj) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), [], default_timeout(delete_timeout)).
 
-%% @doc Delete the riak object with options
-%%      [{rw,2}] sets rw=2 - this is deprecated
-%%      [{r,1}] sets r=1
-%%      [{w,all}] sets w=all
-%%      [{pr,quorum}] sets pr=quorum
-%%      [{pw,2}] sets pw=2
-%%      [{dw,2}] sets dw=2
--spec delete_obj(pid(), riakc_obj(), riak_pbc_options()) -> ok | {error, term()}.
+%% @doc Delete the riak object with options.
+%% @equiv delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj), riakc_obj:vclock(Obj), Options)
+%% @see delete_vclock/6
+-spec delete_obj(pid(), riakc_obj(), delete_options()) -> ok | {error, term()}.
 delete_obj(Pid, Obj, Options) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), Options, default_timeout(delete_timeout)).
 
-%% @doc Delete the riak object with options and timeout
-%%      [{rw,2}] sets rw=2 - this is deprecated
-%%      [{r,1}] sets r=1
-%%      [{w,all}] sets w=all
-%%      [{pr,quorum}] sets pr=quorum
-%%      [{pw,2}] sets pw=2
-%%      [{dw,2}] sets dw=2
--spec delete_obj(pid(), riakc_obj(), riak_pbc_options(), timeout()) -> ok | {error, term()}.
+%% @doc Delete the riak object with options and timeout.
+%% @equiv delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj), riakc_obj:vclock(Obj), Options, Timeout)
+%% @see delete_vclock/6
+-spec delete_obj(pid(), riakc_obj(), delete_options(), timeout()) -> ok | {error, term()}.
 delete_obj(Pid, Obj, Options, Timeout) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), Options, Timeout).
 
-%% @doc List all buckets on the server
+%% @doc List all buckets on the server.
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
+%% @equiv list_buckets(Pid, default_timeout(list_buckets_timeout))
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid) ->
     list_buckets(Pid, default_timeout(list_buckets_timeout)).
 
-%% @doc List all buckets on the server specifying server-side timeout
+%% @doc List all buckets on the server specifying server-side timeout.
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
+%% @equiv list_buckets(Pid, Timeout, default_timeout(list_buckets_call_timeout))
 -spec list_buckets(pid(), timeout()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid, Timeout) ->
     list_buckets(Pid, Timeout, default_timeout(list_buckets_call_timeout)).
 
 %% @doc List all buckets on the server specifying server-side and local
-%%      call timeout
+%%      call timeout.
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
 -spec list_buckets(pid(), timeout(), timeout()) -> {ok, [bucket()]} |
                                                    {error, term()}.
 list_buckets(Pid, Timeout, CallTimeout) ->
     gen_server:call(Pid, {req, rpblistbucketsreq, Timeout}, CallTimeout).
 
 %% @doc List all keys in a bucket
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
+%% @equiv list_keys(Pid, Bucket, default_timeout(list_keys_timeout))
 -spec list_keys(pid(), bucket()) -> {ok, [key()]}.
 list_keys(Pid, Bucket) ->
     list_keys(Pid, Bucket, default_timeout(list_keys_timeout)).
 
-%% @doc List all keys in a bucket specifying timeout
+%% @doc List all keys in a bucket specifying timeout. This is
+%% implemented using {@link stream_list_keys/3} and then waiting for
+%% the results to complete streaming.
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
 -spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]}.
 list_keys(Pid, Bucket, Timeout) ->
     case stream_list_keys(Pid, Bucket, Timeout) of
@@ -408,8 +467,10 @@ list_keys(Pid, Bucket, Timeout) ->
 
 %% @doc Stream list of keys in the bucket to the calling process.  The
 %%      process receives these messages.
-%%        {ReqId, {keys, [key()]}}
-%%        {ReqId, done}
+%% ```    {ReqId::req_id(), {keys, [key()]}}
+%%        {ReqId::req_id(), done}'''
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
+%% @equiv stream_list_keys(Pid, Bucket, default_timeout(stream_list_keys_timeout))
 -spec stream_list_keys(pid(), bucket()) -> {ok, req_id()} | {error, term()}.
 stream_list_keys(Pid, Bucket) ->
     stream_list_keys(Pid, Bucket, default_timeout(stream_list_keys_timeout)).
@@ -417,8 +478,10 @@ stream_list_keys(Pid, Bucket) ->
 %% @doc Stream list of keys in the bucket to the calling process specifying server side
 %%      timeout.
 %%      The process receives these messages.
-%%        {ReqId, {keys, [key()]}}
-%%        {ReqId, done}
+%% ```    {ReqId::req_id(), {keys, [key()]}}
+%%        {ReqId::req_id(), done}'''
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
+%% @equiv stream_list_keys(Pid, Bucket, Timeout, default_timeout(stream_list_keys_call_timeout))
 -spec stream_list_keys(pid(), bucket(), timeout()) -> {ok, req_id()} | {error, term()}.
 stream_list_keys(Pid, Bucket, Timeout) ->
     stream_list_keys(Pid, Bucket, Timeout, default_timeout(stream_list_keys_call_timeout)).
@@ -426,8 +489,9 @@ stream_list_keys(Pid, Bucket, Timeout) ->
 %% @doc Stream list of keys in the bucket to the calling process specifying server side
 %%      timeout and local call timeout.
 %%      The process receives these messages.
-%%        {ReqId, {keys, [key()]}}
-%%        {ReqId, done}
+%% ```    {ReqId::req_id(), {keys, [key()]}}
+%%        {ReqId::req_id(), done}'''
+%% <em>This is a potentially expensive operation and should not be used in production.</em>
 -spec stream_list_keys(pid(), bucket(), timeout(), timeout()) -> {ok, req_id()} |
                                                                  {error, term()}.
 stream_list_keys(Pid, Bucket, Timeout, CallTimeout) ->
@@ -435,77 +499,77 @@ stream_list_keys(Pid, Bucket, Timeout, CallTimeout) ->
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, ReqMsg, Timeout, {ReqId, self()}}, CallTimeout).
 
-%% @doc Get bucket properties
+%% @doc Get bucket properties.
+%% @equiv get_bucket(Pid, Bucket, default_timeout(get_bucket_timeout))
 -spec get_bucket(pid(), bucket()) -> {ok, bucket_props()} | {error, term()}.
 get_bucket(Pid, Bucket) ->
     get_bucket(Pid, Bucket, default_timeout(get_bucket_timeout)).
 
-%% @doc Get bucket properties specifying a server side timeout
+%% @doc Get bucket properties specifying a server side timeout.
+%% @equiv get_bucket(Pid, Bucket, Timeout, default_timeout(get_bucket_call_timeout))
 -spec get_bucket(pid(), bucket(), timeout()) -> {ok, bucket_props()} | {error, term()}.
 get_bucket(Pid, Bucket, Timeout) ->
     get_bucket(Pid, Bucket, Timeout, default_timeout(get_bucket_call_timeout)).
 
-%% @doc Get bucket properties specifying a server side and local call timeout
+%% @doc Get bucket properties specifying a server side and local call timeout.
 -spec get_bucket(pid(), bucket(), timeout(), timeout()) -> {ok, bucket_props()} |
                                                            {error, term()}.
 get_bucket(Pid, Bucket, Timeout, CallTimeout) ->
     Req = #rpbgetbucketreq{bucket = Bucket},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
-%% @doc Set bucket properties
+%% @doc Set bucket properties.
+%% @equiv set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket_timeout))
 -spec set_bucket(pid(), bucket(), bucket_props()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps) ->
     set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket_timeout)).
 
-%% @doc Set bucket properties specifying a server side timeout
+%% @doc Set bucket properties specifying a server side timeout.
+%% @equiv set_bucket(Pid, Bucket, BucketProps, Timeout, default_timeout(set_bucket_call_timeout))
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout) ->
     set_bucket(Pid, Bucket, BucketProps, Timeout,
                default_timeout(set_bucket_call_timeout)).
 
-%% @doc Set bucket properties specifying a server side and local call timeout
+%% @doc Set bucket properties specifying a server side and local call timeout.
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
     PbProps = riakc_pb:pbify_rpbbucketprops(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
-%% @spec mapred(Pid :: pid(),
-%%              Inputs :: list(),
-%%              Query :: [riak_kv_mapred_query:mapred_queryterm()]) ->
-%%       {ok, riak_kv_mapred_query:mapred_result()} |
-%%       {error, {bad_qterm, riak_kv_mapred_query:mapred_queryterm()}} |
-%%       {error, timeout} |
-%%       {error, Err :: term()}
-%% @doc Perform a map/reduce job across the cluster.
-%%      See the map/reduce documentation for explanation of behavior.
+%% @doc Perform a MapReduce job across the cluster.
+%%      See the MapReduce documentation for explanation of behavior.
 %% @equiv mapred(Inputs, Query, default_timeout(mapred))
+-spec mapred(pid(), mapred_inputs(), [mapred_queryterm()]) ->
+                    {ok, mapred_result()} |
+                    {error, {badqterm, mapred_queryterm()}} |
+                    {error, timeout} |
+                    {error, term()}.
 mapred(Pid, Inputs, Query) ->
     mapred(Pid, Inputs, Query, default_timeout(mapred_timeout)).
 
-%% @spec mapred(Pid :: pid(),
-%%              Inputs :: list(),
-%%              Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%              TimeoutMillisecs :: integer()  | 'infinity') ->
-%%       {ok, riak_kv_mapred_query:mapred_result()} |
-%%       {error, timeout} |
-%%       {error, Err :: term()}
-%% @doc Perform a map/reduce job across the cluster with a cluster timeout.
-%%      See the map/reduce documentation for explanation of behavior.
+%% @doc Perform a MapReduce job across the cluster with a job timeout.
+%%      See the MapReduce documentation for explanation of behavior.
+%% @equiv mapred(Pid, Inputs, Query, Timeout, default_timeout(mapred_call_timeout))
+-spec mapred(pid(), mapred_inputs(), [mapred_queryterm()], timeout()) ->
+                    {ok, mapred_result()} |
+                    {error, {badqterm, mapred_queryterm()}} |
+                    {error, timeout} |
+                    {error, term()}.
 mapred(Pid, Inputs, Query, Timeout) ->
     mapred(Pid, Inputs, Query, Timeout, default_timeout(mapred_call_timeout)).
 
-%% @spec mapred(Pid :: pid(),
-%%              Inputs :: list(),
-%%              Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%              TimeoutMillisecs :: integer()  | 'infinity',
-%%              CallTimeoutMillisecs :: integer()  | 'infinity') ->
-%%       {ok, riak_kv_mapred_query:mapred_result()} |
-%%       {error, timeout} |
-%%       {error, Err :: term()}
-%% @doc Perform a map/reduce job across the cluster with a cluster and local
-%%      call timeout.
-%%      See the map/reduce documentation for explanation of behavior.
+%% @doc Perform a MapReduce job across the cluster with a job and
+%%      local call timeout.  See the MapReduce documentation for
+%%      explanation of behavior. This is implemented by using
+%%      <code>mapred_stream/6</code> and then waiting for all results.
+%% @see mapred_stream/6
+-spec mapred(pid(), mapred_inputs(), [mapred_queryterm()], timeout(), timeout()) ->
+                    {ok, mapred_result()} |
+                    {error, {badqterm, mapred_queryterm()}} |
+                    {error, timeout} |
+                    {error, term()}.
 mapred(Pid, Inputs, Query, Timeout, CallTimeout) ->
     case mapred_stream(Pid, Inputs, Query, self(), Timeout, CallTimeout) of
         {ok, ReqId} ->
@@ -514,81 +578,91 @@ mapred(Pid, Inputs, Query, Timeout, CallTimeout) ->
             Error
     end.
 
-%% @spec mapred_stream(Pid :: pid(),
-%%                     Inputs :: list(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     ClientPid :: pid()) ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a streaming map/reduce job across the cluster sending results
+%% @doc Perform a streaming MapReduce job across the cluster sending results
 %%      to ClientPid.
-%%      See the map/reduce documentation for explanation of behavior.
+%%      See the MapReduce documentation for explanation of behavior.
+%%      The ClientPid will receive messages in this format:
+%% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
+%%      {ReqId::req_id(), done}'''
+%% @equiv mapred_stream(ConnectionPid, Inputs, Query, ClientPid, default_timeout(mapred_stream_timeout))
+-spec mapred_stream(ConnectionPid::pid(),Inputs::mapred_inputs(),Query::[mapred_queryterm()], ClientPid::pid()) ->
+                           {ok, req_id()} |
+                           {error, {badqterm, mapred_queryterm()}} |
+                           {error, timeout} |
+                           {error, Err :: term()}.
 mapred_stream(Pid, Inputs, Query, ClientPid) ->
     mapred_stream(Pid, Inputs, Query, ClientPid, default_timeout(mapred_stream_timeout)).
 
-%% @spec mapred_stream(Pid :: pid(),
-%%                     Inputs :: list(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     ClientPid :: pid(),
-%%                     TimeoutMillisecs :: integer() | 'infinity') ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a streaming map/reduce job with a timeout across the cluster.
+%% @doc Perform a streaming MapReduce job with a timeout across the cluster.
 %%      sending results to ClientPid.
-%%      See the map/reduce documentation for explanation of behavior.
+%%      See the MapReduce documentation for explanation of behavior.
+%%      The ClientPid will receive messages in this format:
+%% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
+%%      {ReqId::req_id(), done}'''
+%% @equiv mapred_stream(ConnectionPid, Inputs, Query, ClientPid, Timeout, default_timeout(mapred_stream_call_timeout))
+-spec mapred_stream(ConnectionPid::pid(),Inputs::mapred_inputs(),Query::[mapred_queryterm()], ClientPid::pid(), Timeout::timeout()) ->
+                           {ok, req_id()} |
+                           {error, {badqterm, mapred_queryterm()}} |
+                           {error, timeout} |
+                           {error, Err :: term()}.
 mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
     mapred_stream(Pid, Inputs, Query, ClientPid, Timeout,
                   default_timeout(mapred_stream_call_timeout)).
 
-%% @spec mapred_stream(Pid :: pid(),
-%%                     Inputs :: list(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     ClientPid :: pid(),
-%%                     TimeoutMillisecs :: integer() | 'infinity',
-%%                     CallTimeoutMillisecs :: integer() | 'infinity') ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a streaming map/reduce job with a map/red timeout across the cluster,
+%% @doc Perform a streaming MapReduce job with a map/red timeout across the cluster,
 %%      a local call timeout and sending results to ClientPid.
-%%      See the map/reduce documentation for explanation of behavior.
+%%      See the MapReduce documentation for explanation of behavior.
+%%      The ClientPid will receive messages in this format:
+%% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
+%%      {ReqId::req_id(), done}'''
+-spec mapred_stream(ConnectionPid::pid(),Inputs::mapred_inputs(),
+                    Query::[mapred_queryterm()], ClientPid::pid(),
+                    Timeout::timeout(), CallTimeout::timeout()) ->
+                           {ok, req_id()} |
+                           {error, {badqterm, mapred_queryterm()}} |
+                           {error, timeout} |
+                           {error, Err :: term()}.
 mapred_stream(Pid, Inputs, Query, ClientPid, Timeout, CallTimeout) ->
     MapRed = [{'inputs', Inputs},
               {'query', Query},
               {'timeout', Timeout}],
     send_mapred_req(Pid, MapRed, ClientPid, CallTimeout).
 
-%% @spec mapred_bucket(Pid :: pid(),
-%%                     Bucket :: bucket(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()]) ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a map/reduce job against a bucket across the cluster.
-%%      See the map/reduce documentation for explanation of behavior.
+%% @doc Perform a MapReduce job against a bucket across the cluster.
+%%      See the MapReduce documentation for explanation of behavior.
+%% <em>This uses list_keys under the hood and so is potentially an expensive operation that should not be used in production.</em>
+%% @equiv mapred_bucket(Pid, Bucket, Query, default_timeout(mapred_bucket_timeout))
+-spec mapred_bucket(Pid::pid(), Bucket::bucket(), Query::[mapred_queryterm()]) ->
+                           {ok, mapred_result()} |
+                           {error, {badqterm, mapred_queryterm()}} |
+                           {error, timeout} |
+                           {error, Err :: term()}.
 mapred_bucket(Pid, Bucket, Query) ->
     mapred_bucket(Pid, Bucket, Query, default_timeout(mapred_bucket_timeout)).
 
-%% @spec mapred_bucket(Pid :: pid(),
-%%                     Bucket :: bucket(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     TimeoutMillisecs :: integer() | 'infinity') ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a map/reduce job against a bucket with a timeout
+%% @doc Perform a MapReduce job against a bucket with a timeout
 %%      across the cluster.
-%%      See the map/reduce documentation for explanation of behavior.
+%%      See the MapReduce documentation for explanation of behavior.
+%% <em>This uses list_keys under the hood and so is potentially an expensive operation that should not be used in production.</em>
+%% @equiv mapred_bucket(Pid, Bucket, Query, Timeout, default_timeout(mapred_bucket_call_timeout))
+-spec mapred_bucket(Pid::pid(), Bucket::bucket(), Query::[mapred_queryterm()], Timeout::timeout()) ->
+                           {ok, mapred_result()} |
+                           {error, {badqterm, mapred_queryterm()}} |
+                           {error, timeout} |
+                           {error, Err :: term()}.
 mapred_bucket(Pid, Bucket, Query, Timeout) ->
     mapred_bucket(Pid, Bucket, Query, Timeout, default_timeout(mapred_bucket_call_timeout)).
 
-%% @spec mapred_bucket(Pid :: pid(),
-%%                     Bucket :: bucket(),
-%%                     Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                     TimeoutMillisecs :: integer() | 'infinity',
-%%                     CallTimeoutMillisecs :: integer() | 'infinity') ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a map/reduce job against a bucket with a timeout
+%% @doc Perform a MapReduce job against a bucket with a timeout
 %%      across the cluster and local call timeout.
-%%      See the map/reduce documentation for explanation of behavior.
+%%      See the MapReduce documentation for explanation of behavior.
+%% <em>This uses list_keys under the hood and so is potentially an expensive operation that should not be used in production.</em>
+-spec mapred_bucket(Pid::pid(), Bucket::bucket(), Query::[mapred_queryterm()],
+                    Timeout::timeout(), CallTimeout::timeout()) ->
+                           {ok, mapred_result()} |
+                           {error, {badqterm, mapred_queryterm()}} |
+                           {error, timeout} |
+                           {error, Err :: term()}.
 mapred_bucket(Pid, Bucket, Query, Timeout, CallTimeout) ->
     case mapred_bucket_stream(Pid, Bucket, Query, self(), Timeout, CallTimeout) of
         {ok, ReqId} ->
@@ -597,31 +671,30 @@ mapred_bucket(Pid, Bucket, Query, Timeout, CallTimeout) ->
             Error
     end.
 
-%% @spec mapred_bucket_stream(Pid :: pid(),
-%%                            Bucket :: bucket(),
-%%                            Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                            ClientPid :: pid(),
-%%                            TimeoutMillisecs :: integer() | 'infinity') ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a streaming map/reduce job against a bucket with a timeout
+%% @doc Perform a streaming MapReduce job against a bucket with a timeout
 %%      across the cluster.
-%%      See the map/reduce documentation for explanation of behavior.
+%%      See the MapReduce documentation for explanation of behavior.
+%% <em>This uses list_keys under the hood and so is potentially an expensive operation that should not be used in production.</em>
+%%      The ClientPid will receive messages in this format:
+%% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
+%%      {ReqId::req_id(), done}'''
+%% @equiv     mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, default_timeout(mapred_bucket_stream_call_timeout))
+-spec mapred_bucket_stream(ConnectionPid::pid(), bucket(), [mapred_queryterm()], ClientPid::pid(), timeout()) ->
+                                  {ok, req_id()} |
+                                  {error, term()}.
 mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
     mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout,
                          default_timeout(mapred_bucket_stream_call_timeout)).
 
-%% @spec mapred_bucket_stream(Pid :: pid(),
-%%                            Bucket :: bucket(),
-%%                            Query :: [riak_kv_mapred_query:mapred_queryterm()],
-%%                            ClientPid :: pid(),
-%%                            TimeoutMillisecs :: integer() | 'infinity',
-%%                            CallTimeoutMillisecs :: integer() | 'infinity') ->
-%%       {ok, {ReqId :: term(), MR_FSM_PID :: pid()}} |
-%%       {error, Err :: term()}
-%% @doc Perform a streaming map/reduce job against a bucket with a server timeout
+%% @doc Perform a streaming MapReduce job against a bucket with a server timeout
 %%      across the cluster and a call timeout.
-%%      See the map/reduce documentation for explanation of behavior.
+%%      See the MapReduce documentation for explanation of behavior.
+%% <em>This uses list_keys under the hood and so is potentially an expensive operation that should not be used in production.</em>
+%%      The ClientPid will receive messages in this format:
+%% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
+%%      {ReqId::req_id(), done}'''
+-spec mapred_bucket_stream(ConnectionPid::pid(), bucket(), [mapred_queryterm()], ClientPid::pid(), timeout(), timeout()) ->
+                                  {ok, req_id()} | {error, term()}.
 mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, CallTimeout) ->
     MapRed = [{'inputs', Bucket},
               {'query', Query},
@@ -630,11 +703,12 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, CallTimeout) ->
 
 
 %% @doc Execute a search query. This command will return an error
-%%      unless executed against a Riak Search cluster.
-%% @spec search(rhc(), bucket(), string()) ->
-%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+%%      unless executed against a Riak Search cluster.  Because
+%%      Protocol Buffers has no native Search interface, this uses the
+%%      search inputs to MapReduce.
+-spec search(pid(), bucket(), string()) ->  {ok, mapred_result()} | {error, term()}.
 search(Pid, Bucket, SearchQuery) ->
-    %% Run a Map/Reduce operation using reduce_identity to get a list
+    %% Run a MapReduce operation using reduce_identity to get a list
     %% of BKeys.
     IdentityQuery = [{reduce,
                       {modfun, riak_kv_mapreduce, reduce_identity},
@@ -648,34 +722,33 @@ search(Pid, Bucket, SearchQuery) ->
         Other -> Other
     end.
 
-%% @doc Execute a search query and feed the results into a map/reduce
-%%      query. See {@link rhc_mapred:encode_mapred/2} for details of
-%%      the allowed formats for `MRQuery'. This command will return an error
+%% @doc Execute a search query and feed the results into a MapReduce
+%%      query.  This command will return an error
 %%      unless executed against a Riak Search cluster.
-%% @spec search(rhc(), bucket(), string(),
-%%       [rhc_mapred:query_part()], integer()) ->
-%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+%% @equiv search(Pid, Bucket, SearchQuery, MRQuery, Timeout, default_timeout(search_call_timeout))
+-spec search(pid(), bucket(), string(), [mapred_queryterm()], timeout()) ->
+                    {ok, mapred_result()} | {error, term()}.
 search(Pid, Bucket, SearchQuery, MRQuery, Timeout) ->
     search(Pid, Bucket, SearchQuery, MRQuery, Timeout,
            default_timeout(search_call_timeout)).
 
 
-%% @doc Execute a search query and feed the results into a map/reduce
-%%      query with a timeout on the call. See {@link rhc_mapred:encode_mapred/2}
-%%      for details of the allowed formats for `MRQuery'. This command will return
+%% @doc Execute a search query and feed the results into a MapReduce
+%%      query with a timeout on the call. This command will return
 %%      an error unless executed against a Riak Search cluster.
-%% @spec search(rhc(), bucket(), string(),
-%%       [rhc_mapred:query_part()], integer(), integer()) ->
-%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+-spec search(pid(), bucket(), string(), [mapred_queryterm()], timeout(), timeout()) ->
+                    {ok, mapred_result()} | {error, term()}.
 search(Pid, Bucket, SearchQuery, MRQuery, Timeout, CallTimeout) ->
     Inputs = {modfun, riak_search, mapred_search, [Bucket, SearchQuery]},
     mapred(Pid, Inputs, MRQuery, Timeout, CallTimeout).
 
-%% @doc Execute a secondary index query.
-%% @spec get_index(rhc(), bucket(), Index::binary(), Key::binary()) ->
-%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+%% @doc Execute a secondary index equality query. This functionality
+%% is implemented via executing a MapReduce job with an index as the
+%% input.
+-spec get_index(pid(), bucket(), binary(), key() | integer()) ->
+                       {ok, mapred_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, Key) ->
-    %% Run a Map/Reduce operation using reduce_identity to get a list
+    %% Run a MapReduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, Key},
     IdentityQuery = [{reduce,
@@ -689,11 +762,13 @@ get_index(Pid, Bucket, Index, Key) ->
         Other -> Other
     end.
 
-%% @doc Execute a secondary index query.
-%% @spec get_index(rhc(), bucket(), Index::binary(), Key::binary(), integer(), integer()) ->
-%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+%% @doc Execute a secondary index equality query with specified
+%% timeouts. This behavior is implemented via executing a MapReduce
+%% job with an index as the input.
+-spec get_index(pid(), bucket(), binary(), key() | integer(), timeout(), timeout()) ->
+                       {ok, mapred_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
-    %% Run a Map/Reduce operation using reduce_identity to get a list
+    %% Run a MapReduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, Key},
     IdentityQuery = [{reduce,
@@ -708,11 +783,13 @@ get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
     end.
 
 
-%% @doc Execute a secondary index query.
-%% @spec get_index(rhc(), bucket(), Index::binary(), StartKey::binary(), EndKey::binary()) ->
-%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+%% @doc Execute a secondary index range query. This behavior is
+%% implemented via executing a MapReduce job with an index as the
+%% input.
+-spec get_index(pid(), bucket(), binary(), key() | integer(), key() | integer()) ->
+                       {ok, mapred_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, StartKey, EndKey) ->
-    %% Run a Map/Reduce operation using reduce_identity to get a list
+    %% Run a MapReduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, StartKey, EndKey},
     IdentityQuery = [{reduce,
@@ -726,11 +803,13 @@ get_index(Pid, Bucket, Index, StartKey, EndKey) ->
         Other -> Other
     end.
 
-%% @doc Execute a secondary index query.
-%% @spec get_index(rhc(), bucket(), Index::binary(), StartKey::binary(), EndKey::binary(), integer(), integer()) ->
-%%       {ok, [rhc_mapred:phase_result()]}|{error, term()}
+%% @doc Execute a secondary index range query with specified
+%% timeouts. This behavior is implemented via executing a MapReduce
+%% job with an index as the input.
+-spec get_index(pid(), bucket(), binary(), key() | integer(), key() | integer(), timeout(), timeout()) ->
+                       {ok, mapred_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
-    %% Run a Map/Reduce operation using reduce_identity to get a list
+    %% Run a MapReduce operation using reduce_identity to get a list
     %% of BKeys.
     Input = {index, Bucket, Index, StartKey, EndKey},
     IdentityQuery = [{reduce,
@@ -745,9 +824,9 @@ get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
     end.
 
 
-%% @spec default_timeout(OpTimeout) -> timeout()
 %% @doc Return the default timeout for an operation if none is provided.
 %%      Falls back to the default timeout.
+-spec default_timeout(timeout_name()) -> timeout().
 default_timeout(OpTimeout) ->
     case application:get_env(riakc, OpTimeout) of
         {ok, OpTimeout} ->
@@ -1161,7 +1240,7 @@ send_mapred_req(Pid, MapRed, ClientPid, CallTimeout) ->
                            content_type = <<"application/x-erlang-binary">>},
     ReqId = mk_reqid(),
     %% Add an extra 100ms to the mapred timeout and use that for the
-    %% socket timeout.  This should give the map/reduce a chance to fail and let us know.
+    %% socket timeout.  This should give the MapReduce a chance to fail and let us know.
     Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred_timeout)) + 100,
     gen_server:call(Pid, {req, ReqMsg, Timeout, {ReqId, ClientPid}}, CallTimeout).
 
@@ -1328,13 +1407,15 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
     end.
 
 
-%% Encode the map/reduce request using term to binary
+%% Encode the MapReduce request using term to binary
 %% @private
+-spec encode_mapred_req(term()) -> binary().
 encode_mapred_req(Req) ->
     term_to_binary(Req).
 
 %% Decode a partial phase response
 %% @private
+-spec decode_mapred_resp(binary(), binary()) -> term().
 decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
     try
         binary_to_term(Data)
@@ -1425,7 +1506,7 @@ reset_riak() ->
     {ok, _} = supervisor:restart_child({riak_core_sup, test_riak_node()}, riak_core_vnode_sup),
     {ok, _} = supervisor:restart_child({riak_kv_sup, test_riak_node()}, riak_kv_vnode_master),
 
-    %% Clear the map/reduce cache
+    %% Clear the MapReduce cache
     ok = rpc:call(test_riak_node(), riak_kv_mapred_cache, clear, []),
 
     %% Now reset the ring so bucket properties are default

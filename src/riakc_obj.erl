@@ -58,14 +58,13 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--type riakc_obj() :: #riakc_obj{}.
--type bucket() :: binary().
--type key() :: binary() | 'undefined'.
--type vclock() :: binary().
--type metadata() :: dict().
--type content_type() :: string().
--type value() :: binary().
--type contents() :: [{metadata(), value()}].
+-type bucket() :: binary(). %% A bucket name
+-type key() :: binary() | 'undefined'. %% A key name
+-type vclock() :: binary(). %% An opaque vector clock
+-type metadata() :: dict(). %% Value metadata
+-type content_type() :: string(). %% The media type of a value
+-type value() :: binary(). %% An opaque value
+-type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
 
 -record(riakc_obj, {
           bucket :: bucket(),
@@ -75,6 +74,9 @@
           updatemetadata :: dict(),
           updatevalue :: value()
          }).
+
+-type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
+-export_type([riakc_obj/0, bucket/0, vclock/0]).
 
 %% ====================================================================
 %% object functions
