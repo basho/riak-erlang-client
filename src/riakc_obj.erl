@@ -76,7 +76,7 @@
          }).
 
 -type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
--export_type([riakc_obj/0, bucket/0, vclock/0]).
+-export_type([riakc_obj/0, bucket/0, key/0, vclock/0, contents/0, metadata/0, value/0]).
 
 %% ====================================================================
 %% object functions
