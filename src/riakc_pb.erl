@@ -20,15 +20,17 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc protocol buffer utilities
+%% @doc Utility functions for protocol buffers. These are used inside
+%% the client code and do not normally need to be used in application
+%% code.
 
 -module(riakc_pb).
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-compile([export_all]).
 -endif.
 -include("riakclient_pb.hrl").
 -include("riakc_obj.hrl").
--compile([export_all]).
 
 %% Names of PB fields in bucket properties
 -define(PB_PROPS,   <<"props">>).
@@ -43,20 +45,33 @@
 -define(PB_JSKEY,    <<"key">>).
 -define(PB_ALLOW_MULT, <<"allow_mult">>).
 
-%% Create an iolist of msg code and protocol buffer message
+-export([encode/1, decode/2, msg_type/1, msg_code/1,
+         pbify_rpbcontents/2, pbify_rpbcontent/1,
+         pbify_rpbcontent_entry/3, erlify_rpbcontents/1,
+         erlify_rpbcontent/1, pbify_rpbpair/1, any_to_list/1,
+         erlify_rpbpair/1, pbify_rpblink/1, erlify_rpblink/1,
+         erlify_rpbbucketprops/1, pbify_rpbbucketprops/1,
+         pbify_rpbbucketprops/2, pbify_bool/1, erlify_bool/1,
+         to_binary/1]).
+
+%% @doc Create an iolist of msg code and protocol buffer message
+-spec encode(atom() | tuple()) -> iolist().
 encode(Msg) when is_atom(Msg) ->
     [msg_code(Msg)];
 encode(Msg) when is_tuple(Msg) ->
     MsgType = element(1, Msg),
     [msg_code(MsgType) | riakclient_pb:iolist(MsgType, Msg)].
  
-%% Decode a protocol buffer message given its type - if no bytes
+%% @doc Decode a protocol buffer message given its type - if no bytes
 %% return the atom for the message code
+-spec decode(integer(), binary()) -> atom() | tuple().
 decode(MsgCode, <<>>) ->
     msg_type(MsgCode);
 decode(MsgCode, MsgData) ->
     riakclient_pb:decode(msg_type(MsgCode), MsgData).
 
+%% @doc Converts a message code into the symbolic message name.
+-spec msg_type(integer()) -> atom().
 msg_type(0) -> rpberrorresp;
 msg_type(1) -> rpbpingreq;
 msg_type(2) -> rpbpingresp;
@@ -83,7 +98,9 @@ msg_type(22) -> rpbsetbucketresp;
 msg_type(23) -> rpbmapredreq;
 msg_type(24) -> rpbmapredresp;
 msg_type(_) -> undefined.
-    
+
+%% @doc Converts a symbolic message name into a message code.
+-spec msg_code(atom()) -> integer().
 msg_code(rpberrorresp)           -> 0;
 msg_code(rpbpingreq)             -> 1;
 msg_code(rpbpingresp)            -> 2;
@@ -114,13 +131,15 @@ msg_code(rpbmapredresp)          -> 24.
 %% Encoding/Decoding
 %% ===================================================================
     
-%% Convert a list of {MetaData,Value} pairs to protocol buffers
+%% @doc Convert a list of {MetaData,Value} pairs to protocol buffers
+-spec pbify_rpbcontents(riakc_obj:contents(), list()) -> list(tuple()).
 pbify_rpbcontents([], Acc) ->
     lists:reverse(Acc);
 pbify_rpbcontents([Content | Rest], Acc) ->
     pbify_rpbcontents(Rest, [pbify_rpbcontent(Content) | Acc]).
 
-%% Convert a metadata/value pair into an #rpbcontent{} record    
+%% @doc Convert a metadata/value pair into an #rpbcontent{} record
+-spec pbify_rpbcontent({riakc_obj:metadata(), riakc_obj:value()}) -> tuple().
 pbify_rpbcontent({MetadataIn, ValueIn}=C) ->
     {Metadata, Value} = 
         case is_binary(ValueIn) of
@@ -138,7 +157,8 @@ pbify_rpbcontent({MetadataIn, ValueIn}=C) ->
         end,
     dict:fold(fun pbify_rpbcontent_entry/3, #rpbcontent{value = Value}, Metadata).
 
-%% Convert the metadata dictionary entries to protocol buffers
+%% @doc Convert the metadata dictionary entries to protocol buffers
+-spec pbify_rpbcontent_entry(MetadataKey::string(), any(), tuple()) -> tuple().
 pbify_rpbcontent_entry(?MD_CTYPE, ContentType, PbContent) when is_list(ContentType) -> 
     PbContent#rpbcontent{content_type = ContentType};
 pbify_rpbcontent_entry(?MD_CHARSET, Charset, PbContent) when is_list(Charset) ->
@@ -160,11 +180,13 @@ pbify_rpbcontent_entry(_Key, _Value, PbContent) ->
     %% to/from the client
     PbContent.
 
-%% Convert a list of rpbcontent pb messages to a list of [{MetaData,Value}] tuples
+%% @doc Convert a list of rpbcontent pb messages to a list of [{MetaData,Value}] tuples
+-spec erlify_rpbcontents(PBContents::[tuple()]) -> riakc_obj:contents().
 erlify_rpbcontents(RpbContents) ->
     [erlify_rpbcontent(RpbContent) || RpbContent <- RpbContents].
 
-%% Convert an rpccontent pb message to an erlang {MetaData,Value} tuple
+%% @doc Convert an rpccontent pb message to an erlang {MetaData,Value} tuple
+-spec erlify_rpbcontent(PBContent::tuple()) -> {riakc_obj:metadata(), riakc_obj:value()}.
 erlify_rpbcontent(PbC) ->
     ErlMd0 = orddict:new(),
     case PbC#rpbcontent.content_type of
@@ -230,10 +252,13 @@ erlify_rpbcontent(PbC) ->
     {dict:from_list(orddict:to_list(ErlMd)), PbC#rpbcontent.value}.
 
 
-%% Convert {K,V} tuple to protocol buffers
+%% @doc Convert {K,V} tuple to protocol buffers
+-spec pbify_rpbpair({Key::binary(), Value::any()}) -> tuple().
 pbify_rpbpair({K,V}) ->
     #rpbpair{key = K, value = any_to_list(V)}.
 
+%% @doc Converts an arbitrary type to a list for sending in a PB.
+-spec any_to_list(list() | atom() | binary() | integer()) -> list().
 any_to_list(V) when is_list(V) ->
     V;
 any_to_list(V) when is_atom(V) ->
@@ -243,20 +268,23 @@ any_to_list(V) when is_binary(V) ->
 any_to_list(V) when is_integer(V) ->
     integer_to_list(V).
 
-%% Convert RpbPair PB message to erlang {K,V} tuple
+%% @doc Convert RpbPair PB message to erlang {K,V} tuple
+-spec erlify_rpbpair(PBPair::tuple()) -> {string(), string()}.
 erlify_rpbpair(#rpbpair{key = K, value = V}) ->
     {binary_to_list(K), binary_to_list(V)}.
 
-%% Covnert erlang link tuple to RpbLink PB message
+%% @doc Convert erlang link tuple to RpbLink PB message
+-spec pbify_rpblink({{riakc_obj:bucket(), riakc_obj:key()}, binary() | string()}) -> tuple().
 pbify_rpblink({{B,K},T}) ->
     #rpblink{bucket = B, key = K, tag = T}.
 
-%% Convert RpbLink PB message to erlang link tuple
+%% @doc Convert RpbLink PB message to erlang link tuple
+-spec erlify_rpblink(PBLink::tuple()) -> {{riakc_obj:bucket(), riakc_obj:key()}, binary() | string()}.
 erlify_rpblink(#rpblink{bucket = B, key = K, tag = T}) ->
     {{B,K},T}.
 
-
-%% Convert an RpbBucketProps message to a property list
+%% @doc Convert an RpbBucketProps message to a property list
+-spec erlify_rpbbucketprops(PBProps::tuple() | undefined) -> [proplists:property()].
 erlify_rpbbucketprops(undefined) ->
     [];
 erlify_rpbbucketprops(Pb) ->
@@ -276,10 +304,13 @@ erlify_rpbbucketprops(Pb) ->
                {allow_mult, erlify_bool(Flag)}
        end]).
 
-%% Convert a property list to an RpbBucketProps message
+%% @doc Convert a property list to an RpbBucketProps message
+-spec pbify_rpbbucketprops([proplists:property()]) -> PBProps::tuple().
 pbify_rpbbucketprops(Props) ->
     pbify_rpbbucketprops(Props, #rpbbucketprops{}).
 
+%% @doc Convert a property list to an RpbBucketProps message
+-spec pbify_rpbbucketprops([proplists:property()], PBPropsIn::tuple()) -> PBPropsOut::tuple().
 pbify_rpbbucketprops([], Pb) ->
     Pb;
 pbify_rpbbucketprops([{n_val, Nval} | Rest], Pb) ->
@@ -290,7 +321,8 @@ pbify_rpbbucketprops([_Ignore|Rest], Pb) ->
     %% Ignore any properties not explicitly part of the PB message
     pbify_rpbbucketprops(Rest, Pb).
     
-%% Convert a true/false, 1/0 etc to a 1/0 for protocol buffers bool
+%% @doc Convert a true/false, 1/0 etc to a 1/0 for protocol buffers bool
+-spec pbify_bool(boolean() | integer()) -> boolean().
 pbify_bool(true) ->
     true;
 pbify_bool(false) ->
@@ -303,12 +335,15 @@ pbify_bool(N) when is_integer(N) ->
             false
     end.
 
+%% @doc Convert a protocol buffers boolean to an Erlang boolean
+-spec erlify_bool(integer()) -> boolean().
 erlify_bool(0) ->
     false;
 erlify_bool(1) ->
     true.
 
-%% Make sure an atom/string/binary is definitely a binary
+%% @doc Make sure an atom/string/binary is definitely a binary
+-spec to_binary(atom() | list() | binary()) -> binary().
 to_binary(A) when is_atom(A) ->
     atom_to_binary(A, latin1);
 to_binary(L) when is_list(L) ->

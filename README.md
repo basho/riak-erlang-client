@@ -1,5 +1,5 @@
 <p align="right">
-    <img src="http://www.basho.com/images/riaklogo.png">
+    <img src="http://wiki.basho.com/images/riaklogo.png">
 </p>
 # Riak Protocol Buffers Client Introduction
 
