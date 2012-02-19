@@ -1160,10 +1160,17 @@ send_mapred_req(Pid, MapRed, ClientPid, CallTimeout) ->
     ReqMsg = #rpbmapredreq{request = encode_mapred_req(MapRed),
                            content_type = <<"application/x-erlang-binary">>},
     ReqId = mk_reqid(),
-    %% Add an extra 100ms to the mapred timeout and use that for the
-    %% socket timeout.  This should give the map/reduce a chance to fail and let us know.
-    Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred_timeout)) + 100,
-    gen_server:call(Pid, {req, ReqMsg, Timeout, {ReqId, ClientPid}}, CallTimeout).
+    Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred_timeout)),
+    Timeout1 = if
+		   is_integer(Timeout) ->
+		       %% Add an extra 100ms to the mapred timeout and use that
+		       %% for the socket timeout. This should give the
+		       %% map/reduce a chance to fail and let us know.
+		       Timeout + 100;
+		   true ->
+		       Timeout
+	       end,
+    gen_server:call(Pid, {req, ReqMsg, Timeout1, {ReqId, ClientPid}}, CallTimeout).
 
 %% @private
 %% Make a new request that can be sent or queued
