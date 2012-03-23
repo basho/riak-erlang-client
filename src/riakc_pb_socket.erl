@@ -750,8 +750,8 @@ get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
 %%      Falls back to the default timeout.
 default_timeout(OpTimeout) ->
     case application:get_env(riakc, OpTimeout) of
-        {ok, OpTimeout} ->
-            OpTimeout;
+        {ok, EnvTimeout} ->
+            EnvTimeout;
         undefined ->
             case application:get_env(riakc, timeout) of
                 {ok, Timeout} ->
