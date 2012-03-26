@@ -101,16 +101,15 @@
 %%      Start as a poolboy worker like this:
 %%      poolboy:start_link([{name, {local, riakc_pool}}, {size, 10},
 %%                          {worker_module, riakc_pb_socket},
-%%                          {riak_hosts, ["127.0.0.1"]}, {port, 8087},
+%%                          {riak_nodes, [{"127.0.0.1", 8087}, {"127.0.0.1", 8088}]},
 %%                          {riakc_options, [{auto_reconnect, true}]}]).
 -spec start_link(PoolboyArgs::list()) -> {ok, Pid::pid()} | {error, Reason::term()}.
 start_link(PoolboyArgs) ->
-    RiakHosts = proplists:get_value(riak_hosts, PoolboyArgs, ["127.0.0.1"]),
-    Port = proplists:get_value(port, PoolboyArgs, 8087),
+    RiakNodes = proplists:get_value(riak_nodes, PoolboyArgs, [{"127.0.0.1", 8087}]),
     Options = proplists:get_value(riakc_options, PoolboyArgs, []),
 
     random:seed(now()),
-    Address = lists:nth(random:uniform(length(RiakHosts)), RiakHosts),
+    {Address, Port} = lists:nth(random:uniform(length(RiakNodes)), RiakNodes),
 
     start_link(Address, Port, Options).
 
