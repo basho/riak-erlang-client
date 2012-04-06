@@ -119,15 +119,23 @@ start_link(Address, Port, Options) when is_list(Options) ->
 
 %% @doc Create a process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
--spec start(address(), portnum()) -> {ok, pid()} | {error, term()}.
+-spec start(address(), portnum()) -> {ok, pid()} | {error, term()} | {damn, wth, wtf}.
 start(Address, Port) ->
     start(Address, Port, []).
 
 %% @doc Create a process to talk with the riak server on Address:Port with Options
 %%     See start_link/3.
--spec start(address(), portnum(), options()) -> {ok, pid()} | {error, term()}.
+-spec start(address(), portnum(), options()) -> {ok, pid()} | {error, term()} | {damn, wth, wtf}.
 start(Address, Port, Options) when is_list(Options) ->
     gen_server:start(?MODULE, [Address, Port, Options], []).
+%    case gen_server:start(?MODULE, [Address, Port, Options], []) of
+%        %{error, damnit} -> {damn, wth, wtf};
+%        %{ok, Pid} -> {ok, damndamn, Pid};
+%        %Else -> Else
+%        {error, _} = Err -> Err;
+%        {ok, _} = OK -> OK;
+%        ignore -> ignore
+%    end.
 
 %% @doc Disconnect the socket and stop the process
 stop(Pid) ->
@@ -392,12 +400,12 @@ list_buckets(Pid, Timeout, CallTimeout) ->
     gen_server:call(Pid, {req, rpblistbucketsreq, Timeout}, CallTimeout).
 
 %% @doc List all keys in a bucket
--spec list_keys(pid(), bucket()) -> {ok, [key()]}.
+-spec list_keys(pid(), bucket()) -> {ok, [key()]} | {error, term()}.
 list_keys(Pid, Bucket) ->
     list_keys(Pid, Bucket, default_timeout(list_keys_timeout)).
 
 %% @doc List all keys in a bucket specifying timeout
--spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]}.
+-spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]} | {error, term()}.
 list_keys(Pid, Bucket, Timeout) ->
     case stream_list_keys(Pid, Bucket, Timeout) of
         {ok, ReqId} ->
