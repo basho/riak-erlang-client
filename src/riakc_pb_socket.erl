@@ -80,21 +80,29 @@
 -type server_info() :: [server_prop()].
 -type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
 -type bucket_props() :: [bucket_prop()].
+-type c_timeout() :: 'infinity' | non_neg_integer().
+
+-record(request, {ref :: reference(),
+                  msg :: rpb_req(),
+                  from,
+                  ctx :: ctx(), timeout :: integer(),
+                  tref :: reference() | undefined}).
 
 -record(state, {address,    % address to connect to
                 port,       % port to connect to
-                auto_reconnect = false, % if true, automatically reconnects to server
+                                        % if true, automatically reconnects to server
                                         % if false, exits on connection failure/request timeout
-                queue_if_disconnected = false, % if true, add requests to queue if disconnected
-                sock,       % gen_tcp socket
-                active,     % active request
-                queue,      % queue of pending requests
-                connects=0, % number of successful connects
-                failed=[],  % breakdown of failed connects
-                connect_timeout=infinity, % timeout of TCP connection
-                reconnect_interval=?FIRST_RECONNECT_INTERVAL}).
--record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: integer(),
-                  tref :: reference() | undefined }).
+                auto_reconnect = false :: boolean(),
+                                        % if true, add requests to queue if disconnected
+                queue_if_disconnected = false :: boolean(),
+                sock,                   % gen_tcp socket
+                active :: undefined | #request{}, % active request
+                queue,                  % queue of pending requests
+                connects = 0 :: non_neg_integer(), % number of successful connects
+                failed=[],              % breakdown of failed connects
+                                        % timeout of TCP connection
+                connect_timeout = infinity :: c_timeout(),
+                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
@@ -119,23 +127,15 @@ start_link(Address, Port, Options) when is_list(Options) ->
 
 %% @doc Create a process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
--spec start(address(), portnum()) -> {ok, pid()} | {error, term()} | {damn, wth, wtf}.
+-spec start(address(), portnum()) -> {ok, pid()} | {error, term()} | ignore.
 start(Address, Port) ->
     start(Address, Port, []).
 
 %% @doc Create a process to talk with the riak server on Address:Port with Options
 %%     See start_link/3.
--spec start(address(), portnum(), options()) -> {ok, pid()} | {error, term()} | {damn, wth, wtf}.
+-spec start(address(), portnum(), options()) -> {ok, pid()} | {error, term()} | ignore.
 start(Address, Port, Options) when is_list(Options) ->
     gen_server:start(?MODULE, [Address, Port, Options], []).
-%    case gen_server:start(?MODULE, [Address, Port, Options], []) of
-%        %{error, damnit} -> {damn, wth, wtf};
-%        %{ok, Pid} -> {ok, damndamn, Pid};
-%        %Else -> Else
-%        {error, _} = Err -> Err;
-%        {ok, _} = OK -> OK;
-%        ignore -> ignore
-%    end.
 
 %% @doc Disconnect the socket and stop the process
 stop(Pid) ->
@@ -826,7 +826,7 @@ handle_call(is_connected, _From, State) ->
 handle_call({set_options, Options}, _From, State) ->
     {reply, ok, parse_options(Options, State)};
 handle_call(stop, _From, State) ->
-    disconnect(State),
+    _ = disconnect(State),
     {stop, normal, ok, State}.
 
 %% @private
@@ -854,14 +854,14 @@ handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
                     %% Send reply and get ready for the next request - send the next request
                     %% if one is queued up
                     cancel_req_timer(Active#request.tref),
-                    send_caller(Response, NewState0#state.active),
+                    _ = send_caller(Response, NewState0#state.active),
                     NewState = dequeue_request(NewState0#state{active = undefined});
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
                     NewActive = restart_req_timer(Active),
                     NewState = NewState0#state{active = NewActive}
             end
     end,
-    inet:setopts(Sock, [{active, once}]),
+    ok = inet:setopts(Sock, [{active, once}]),
     {noreply, NewState};
 handle_info({req_timeout, Ref}, State) ->
     case State#state.active of %%
@@ -1085,13 +1085,13 @@ process_response(#request{msg = rpblistbucketsreq},
 
 process_response(#request{msg = #rpblistkeysreq{}}=Request,
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
-    case Keys of
-        undefined ->
-            ok;
-        _ ->
-            %% Have to directly use send_caller as may want to reply with done below.
-            send_caller({keys, Keys}, Request)
-    end,
+    _ = case Keys of
+            undefined ->
+                ok;
+            _ ->
+                %% Have to directly use send_caller as may want to reply with done below.
+                send_caller({keys, Keys}, Request)
+        end,
     case Done of
         true ->
             {reply, done, State};
@@ -1112,13 +1112,13 @@ process_response(#request{msg = #rpbsetbucketreq{}},
 
 process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Request,
                  #rpbmapredresp{done = Done, phase=PhaseId, response=Data}, State) ->
-    case Data of
-        undefined ->
-            ok;
-        _ ->
-            Response = decode_mapred_resp(Data, ContentType),
-            send_caller({mapred, PhaseId, Response}, Request)
-    end,
+    _ = case Data of
+            undefined ->
+                ok;
+            _ ->
+                Response = decode_mapred_resp(Data, ContentType),
+                send_caller({mapred, PhaseId, Response}, Request)
+        end,
     case Done of
         true ->
             {reply, done, State};
@@ -1205,7 +1205,7 @@ create_req_timer(Msecs, Ref) ->
 cancel_req_timer(undefined) ->
     ok;
 cancel_req_timer(Tref) ->
-    erlang:cancel_timer(Tref),
+    _ = erlang:cancel_timer(Tref),
     ok.
 
 %% @private
@@ -1240,12 +1240,12 @@ connect(State) when State#state.sock =:= undefined ->
 %% Disconnect socket if connected
 disconnect(State) ->
     %% Tell any pending requests we've disconnected
-    case State#state.active of
-        undefined ->
-            ok;
-        Request ->
-            send_caller({error, disconnected}, Request)
-    end,
+    _ = case State#state.active of
+            undefined ->
+                ok;
+            Request ->
+                send_caller({error, disconnected}, Request)
+        end,
 
     %% Make sure the connection is really closed
     case State#state.sock of
@@ -1280,7 +1280,7 @@ increase_reconnect_interval(State) ->
 %% @private
 send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riakc_pb:encode(Request#request.msg),
-    gen_tcp:send(State#state.sock, Pkt),
+    ok = gen_tcp:send(State#state.sock, Pkt),
     maybe_reply(after_send(Request, State#state{active = Request})).
 
 %% Queue up a request if one is pending
@@ -1307,7 +1307,7 @@ remove_queued_request(Ref, State) ->
             State;
         {value, Req, L2} ->
             {reply, Reply, NewState} = on_timeout(Req, State),
-            send_caller(Reply, Req),
+            _ = send_caller(Reply, Req),
             NewState#state{queue = queue:from_list(L2)}
     end.
 
