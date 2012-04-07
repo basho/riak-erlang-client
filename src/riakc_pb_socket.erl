@@ -139,7 +139,7 @@
 -type mapred_result() :: [term()].
 %% The results of a MapReduce job.
 -type mapred_inputs() :: [{bucket(), key()} | {bucket(), key(), term()}] |
-                         {modfun, module(), function(), [term()]} |
+                         {modfun, Module::atom(), Function::atom(), [term()]} |
                          bucket() |
                          {index, bucket(), Index::binary(), key()} |
                          {index, bucket(), Index::binary(), StartKey::key(), EndKey::key()}.
