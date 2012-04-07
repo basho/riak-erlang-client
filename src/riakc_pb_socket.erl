@@ -80,7 +80,6 @@
 -type server_info() :: [server_prop()].
 -type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}.
 -type bucket_props() :: [bucket_prop()].
--type c_timeout() :: 'infinity' | non_neg_integer().
 
 -record(request, {ref :: reference(),
                   msg :: rpb_req(),
@@ -101,7 +100,7 @@
                 connects = 0 :: non_neg_integer(), % number of successful connects
                 failed=[],              % breakdown of failed connects
                                         % timeout of TCP connection
-                connect_timeout = infinity :: c_timeout(),
+                connect_timeout = infinity :: timeout(),
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 
