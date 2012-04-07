@@ -74,6 +74,8 @@
           updatemetadata :: dict(),
           updatevalue :: value()
          }).
+-type riakc_obj() :: #riakc_obj{}.
+-export_type([riakc_obj/0]).
 
 %% ====================================================================
 %% object functions
