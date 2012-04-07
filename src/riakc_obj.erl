@@ -58,13 +58,13 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--type bucket() :: binary().
--type key() :: binary() | 'undefined'.
--type vclock() :: binary().
--type metadata() :: dict().
--type content_type() :: string().
--type value() :: binary().
--type contents() :: [{metadata(), value()}].
+-type bucket() :: binary(). %% A bucket name
+-type key() :: binary() | 'undefined'. %% A key name
+-type vclock() :: binary(). %% An opaque vector clock
+-type metadata() :: dict(). %% Value metadata
+-type content_type() :: string(). %% The media type of a value
+-type value() :: binary(). %% An opaque value
+-type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
 
 -record(riakc_obj, {
           bucket :: bucket(),
@@ -75,64 +75,68 @@
           updatevalue :: value()
          }).
 
+-type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
+-export_type([riakc_obj/0, bucket/0, key/0, vclock/0, contents/0, metadata/0, value/0]).
+
 %% ====================================================================
 %% object functions
 %% ====================================================================
 
 %% @doc Constructor for new riak client objects.
--spec new(bucket(), key()) -> #riakc_obj{}.
+-spec new(bucket(), key()) -> riakc_obj().
 new(Bucket, Key) ->
     #riakc_obj{bucket = Bucket, key = Key, contents = []}.
 
-%% @doc Constructor for new riak client objects with an update value
--spec new(bucket(), key(), value()) -> #riakc_obj{}.
+%% @doc Constructor for new riak client objects with an update value.
+-spec new(bucket(), key(), value()) -> riakc_obj().
 new(Bucket, Key, Value) ->
     #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value}.
 
-%% @doc Constructor for new riak client objects with an update value
--spec new(bucket(), key(), value(), content_type()) -> #riakc_obj{}.
+%% @doc Constructor for new riak client objects with an update value and content type.
+-spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
 new(Bucket, Key, Value, ContentType) ->
     O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
     update_content_type(O, ContentType).
 
 
 %% @doc Return the containing bucket for this riakc_obj.
--spec bucket(#riakc_obj{}) -> bucket().
+-spec bucket(Object::riakc_obj()) -> bucket().
 bucket(O) ->
     O#riakc_obj.bucket.
 
-%% @spec key(riakc_obj()) -> key()
 %% @doc  Return the key for this riakc_obj.
--spec key(#riakc_obj{}) -> key().
+-spec key(Object::riakc_obj()) -> key().
 key(O) ->
     O#riakc_obj.key.
 
 %% @doc  Return the vector clock for this riakc_obj.
--spec vclock(#riakc_obj{}) -> vclock().
+-spec vclock(Object::riakc_obj()) -> vclock().
 vclock(O) ->
     O#riakc_obj.vclock.
 
 %% @doc  Return the number of values (siblings) of this riakc_obj.
--spec value_count(#riakc_obj{}) -> non_neg_integer().
+-spec value_count(Object::riakc_obj()) -> non_neg_integer().
 value_count(#riakc_obj{contents=Contents}) -> 
     length(Contents).
 
 %% @doc  Select the sibling to use for update - starting from 1.
--spec select_sibling(pos_integer(), #riakc_obj{}) -> #riakc_obj{}.
+-spec select_sibling(pos_integer(), Object::riakc_obj()) -> riakc_obj().
 select_sibling(Index, O) ->
     {MD,V} = lists:nth(Index, O#riakc_obj.contents),
     O#riakc_obj{updatemetadata=MD, updatevalue=V}.
 
 %% @doc  Return the contents (a list of {metadata, value} tuples) for
 %%       this riakc_obj.
--spec get_contents(#riakc_obj{}) -> contents().
+-spec get_contents(Object::riakc_obj()) -> contents().
 get_contents(O) ->
     O#riakc_obj.contents.
 
-%% @doc  Assert that this riak_object has no siblings and return its associated
-%%       metadata.  This function will throw siblings if the object has 
-%%       siblings (value_count() > 1).
--spec get_metadata(#riakc_obj{}) -> metadata().
+%% @doc Assert that this riakc_obj has no siblings and return its
+%%       associated metadata.  This function will throw `siblings' if
+%%       the object has siblings (value_count() > 1), or `no_metadata'
+%%       if the object has no metadata.
+%% @throws siblings | no_metadata
+-spec get_metadata(Object::riakc_obj()) -> metadata().
 get_metadata(O=#riakc_obj{}) ->
     case get_contents(O) of
         [] ->
@@ -143,28 +147,32 @@ get_metadata(O=#riakc_obj{}) ->
             throw(siblings)
     end.
 
-%% @doc  Return a list of the metadata values for this riak_object.
--spec get_metadatas(#riakc_obj{}) -> [metadata()].
+%% @doc  Return a list of the metadata values for this riakc_obj.
+-spec get_metadatas(Object::riakc_obj()) -> [metadata()].
 get_metadatas(#riakc_obj{contents=Contents}) ->
     [M || {M,_V} <- Contents].
 
-%% @doc Return the content type of the value if there are no siblings
--spec get_content_type(#riakc_obj{}) -> content_type().
+%% @doc Return the content type of the value if there are no siblings.
+%% @see get_metadata/1
+%% @throws siblings | no_metadata
+-spec get_content_type(Object::riakc_obj()) -> content_type().
 get_content_type(Object=#riakc_obj{}) ->
     UM = get_metadata(Object),
     md_ctype(UM).
 
-%% @doc Return a list of content types for all siblings
--spec get_content_types(#riakc_obj{}) -> [content_type()].
+%% @doc Return a list of content types for all siblings.
+-spec get_content_types(Object::riakc_obj()) -> [content_type()].
 get_content_types(Object=#riakc_obj{}) ->
     F = fun({M,_}) -> md_ctype(M) end,
     [F(C) || C<- get_contents(Object)].
 
 
-%% @doc  Assert that this riakc_obj has no siblings and return its associated
-%%       value.  This function will throw siblings if the object has 
-%%       siblings (value_count() > 1).
--spec get_value(#riakc_obj{}) -> value().
+%% @doc Assert that this riakc_obj has no siblings and return its
+%%       associated value.  This function will throw `siblings' if the
+%%       object has siblings (value_count() > 1), or `no_value' if the
+%%       object has no value.
+%% @throws siblings | no_value
+-spec get_value(Object::riakc_obj()) -> value().
 get_value(#riakc_obj{}=O) ->
     case get_contents(O) of
         [] ->
@@ -176,17 +184,17 @@ get_value(#riakc_obj{}=O) ->
     end.
 
 %% @doc  Return a list of object values for this riakc_obj.
--spec get_values(#riakc_obj{}) -> [value()].
+-spec get_values(Object::riakc_obj()) -> [value()].
 get_values(#riakc_obj{contents=Contents}) ->
     [V || {_,V} <- Contents].
 
 %% @doc  Set the updated metadata of an object to M.
--spec update_metadata(#riakc_obj{}, metadata()) -> #riakc_obj{}.
+-spec update_metadata(riakc_obj(), metadata()) -> riakc_obj().
 update_metadata(Object=#riakc_obj{}, M) ->
     Object#riakc_obj{updatemetadata=M}.
 
 %% @doc  Set the updated content-type of an object to CT.
--spec update_content_type(#riakc_obj{},content_type()|binary()) -> #riakc_obj{}.
+-spec update_content_type(riakc_obj(),content_type()|binary()) -> riakc_obj().
 update_content_type(Object=#riakc_obj{}, CT) when is_binary(CT) ->
     update_content_type(Object, binary_to_list(CT));
 update_content_type(Object=#riakc_obj{}, CT) when is_list(CT) ->
@@ -194,17 +202,17 @@ update_content_type(Object=#riakc_obj{}, CT) when is_list(CT) ->
     Object#riakc_obj{updatemetadata=dict:store(?MD_CTYPE, CT, M1)}.
 
 %% @doc  Set the updated value of an object to V
--spec update_value(#riakc_obj{}, value()) -> #riakc_obj{}.
+-spec update_value(riakc_obj(), value()) -> riakc_obj().
 update_value(Object=#riakc_obj{}, V) -> Object#riakc_obj{updatevalue=V}.
 
 %% @doc  Set the updated value of an object to V
--spec update_value(#riakc_obj{}, value(), content_type()) -> #riakc_obj{}.
+-spec update_value(riakc_obj(), value(), content_type()) -> riakc_obj().
 update_value(Object=#riakc_obj{}, V, CT) -> 
     O1 = update_content_type(Object, CT),
     O1#riakc_obj{updatevalue=V}.
 
 %% @doc  Return the updated metadata of this riakc_obj.
--spec get_update_metadata(#riakc_obj{}) -> metadata().
+-spec get_update_metadata(Object::riakc_obj()) -> metadata().
 get_update_metadata(#riakc_obj{updatemetadata=UM}=Object) ->
     case UM of
         undefined ->
@@ -219,12 +227,13 @@ get_update_metadata(#riakc_obj{updatemetadata=UM}=Object) ->
     end.
            
 %% @doc Return the content type of the update value
+-spec get_update_content_type(riakc_obj()) -> content_type().
 get_update_content_type(Object=#riakc_obj{}) ->
     UM = get_update_metadata(Object),
     md_ctype(UM).
 
 %% @doc  Return the updated value of this riakc_obj.
--spec get_update_value(#riakc_obj{}) -> value().
+-spec get_update_value(Object::riakc_obj()) -> value().
 get_update_value(#riakc_obj{updatevalue=UV}=Object) -> 
     case UV of
         undefined ->
@@ -244,16 +253,16 @@ md_ctype(MetaData) ->
     end.
 
 %% @doc  Set the vector clock of an object
--spec set_vclock(#riakc_obj{}, vclock()) -> #riakc_obj{}.
+-spec set_vclock(riakc_obj(), vclock()) -> riakc_obj().
 set_vclock(Object=#riakc_obj{}, Vclock) ->
     Object#riakc_obj{vclock=Vclock}.
 
-%% @doc  INTERNAL USE ONLY.  Set the contents of riak_object to the
+%% @doc  INTERNAL USE ONLY.  Set the contents of riakc_obj to the
 %%       {Metadata, Value} pairs in MVs. Normal clients should use the
 %%       set_update_[value|metadata]() + apply_updates() method for changing
 %%       object contents.
 %% @private
--spec new_obj(bucket(), key(), vclock(), contents()) -> #riakc_obj{}.
+-spec new_obj(bucket(), key(), vclock(), contents()) -> riakc_obj().
 new_obj(Bucket, Key, Vclock, Contents) ->
     #riakc_obj{bucket = Bucket, key = Key, vclock = Vclock, contents = Contents}.
 
