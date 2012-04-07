@@ -448,7 +448,7 @@ list_buckets(Pid, Timeout, CallTimeout) ->
 %% @doc List all keys in a bucket
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 %% @equiv list_keys(Pid, Bucket, default_timeout(list_keys_timeout))
--spec list_keys(pid(), bucket()) -> {ok, [key()]}.
+-spec list_keys(pid(), bucket()) -> {ok, [key()]} | {error, term()}.
 list_keys(Pid, Bucket) ->
     list_keys(Pid, Bucket, default_timeout(list_keys_timeout)).
 
@@ -456,7 +456,7 @@ list_keys(Pid, Bucket) ->
 %% implemented using {@link stream_list_keys/3} and then waiting for
 %% the results to complete streaming.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
--spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]}.
+-spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]} | {error, term()}.
 list_keys(Pid, Bucket, Timeout) ->
     case stream_list_keys(Pid, Bucket, Timeout) of
         {ok, ReqId} ->
