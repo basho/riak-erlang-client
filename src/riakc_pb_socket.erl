@@ -101,6 +101,8 @@
                          {rw, ReadWriteQuorum::quorum()}. %% Valid quorum options for delete requests. Note that `rw' is deprecated in Riak 1.0 and later.
 -type get_option() :: read_quorum() |
                       {if_modified, riakc_obj:vclock()} |
+                      {notfound_ok, boolean()} |
+                      {basic_quorum, boolean()} |
                       head | deletedvclock.
 %% Valid request options for get requests. When `if_modified' is
 %% specified with a vclock, the request will fail if the object has
@@ -897,7 +899,7 @@ handle_call(is_connected, _From, State) ->
 handle_call({set_options, Options}, _From, State) ->
     {reply, ok, parse_options(Options, State)};
 handle_call(stop, _From, State) ->
-    disconnect(State),
+    _ = disconnect(State),
     {stop, normal, ok, State}.
 
 %% @private
@@ -925,14 +927,14 @@ handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
                     %% Send reply and get ready for the next request - send the next request
                     %% if one is queued up
                     cancel_req_timer(Active#request.tref),
-                    send_caller(Response, NewState0#state.active),
+                    _ = send_caller(Response, NewState0#state.active),
                     NewState = dequeue_request(NewState0#state{active = undefined});
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
                     NewActive = restart_req_timer(Active),
                     NewState = NewState0#state{active = NewActive}
             end
     end,
-    inet:setopts(Sock, [{active, once}]),
+    ok = inet:setopts(Sock, [{active, once}]),
     {noreply, NewState};
 handle_info({req_timeout, Ref}, State) ->
     case State#state.active of %%
@@ -1156,13 +1158,13 @@ process_response(#request{msg = rpblistbucketsreq},
 
 process_response(#request{msg = #rpblistkeysreq{}}=Request,
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
-    case Keys of
-        undefined ->
-            ok;
-        _ ->
-            %% Have to directly use send_caller as may want to reply with done below.
-            send_caller({keys, Keys}, Request)
-    end,
+    _ = case Keys of
+            undefined ->
+                ok;
+            _ ->
+                %% Have to directly use send_caller as may want to reply with done below.
+                send_caller({keys, Keys}, Request)
+        end,
     case Done of
         true ->
             {reply, done, State};
@@ -1183,13 +1185,13 @@ process_response(#request{msg = #rpbsetbucketreq{}},
 
 process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Request,
                  #rpbmapredresp{done = Done, phase=PhaseId, response=Data}, State) ->
-    case Data of
-        undefined ->
-            ok;
-        _ ->
-            Response = decode_mapred_resp(Data, ContentType),
-            send_caller({mapred, PhaseId, Response}, Request)
-    end,
+    _ = case Data of
+            undefined ->
+                ok;
+            _ ->
+                Response = decode_mapred_resp(Data, ContentType),
+                send_caller({mapred, PhaseId, Response}, Request)
+        end,
     case Done of
         true ->
             {reply, done, State};
@@ -1276,7 +1278,7 @@ create_req_timer(Msecs, Ref) ->
 cancel_req_timer(undefined) ->
     ok;
 cancel_req_timer(Tref) ->
-    erlang:cancel_timer(Tref),
+    _ = erlang:cancel_timer(Tref),
     ok.
 
 %% @private
@@ -1311,12 +1313,12 @@ connect(State) when State#state.sock =:= undefined ->
 %% Disconnect socket if connected
 disconnect(State) ->
     %% Tell any pending requests we've disconnected
-    case State#state.active of
-        undefined ->
-            ok;
-        Request ->
-            send_caller({error, disconnected}, Request)
-    end,
+    _ = case State#state.active of
+            undefined ->
+                ok;
+            Request ->
+                send_caller({error, disconnected}, Request)
+        end,
 
     %% Make sure the connection is really closed
     case State#state.sock of
@@ -1351,7 +1353,7 @@ increase_reconnect_interval(State) ->
 %% @private
 send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riakc_pb:encode(Request#request.msg),
-    gen_tcp:send(State#state.sock, Pkt),
+    ok = gen_tcp:send(State#state.sock, Pkt),
     maybe_reply(after_send(Request, State#state{active = Request})).
 
 %% Queue up a request if one is pending
@@ -1378,7 +1380,7 @@ remove_queued_request(Ref, State) ->
             State;
         {value, Req, L2} ->
             {reply, Reply, NewState} = on_timeout(Req, State),
-            send_caller(Reply, Req),
+            _ = send_caller(Reply, Req),
             NewState#state{queue = queue:from_list(L2)}
     end.
 
