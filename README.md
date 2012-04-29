@@ -6,7 +6,7 @@
 This document assumes that you have already started your Riak cluster.
 For instructions on that prerequisite, refer to
 [Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html)
-in the [Riak Wiki](https://wiki.basho.com).
+in the [Riak Wiki](https://wiki.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
 
 Dependencies
 =========
