@@ -38,6 +38,7 @@
          set_options/2, set_options/3,
          is_connected/1, is_connected/2,
          ping/1, ping/2,
+         status/1, status/2,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
@@ -251,6 +252,16 @@ ping(Pid) ->
 -spec ping(pid(), timeout()) -> ok | {error, term()}.
 ping(Pid, Timeout) ->
     gen_server:call(Pid, {req, rpbpingreq, Timeout}, infinity).
+
+%% @doc Get riak status
+-spec status(pid()) -> ok | {error, term()}.
+status(Pid) ->
+    status(Pid, default_timeout(ping_timeout)).
+
+%% @doc Get riak status specfing timeout
+-spec status(pid(), timeout()) -> ok | {error, term()}.
+status(Pid, Timeout) ->
+    gen_server:call(Pid, {req, rpbstatusreq, Timeout}, infinity).
 
 %% @doc Get the client id for this connection
 %% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
@@ -1107,6 +1118,9 @@ process_response(#request{msg = rpbgetserverinforeq},
             VersionInfo = [{server_version, ServerVersion}]
     end,
     {reply, {ok, NodeInfo++VersionInfo}, State};
+process_response(#request{msg = rpbstatusreq},
+                 #rpbstatusresp{status = Status}, State) ->
+    {reply, {ok, binary_to_term(Status)}, State};
 process_response(#request{msg = #rpbgetreq{}}, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};

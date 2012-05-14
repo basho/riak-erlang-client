@@ -279,6 +279,40 @@ Here's an example of getting/setting properties
     7> riakc_pb_socket:get_bucket(Pid, <<"groceries">>).
     {ok,[{n_val,7},{allow_mult,true}]}
 
+Status
+==================
+
+Reports about the performance and configuration of the Riak node that the client is connected to. This is equivalent to the riak-admin status command.
+
+    3> riakc_pb_socket:status(Pid).
+        {ok,[{vnode_gets,0},
+        {vnode_puts,0},
+        {vnode_index_reads,0},
+        {vnode_index_writes,0},
+        {vnode_index_writes_postings,0},
+        {vnode_index_deletes,0},
+        {vnode_index_deletes_postings,0},
+        {read_repairs,0},
+        {vnode_gets_total,0},
+        {vnode_puts_total,0},
+        {vnode_index_reads_total,0},
+        {vnode_index_writes_total,0},
+        {vnode_index_writes_postings_total,0},
+        {vnode_index_deletes_total,0},
+        {vnode_index_deletes_postings_total,0},
+        {node_gets,0},
+        {node_gets_total,0},
+        {node_get_fsm_time_mean,0},
+        {node_get_fsm_time_median,0},
+        {node_get_fsm_time_95,0},
+        {node_get_fsm_time_99,0},
+        {node_get_fsm_time_100,0},
+        {node_puts,0},
+        {node_puts_total,0},
+        {node_put_fsm_time_mean,0},
+        {node_put_fsm_time_median,...},
+        {...}|...]}
+
 Troubleshooting
 ==================
 
