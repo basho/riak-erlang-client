@@ -60,6 +60,7 @@
 **   RpbListBucketsReq -> RpbErrorResp | RpbListBucketsResp
 **   RpbListKeysReq -> RpbErrorResp | RpbListKeysResp{1,}
 **   RpbGetBucketReq -> RpbErrorResp | RpbGetBucketResp
+**   RpbStatusReq -> RbdStatusResp
 **
 **
 ** Message Codes
@@ -88,6 +89,8 @@
 ** 22 - RpbSetBucketResp
 ** 23 - RpbMapRedReq
 ** 24 - RpbMapRedResp{1,}
+** 25 - RpbStatusReq - 0 length
+** 26 - RbpStatusResp
 **
 */
 
@@ -262,4 +265,9 @@ message RpbLink {
 message RpbBucketProps {
     optional uint32 n_val = 1;
     optional bool allow_mult = 2;
+}
+
+// Status Response
+message RpbStatusResp {
+    required bytes status = 1;
 }

@@ -282,7 +282,7 @@ Here's an example of getting/setting properties
 Status
 ==================
 
-Reports about the performance and configuration of the Riak node that the client is connected to.  This is equivalent to the riak-admin status command.
+Reports about the performance and configuration of the Riak node that the client is connected to. This is equivalent to the riak-admin status command.
 
     3> riakc_pb_socket:status(Pid).
         {ok,[{vnode_gets,0},
