@@ -1025,9 +1025,9 @@ get_options([{basic_quorum, BQ} | Rest], Req) ->
 get_options([{notfound_ok, NFOk} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{notfound_ok = NFOk});
 get_options([{r, R} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{r = normalize_rw_value(R)});
+    get_options(Rest, Req#rpbgetreq{r = riak_pb_kv_codec:encode_quorum(R)});
 get_options([{pr, PR} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)});
+    get_options(Rest, Req#rpbgetreq{pr = riak_pb_kv_codec:encode_quorum(PR)});
 get_options([{if_modified, VClock} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{if_modified = VClock});
 get_options([head | Rest], Req) ->
@@ -1039,11 +1039,11 @@ get_options([deletedvclock | Rest], Req) ->
 put_options([], Req) ->
     Req;
 put_options([{w, W} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{w = normalize_rw_value(W)});
+    put_options(Rest, Req#rpbputreq{w = riak_pb_kv_codec:encode_quorum(W)});
 put_options([{dw, DW} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{dw = normalize_rw_value(DW)});
+    put_options(Rest, Req#rpbputreq{dw = riak_pb_kv_codec:encode_quorum(DW)});
 put_options([{pw, PW} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{pw = normalize_rw_value(PW)});
+    put_options(Rest, Req#rpbputreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
 put_options([return_body | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{return_body = 1});
 put_options([return_head | Rest], Req) ->
@@ -1057,24 +1057,17 @@ put_options([if_none_match | Rest], Req) ->
 delete_options([], Req) ->
     Req;
 delete_options([{rw, RW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{rw = normalize_rw_value(RW)});
+    delete_options(Rest, Req#rpbdelreq{rw = riak_pb_kv_codec:encode_quorum(RW)});
 delete_options([{r, R} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{r = normalize_rw_value(R)});
+    delete_options(Rest, Req#rpbdelreq{r = riak_pb_kv_codec:encode_quorum(R)});
 delete_options([{w, W} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{w = normalize_rw_value(W)});
+    delete_options(Rest, Req#rpbdelreq{w = riak_pb_kv_codec:encode_quorum(W)});
 delete_options([{pr, PR} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{pr = normalize_rw_value(PR)});
+    delete_options(Rest, Req#rpbdelreq{pr = riak_pb_kv_codec:encode_quorum(PR)});
 delete_options([{pw, PW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{pw = normalize_rw_value(PW)});
+    delete_options(Rest, Req#rpbdelreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
 delete_options([{dw, DW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{dw = normalize_rw_value(DW)}).
-
-normalize_rw_value(one) -> ?RIAKC_RW_ONE;
-normalize_rw_value(quorum) -> ?RIAKC_RW_QUORUM;
-normalize_rw_value(all) -> ?RIAKC_RW_ALL;
-normalize_rw_value(default) -> ?RIAKC_RW_DEFAULT;
-normalize_rw_value(N) -> N.
-
+    delete_options(Rest, Req#rpbdelreq{dw = riak_pb_kv_codec:encode_quorum(DW)}).
 
 %% Process response from the server - passes back in the request and
 %% context the request was issued with.
