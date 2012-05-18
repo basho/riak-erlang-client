@@ -53,7 +53,7 @@
 %% Internal library use only
 -export([new_obj/4]).
 
--include("riakc_obj.hrl").
+-include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.

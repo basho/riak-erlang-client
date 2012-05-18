@@ -1,15 +1,14 @@
 {application, riakc,
  [{description, "Riak Client"},
-  {vsn, "1.2.1"},
+  {vsn, "1.3.0"},
   {modules, [
-             riakc_pb,
              riakc_pb_socket,
-             riakc_obj,
-             riakclient_pb
+             riakc_obj
             ]},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  riak_pb
                  ]},
   {registered, []},
   {env, [

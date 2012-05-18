@@ -28,8 +28,9 @@
 
 -module(riakc_pb_socket).
 -include_lib("kernel/include/inet.hrl").
--include("riakclient_pb.hrl").
--include("riakc_pb.hrl").
+-include_lib("riak_pb/include/riak_pb.hrl").
+-include_lib("riak_pb/include/riak_kv_pb.hrl").
+-include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -behaviour(gen_server).
 
 -export([start_link/2, start_link/3,
@@ -344,8 +345,8 @@ put(Pid, Obj, Options) ->
 -spec put(pid(), riakc_obj(), put_options(), timeout()) ->
                  ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj, Options, Timeout) ->
-    Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
-                                         riakc_obj:get_update_value(Obj)}),
+    Content = riak_pb_kv_codec:encode_content({riakc_obj:get_update_metadata(Obj),
+                                               riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
                       #rpbputreq{bucket = riakc_obj:bucket(Obj),
                                  key = riakc_obj:key(Obj),
@@ -536,7 +537,7 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 %% @doc Set bucket properties specifying a server side and local call timeout.
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
-    PbProps = riakc_pb:pbify_rpbbucketprops(BucketProps),
+    PbProps = riak_pb_kv_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
@@ -916,7 +917,7 @@ handle_info({tcp_closed, _Socket}, State) ->
 %% it should drop through and be ignored.
 handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
     [MsgCode|MsgData] = Data,
-    Resp = riakc_pb:decode(MsgCode, MsgData),
+    Resp = riak_pb_codec:decode(MsgCode, MsgData),
     case Resp of
         #rpberrorresp{} ->
             NewState1 = maybe_reply(on_error(Active, Resp, State)),
@@ -1119,7 +1120,7 @@ process_response(#request{msg = #rpbgetreq{}}, #rpbgetresp{unchanged=true}, Stat
     {reply, unchanged, State};
 process_response(#request{msg = #rpbgetreq{bucket = Bucket, key = Key}},
                  #rpbgetresp{content = RpbContents, vclock = Vclock}, State) ->
-    Contents = riakc_pb:erlify_rpbcontents(RpbContents),
+    Contents = riak_pb_kv_codec:decode_contents(RpbContents),
     {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
 
 process_response(#request{msg = #rpbputreq{}},
@@ -1135,7 +1136,7 @@ process_response(#request{ msg = #rpbputreq{}},
 process_response(#request{msg = #rpbputreq{bucket = Bucket, key = Key}},
                  #rpbputresp{content = RpbContents, vclock = Vclock,
                      key = NewKey}, State) ->
-    Contents = riakc_pb:erlify_rpbcontents(RpbContents),
+    Contents = riak_pb_kv_codec:decode_contents(RpbContents),
     ReturnKey = case NewKey of
                     undefined -> Key;
                     _ -> NewKey
@@ -1176,7 +1177,7 @@ process_response(#request{msg = #rpblistkeysreq{}}=Request,
 
 process_response(#request{msg = #rpbgetbucketreq{}},
                  #rpbgetbucketresp{props = PbProps}, State) ->
-    Props = riakc_pb:erlify_rpbbucketprops(PbProps),
+    Props = riak_pb_kv_codec:decode_bucket_props(PbProps),
     {reply, {ok, Props}, State};
 
 process_response(#request{msg = #rpbsetbucketreq{}},
@@ -1352,7 +1353,7 @@ increase_reconnect_interval(State) ->
 %% Send a request to the server and prepare the state for the response
 %% @private
 send_request(Request, State) when State#state.active =:= undefined ->
-    Pkt = riakc_pb:encode(Request#request.msg),
+    Pkt = riak_pb_codec:encode(Request#request.msg),
     ok = gen_tcp:send(State#state.sock, Pkt),
     maybe_reply(after_send(Request, State#state{active = Request})).
 
