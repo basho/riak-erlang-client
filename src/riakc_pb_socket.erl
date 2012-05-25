@@ -1403,16 +1403,80 @@ wait_for_listkeys(ReqId,Timeout,Acc) ->
 
 %% @private
 wait_for_mapred(ReqId, Timeout) ->
-    wait_for_mapred(ReqId,Timeout,orddict:new()).
-%% @private
-wait_for_mapred(ReqId, Timeout, Acc) ->
-    receive
-        {ReqId, done} -> {ok, orddict:to_list(Acc)};
-        {ReqId, {mapred,Phase,Res}} ->
-            wait_for_mapred(ReqId,Timeout,orddict:append_list(Phase,Res,Acc));
-        {ReqId, {error, Reason}} -> {error, Reason}
-    after Timeout ->
+    wait_for_mapred_first(ReqId, Timeout).
+
+%% Wait for the first mapred result, so we know at least one phase
+%% that will be delivering results.
+wait_for_mapred_first(ReqId, Timeout) ->
+    case receive_mapred(ReqId, Timeout) of
+        done ->
+            {ok, []};
+        {mapred, Phase, Res} ->
+            wait_for_mapred_one(ReqId, Timeout, Phase,
+                                acc_mapred_one(Res, []));
+        {error, _}=Error ->
+            Error;
+        timeout ->
+            {error, {timeout, []}}
+    end.
+
+%% So far we have only received results from one phase.  This method
+%% of accumulating a single phases's outputs will be more efficient
+%% than the repeated orddict:append_list/3 used when accumulating
+%% outputs from multiple phases.
+wait_for_mapred_one(ReqId, Timeout, Phase, Acc) ->
+    case receive_mapred(ReqId, Timeout) of
+        done ->
+            {ok, finish_mapred_one(Phase, Acc)};
+        {mapred, Phase, Res} ->
+            %% still receiving for just one phase
+            wait_for_mapred_one(ReqId, Timeout, Phase,
+                                acc_mapred_one(Res, Acc));
+        {mapred, NewPhase, Res} ->
+            %% results from a new phase have arrived - track them all
+            Dict = orddict:from_list(
+                     [{NewPhase, Res}
+                      |finish_mapred_one(Phase, Acc)]),
+            wait_for_mapred_many(ReqId, Timeout, Dict);
+        {error, _}=Error ->
+            Error;
+        timeout ->
+            {error, {timeout, finish_mapred_one(Phase, Acc)}}
+    end.
+
+%% Single-phase outputs are kept as a reverse list of results.
+acc_mapred_one([R|Rest], Acc) ->
+    acc_mapred_one(Rest, [R|Acc]);
+acc_mapred_one([], Acc) ->
+    Acc.
+
+finish_mapred_one(Phase, Acc) ->
+    [{Phase, lists:reverse(Acc)}].
+
+%% Tracking outputs from multiple phases.
+wait_for_mapred_many(ReqId, Timeout, Acc) ->
+    case receive_mapred(ReqId, Timeout) of
+        done ->
+            {ok, orddict:to_list(Acc)};
+        {mapred, Phase, Res} ->
+            wait_for_mapred_many(
+              ReqId, Timeout, orddict:append_list(Phase, Res, Acc));
+        {error, _}=Error ->
+            Error;
+        timeout ->
             {error, {timeout, orddict:to_list(Acc)}}
+    end.
+
+%% Receive one mapred message.
+-spec receive_mapred(reference(), timeout()) ->
+         done | {mapred, integer(), [term()]} | {error, term()} | timeout.
+receive_mapred(ReqId, Timeout) ->
+    receive {ReqId, Msg} ->
+            %% Msg should be `done', `{mapred, Phase, Results}', or
+            %% `{error, Reason}'
+            Msg
+    after Timeout ->
+            timeout
     end.
 
 
