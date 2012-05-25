@@ -1434,9 +1434,7 @@ wait_for_mapred_one(ReqId, Timeout, Phase, Acc) ->
                                 acc_mapred_one(Res, Acc));
         {mapred, NewPhase, Res} ->
             %% results from a new phase have arrived - track them all
-            Dict = orddict:from_list(
-                     [{NewPhase, Res}
-                      |finish_mapred_one(Phase, Acc)]),
+            Dict = [{NewPhase, Res},{Phase, Acc}],
             wait_for_mapred_many(ReqId, Timeout, Dict);
         {error, _}=Error ->
             Error;
@@ -1457,15 +1455,28 @@ finish_mapred_one(Phase, Acc) ->
 wait_for_mapred_many(ReqId, Timeout, Acc) ->
     case receive_mapred(ReqId, Timeout) of
         done ->
-            {ok, orddict:to_list(Acc)};
+            {ok, finish_mapred_many(Acc)};
         {mapred, Phase, Res} ->
             wait_for_mapred_many(
-              ReqId, Timeout, orddict:append_list(Phase, Res, Acc));
+              ReqId, Timeout, acc_mapred_many(Phase, Res, Acc));
         {error, _}=Error ->
             Error;
         timeout ->
-            {error, {timeout, orddict:to_list(Acc)}}
+            {error, {timeout, finish_mapred_many(Acc)}}
     end.
+
+%% Many-phase outputs are kepts as a proplist of reversed lists of
+%% results.
+acc_mapred_many(Phase, Res, Acc) ->
+    case lists:keytake(Phase, 1, Acc) of
+        {value, {Phase, PAcc}, RAcc} ->
+            [{Phase,acc_mapred_one(Res,PAcc)}|RAcc];
+        false ->
+            [{Phase,acc_mapred_one(Res,[])}|Acc]
+    end.
+
+finish_mapred_many(Acc) ->
+    [ {P, lists:reverse(A)} || {P, A} <- lists:keysort(1, Acc) ].
 
 %% Receive one mapred message.
 -spec receive_mapred(reference(), timeout()) ->
