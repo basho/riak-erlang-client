@@ -1436,7 +1436,6 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 %%
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
-%% -include("riakc_obj.hrl").
 
 %% Get the test host - check env RIAK_TEST_PB_HOST then env 'RIAK_TEST_HOST_1'
 %% falling back to 127.0.0.1
