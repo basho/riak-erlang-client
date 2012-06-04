@@ -28,8 +28,9 @@
 
 -module(riakc_pb_socket).
 -include_lib("kernel/include/inet.hrl").
--include("riakclient_pb.hrl").
--include("riakc_pb.hrl").
+-include_lib("riak_pb/include/riak_pb.hrl").
+-include_lib("riak_pb/include/riak_kv_pb.hrl").
+-include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -behaviour(gen_server).
 
 -export([start_link/2, start_link/3,
@@ -344,8 +345,8 @@ put(Pid, Obj, Options) ->
 -spec put(pid(), riakc_obj(), put_options(), timeout()) ->
                  ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
 put(Pid, Obj, Options, Timeout) ->
-    Content = riakc_pb:pbify_rpbcontent({riakc_obj:get_update_metadata(Obj),
-                                         riakc_obj:get_update_value(Obj)}),
+    Content = riak_pb_kv_codec:encode_content({riakc_obj:get_update_metadata(Obj),
+                                               riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
                       #rpbputreq{bucket = riakc_obj:bucket(Obj),
                                  key = riakc_obj:key(Obj),
@@ -536,7 +537,7 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 %% @doc Set bucket properties specifying a server side and local call timeout.
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
-    PbProps = riakc_pb:pbify_rpbbucketprops(BucketProps),
+    PbProps = riak_pb_kv_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
@@ -916,7 +917,7 @@ handle_info({tcp_closed, _Socket}, State) ->
 %% it should drop through and be ignored.
 handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
     [MsgCode|MsgData] = Data,
-    Resp = riakc_pb:decode(MsgCode, MsgData),
+    Resp = riak_pb_codec:decode(MsgCode, MsgData),
     case Resp of
         #rpberrorresp{} ->
             NewState1 = maybe_reply(on_error(Active, Resp, State)),
@@ -1024,9 +1025,9 @@ get_options([{basic_quorum, BQ} | Rest], Req) ->
 get_options([{notfound_ok, NFOk} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{notfound_ok = NFOk});
 get_options([{r, R} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{r = normalize_rw_value(R)});
+    get_options(Rest, Req#rpbgetreq{r = riak_pb_kv_codec:encode_quorum(R)});
 get_options([{pr, PR} | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{pr = normalize_rw_value(PR)});
+    get_options(Rest, Req#rpbgetreq{pr = riak_pb_kv_codec:encode_quorum(PR)});
 get_options([{if_modified, VClock} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{if_modified = VClock});
 get_options([head | Rest], Req) ->
@@ -1038,11 +1039,11 @@ get_options([deletedvclock | Rest], Req) ->
 put_options([], Req) ->
     Req;
 put_options([{w, W} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{w = normalize_rw_value(W)});
+    put_options(Rest, Req#rpbputreq{w = riak_pb_kv_codec:encode_quorum(W)});
 put_options([{dw, DW} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{dw = normalize_rw_value(DW)});
+    put_options(Rest, Req#rpbputreq{dw = riak_pb_kv_codec:encode_quorum(DW)});
 put_options([{pw, PW} | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{pw = normalize_rw_value(PW)});
+    put_options(Rest, Req#rpbputreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
 put_options([return_body | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{return_body = 1});
 put_options([return_head | Rest], Req) ->
@@ -1056,24 +1057,17 @@ put_options([if_none_match | Rest], Req) ->
 delete_options([], Req) ->
     Req;
 delete_options([{rw, RW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{rw = normalize_rw_value(RW)});
+    delete_options(Rest, Req#rpbdelreq{rw = riak_pb_kv_codec:encode_quorum(RW)});
 delete_options([{r, R} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{r = normalize_rw_value(R)});
+    delete_options(Rest, Req#rpbdelreq{r = riak_pb_kv_codec:encode_quorum(R)});
 delete_options([{w, W} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{w = normalize_rw_value(W)});
+    delete_options(Rest, Req#rpbdelreq{w = riak_pb_kv_codec:encode_quorum(W)});
 delete_options([{pr, PR} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{pr = normalize_rw_value(PR)});
+    delete_options(Rest, Req#rpbdelreq{pr = riak_pb_kv_codec:encode_quorum(PR)});
 delete_options([{pw, PW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{pw = normalize_rw_value(PW)});
+    delete_options(Rest, Req#rpbdelreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
 delete_options([{dw, DW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{dw = normalize_rw_value(DW)}).
-
-normalize_rw_value(one) -> ?RIAKC_RW_ONE;
-normalize_rw_value(quorum) -> ?RIAKC_RW_QUORUM;
-normalize_rw_value(all) -> ?RIAKC_RW_ALL;
-normalize_rw_value(default) -> ?RIAKC_RW_DEFAULT;
-normalize_rw_value(N) -> N.
-
+    delete_options(Rest, Req#rpbdelreq{dw = riak_pb_kv_codec:encode_quorum(DW)}).
 
 %% Process response from the server - passes back in the request and
 %% context the request was issued with.
@@ -1119,7 +1113,7 @@ process_response(#request{msg = #rpbgetreq{}}, #rpbgetresp{unchanged=true}, Stat
     {reply, unchanged, State};
 process_response(#request{msg = #rpbgetreq{bucket = Bucket, key = Key}},
                  #rpbgetresp{content = RpbContents, vclock = Vclock}, State) ->
-    Contents = riakc_pb:erlify_rpbcontents(RpbContents),
+    Contents = riak_pb_kv_codec:decode_contents(RpbContents),
     {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
 
 process_response(#request{msg = #rpbputreq{}},
@@ -1135,7 +1129,7 @@ process_response(#request{ msg = #rpbputreq{}},
 process_response(#request{msg = #rpbputreq{bucket = Bucket, key = Key}},
                  #rpbputresp{content = RpbContents, vclock = Vclock,
                      key = NewKey}, State) ->
-    Contents = riakc_pb:erlify_rpbcontents(RpbContents),
+    Contents = riak_pb_kv_codec:decode_contents(RpbContents),
     ReturnKey = case NewKey of
                     undefined -> Key;
                     _ -> NewKey
@@ -1176,7 +1170,7 @@ process_response(#request{msg = #rpblistkeysreq{}}=Request,
 
 process_response(#request{msg = #rpbgetbucketreq{}},
                  #rpbgetbucketresp{props = PbProps}, State) ->
-    Props = riakc_pb:erlify_rpbbucketprops(PbProps),
+    Props = riak_pb_kv_codec:decode_bucket_props(PbProps),
     {reply, {ok, Props}, State};
 
 process_response(#request{msg = #rpbsetbucketreq{}},
@@ -1352,7 +1346,7 @@ increase_reconnect_interval(State) ->
 %% Send a request to the server and prepare the state for the response
 %% @private
 send_request(Request, State) when State#state.active =:= undefined ->
-    Pkt = riakc_pb:encode(Request#request.msg),
+    Pkt = riak_pb_codec:encode(Request#request.msg),
     ok = gen_tcp:send(State#state.sock, Pkt),
     maybe_reply(after_send(Request, State#state{active = Request})).
 
@@ -1517,7 +1511,6 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 %%
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--include("riakc_obj.hrl").
 
 %% Get the test host - check env RIAK_TEST_PB_HOST then env 'RIAK_TEST_HOST_1'
 %% falling back to 127.0.0.1
