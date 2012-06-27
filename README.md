@@ -3,6 +3,8 @@
 </p>
 # Riak Protocol Buffers Client Introduction
 
+[![Build Status](https://secure.travis-ci.org/basho/riak-erlang-client.png?branch=master)](http://travis-ci.org/basho/riak-erlang-client)
+
 This document assumes that you have already started your Riak cluster.
 For instructions on that prerequisite, refer to
 [Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html)
