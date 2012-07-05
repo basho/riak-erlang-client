@@ -155,6 +155,8 @@ pbify_rpbcontent_entry(?MD_USERMETA, UserMeta, PbContent) when is_list(UserMeta)
     PbContent#rpbcontent{usermeta = [pbify_rpbpair(E) || E <- UserMeta]};
 pbify_rpbcontent_entry(?MD_INDEX, Indexes, PbContent) when is_list(Indexes) ->
     PbContent#rpbcontent{indexes = [pbify_rpbpair(E) || E <- Indexes]};
+pbify_rpbcontent_entry(?MD_DELETED, DeletedVal, PbContent) when is_list(DeletedVal) ->
+    PbContent#rpbcontent{deleted=DeletedVal};
 pbify_rpbcontent_entry(_Key, _Value, PbContent) ->
     %% Ignore unknown metadata - need to add to RpbContent if it needs to make it
     %% to/from the client
@@ -219,12 +221,18 @@ erlify_rpbcontent(PbC) ->
             UserMeta = [erlify_rpbpair(E) || E <- PbUserMeta],
             ErlMd7 = orddict:store(?MD_USERMETA, UserMeta, ErlMd6)
     end,
+    case PbC#rpbcontent.deleted of
+        undefined ->
+            ErlMd8 = ErlMd7;
+        DeletedVal ->
+            ErlMd8 = orddict:store(?MD_DELETED, binary_to_list(DeletedVal), ErlMd7)
+    end,
     case PbC#rpbcontent.indexes of
         undefined ->
-            ErlMd = ErlMd7;
+            ErlMd = ErlMd8;
         PbIndexes ->
             Indexes = [erlify_rpbpair(E) || E <- PbIndexes],
-            ErlMd = orddict:store(?MD_INDEX, Indexes, ErlMd7)
+            ErlMd = orddict:store(?MD_INDEX, Indexes, ErlMd8)
     end,
 
     {dict:from_list(orddict:to_list(ErlMd)), PbC#rpbcontent.value}.
@@ -339,7 +347,8 @@ pb_test_() ->
                                 {?MD_LASTMOD, {1, 2, 3}},
                                 {?MD_USERMETA, [{"X-Riak-Meta-MyMetaData1","here it is"},
                                                 {"X-Riak-Meta-MoreMd", "have some more"}
-                                               ]}
+                                               ]},
+                                {?MD_DELETED, "true"}
                                ]),
                   Value = <<"test value">>,
                   {MetaData2, Value2} = erlify_rpbcontent(
