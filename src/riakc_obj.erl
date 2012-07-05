@@ -40,6 +40,8 @@
          get_content_types/1,
          get_value/1,
          get_values/1,
+         content_deleted/1,
+         object_deleted/1,
          update_metadata/2,
          update_value/2,
          update_value/3,
@@ -74,6 +76,8 @@
           updatemetadata :: dict(),
           updatevalue :: value()
          }).
+
+-type riakc_obj() :: #riakc_obj{}.
 
 %% ====================================================================
 %% object functions
@@ -179,6 +183,23 @@ get_value(#riakc_obj{}=O) ->
 -spec get_values(#riakc_obj{}) -> [value()].
 get_values(#riakc_obj{contents=Contents}) ->
     [V || {_,V} <- Contents].
+
+%% @doc Return true if the {Metadata, Value} pair
+%% has a deleted tombstone
+-spec content_deleted({metadata(), value()}) -> boolean().
+content_deleted({Metadata, _Val}) ->
+    tombstone_in_metadata(Metadata).
+
+%% helper for is_content_deleted
+-spec tombstone_in_metadata(dict()) -> boolean().
+tombstone_in_metadata(Metadata) ->
+    dict:is_key(?MD_DELETED, Metadata).
+
+%% @doc Return true if all of the siblings
+%% have a deleted tombstone
+-spec object_deleted(riakc_obj()) -> boolean().
+object_deleted(#riakc_obj{contents=Contents}) ->
+    lists:all(fun content_deleted/1, Contents).
 
 %% @doc  Set the updated metadata of an object to M.
 -spec update_metadata(#riakc_obj{}, metadata()) -> #riakc_obj{}.
@@ -413,8 +434,33 @@ select_sibling_test() ->
     ?assertEqual(<<"sib_one">>, get_update_value(O1)),
     ?assertEqual("application/json", get_update_content_type(O2)),
     ?assertEqual(<<"sib_two">>, get_update_value(O2)).
-   
-    
-    
+
+content_deleted_true_test() ->
+    Meta = dict:from_list([{?MD_DELETED, ""}]),
+    ContentPair = {Meta, <<>>},
+    ?assert(content_deleted(ContentPair)).
+
+content_deleted_false_test() ->
+    Meta = dict:from_list([]),
+    ContentPair = {Meta, <<>>},
+    ?assert(not content_deleted(ContentPair)).
+
+object_deleted_true_test() ->
+    Meta = dict:from_list([{?MD_DELETED, ""}]),
+    ContentPair = {Meta, <<>>},
+    RiakObject = new_obj(<<"b">>, <<"k">>, <<"">>,
+        [ContentPair, ContentPair]),
+    ?assert(object_deleted(RiakObject)).
+
+object_deleted_false_test() ->
+    Meta1 = dict:from_list([{?MD_DELETED, ""}]),
+    ContentPair1 = {Meta1, <<>>},
+
+    Meta2 = dict:from_list([]),
+    ContentPair2 = {Meta2, <<"value">>},
+
+    RiakObject = new_obj(<<"b">>, <<"k">>, <<"">>,
+        [ContentPair1, ContentPair2]),
+    ?assert(not object_deleted(RiakObject)).
 
 -endif.
