@@ -1,7 +1,7 @@
 language: erlang
 before_script:
   - export RIAK_TEST_NODE_1=`egrep '^\-s?name' /etc/riak/vm.args | awk '{print $2}'`
-  - echo $RIAK_TEST_NODE
+  - echo $RIAK_TEST_NODE_1
   - export RIAK_TEST_COOKIE=`egrep '^-setcookie' /etc/riak/vm.args | awk '{print $2}'`
   - echo $RIAK_TEST_COOKIE
 notifications:
