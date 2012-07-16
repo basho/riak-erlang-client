@@ -1220,7 +1220,7 @@ on_error(_Request, ErrMsg, State) ->
 %% Format the PB encoded error message
 fmt_err_msg(ErrMsg) ->
     case ErrMsg#rpberrorresp.errcode of
-        Code when Code =:= 1; Code =:= undefined ->
+        Code when Code =:= 0; Code =:= 1; Code =:= undefined ->
             {error, ErrMsg#rpberrorresp.errmsg};
         Code ->
             {error, {Code, ErrMsg#rpberrorresp.errmsg}}
@@ -1237,14 +1237,14 @@ send_mapred_req(Pid, MapRed, ClientPid, CallTimeout) ->
     ReqId = mk_reqid(),
     Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred_timeout)),
     Timeout1 = if
-		   is_integer(Timeout) ->
-		       %% Add an extra 100ms to the mapred timeout and use that
-		       %% for the socket timeout. This should give the
-		       %% map/reduce a chance to fail and let us know.
-		       Timeout + 100;
-		   true ->
-		       Timeout
-	       end,
+           is_integer(Timeout) ->
+               %% Add an extra 100ms to the mapred timeout and use that
+               %% for the socket timeout. This should give the
+               %% map/reduce a chance to fail and let us know.
+               Timeout + 100;
+           true ->
+               Timeout
+           end,
     gen_server:call(Pid, {req, ReqMsg, Timeout1, {ReqId, ClientPid}}, CallTimeout).
 
 %% @private
@@ -1510,6 +1510,7 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 %% as a dependency.
 %%
 -ifdef(TEST).
+-compile(export_all).
 -include_lib("eunit/include/eunit.hrl").
 
 %% Get the test host - check env RIAK_TEST_PB_HOST then env 'RIAK_TEST_HOST_1'
@@ -1563,15 +1564,51 @@ test_cookie() ->
             list_to_atom(CookieStr)
     end.
 
+%% Get the riak version from the init boot script, turn it into a list
+%% of integers.
+riak_version() ->
+    StrVersion = element(2, rpc:call(test_riak_node(), init, script_id, [])),
+    [ list_to_integer(V) || V <- string:tokens(StrVersion, ".") ].
 
+%% Resets the riak node
 reset_riak() ->
     %% sleep because otherwise we're going to kill the vnodes too fast
     %% for the supervisor's maximum restart frequency, which will bring
     %% down the entire node
-    timer:sleep(500),
-
     ?assertEqual(ok, maybe_start_network()),
+    case riak_version() of
+        [1,Two|_] when Two >= 2->
+            reset_riak_12();
+        _ ->
+            reset_riak_legacy()
+    end.
 
+%% Resets a Riak 1.2+ node, which can run the memory backend in 'test'
+%% mode.
+reset_riak_12() ->
+    set_test_backend(),
+    ok = rpc:call(test_riak_node(), riak_kv_memory_backend, reset, []),
+    reset_ring().
+
+%% Sets up the memory/test backend, leaving it alone if already set properly.
+set_test_backend() ->
+    Env = rpc:call(test_riak_node(), application, get_all_env, [riak_kv]),
+    Backend = proplists:get_value(storage_backend, Env),
+    Test = proplists:get_value(test, Env),
+    case {Backend, Test} of
+        {riak_kv_memory_backend, true} ->
+            ok;
+        _ ->
+            ok = rpc:call(test_riak_node(), application, set_env, [riak_kv, storage_backend, riak_kv_memory_backend]),
+            ok = rpc:call(test_riak_node(), application, set_env, [riak_kv, test, true]),
+            Vnodes = rpc:call(test_riak_node(), riak_core_vnode_manager, all_vnodes, [riak_kv_vnode]),
+            [ ok = rpc:call(test_riak_node(), supervisor, terminate_child, [riak_core_vnode_sup, Pid]) ||
+                {_, _, Pid} <- Vnodes ]
+    end.
+
+%% Resets a Riak 1.1 and earlier node.
+reset_riak_legacy() ->
+    timer:sleep(500),
     %% Until there is a good way to empty the vnodes, require the
     %% test to run with ETS and kill the vnode master/sup to empty all the ETS tables
     %% and the ring manager to remove any bucket properties
@@ -1587,13 +1624,25 @@ reset_riak() ->
     ok = rpc:call(test_riak_node(), riak_kv_mapred_cache, clear, []),
 
     %% Now reset the ring so bucket properties are default
+    reset_ring().
+
+%% Resets the ring to a fresh one, effectively deleting any bucket properties.
+reset_ring() ->
     Ring = rpc:call(test_riak_node(), riak_core_ring, fresh, []),
     ok = rpc:call(test_riak_node(), riak_core_ring_manager, set_my_ring, [Ring]).
 
 
+%% Finds the pid of the PB listener process
 riak_pb_listener_pid() ->
-    Children = supervisor:which_children({riak_kv_sup, test_riak_node()}),
-    hd([Pid || {Mod,Pid,_,_} <- Children, Mod == riak_kv_pb_listener]).
+    {Children, Proc} = case riak_version() of
+                           [1,Two|_] when Two == 2->
+                               {supervisor:which_children({riak_api_sup, test_riak_node()}),
+                                riak_api_pb_listener};
+                           _ ->
+                               {supervisor:which_children({riak_kv_sup, test_riak_node()}),
+                                riak_kv_pb_listener}
+                       end,
+    hd([Pid || {Mod,Pid,_,_} <- Children, Mod == Proc]).
 
 pause_riak_pb_listener() ->
     Pid = riak_pb_listener_pid(),
@@ -1604,10 +1653,16 @@ resume_riak_pb_listener() ->
     rpc:call(test_riak_node(), sys, resume, [Pid]).
 
 kill_riak_pb_sockets() ->
-    case supervisor:which_children({riak_kv_pb_socket_sup, test_riak_node()}) of
+    Children = case riak_version() of
+                   [1,Two|_] when Two >= 2 ->
+                       supervisor:which_children({riak_api_pb_sup, test_riak_node()});
+                   _ ->
+                       supervisor:which_children({riak_kv_pb_socket_sup, test_riak_node()})
+               end,
+    case Children of
         [] ->
             ok;
-        Children ->
+        [_|_] ->
             Pids = [Pid || {_,Pid,_,_} <- Children],
             [rpc:call(test_riak_node(), erlang, exit, [Pid, kill]) || Pid <- Pids],
             erlang:yield(),
@@ -1617,7 +1672,7 @@ kill_riak_pb_sockets() ->
 maybe_start_network() ->
     %% Try to spin up net_kernel
     os:cmd("epmd -daemon"),
-    case net_kernel:start([test_eunit_node()]) of
+    case net_kernel:start([test_eunit_node(), longnames]) of
         {ok, _} ->
             erlang:set_cookie(test_riak_node(), test_cookie()),
             ok;
@@ -1647,6 +1702,8 @@ auto_reconnect_bad_connect_test() ->
     stop(Pid).
 
 server_closes_socket_test() ->
+    %% Silence SASL junk when socket closes.
+    error_logger:tty(false),
     %% Set up a dummy socket to send requests on
     {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
     {ok, Port} = inet:port(Listen),
