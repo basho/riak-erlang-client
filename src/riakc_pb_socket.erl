@@ -2,7 +2,7 @@
 %%
 %% riakc_pb_socket: protocol buffer client
 %%
-%% Copyright (c) 2007-2010 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2007-2012 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -20,7 +20,6 @@
 %%
 %% -------------------------------------------------------------------
 
-
 %% @doc Manages a connection to Riak via the Protocol Buffers
 %% transport and executes the commands that can be performed over that
 %% connection.
@@ -31,6 +30,8 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
+-include_lib("riak_pb/include/riak_search_pb.hrl").
+-include("riakc.hrl").
 -behaviour(gen_server).
 
 -export([start_link/2, start_link/3,
@@ -56,112 +57,16 @@
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
          mapred_bucket_stream/5, mapred_bucket_stream/6,
-         search/3, search/5, search/6,
+         search/3, search/4, search/5, search/6,
          get_index/4, get_index/5, get_index/6, get_index/7,
          default_timeout/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--define(PROTO_MAJOR, 1).
--define(PROTO_MINOR, 0).
--define(DEFAULT_TIMEOUT, 60000).
--define(FIRST_RECONNECT_INTERVAL, 100).
--define(MAX_RECONNECT_INTERVAL, 30000).
-
--type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
--type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
--type client_option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
-                   auto_reconnect | {auto_reconnect, boolean()}.
-%% Options for starting or modifying the connection:
-%% `queue_if_disconnected' when present or true will cause requests to
-%% be queued while the connection is down. `auto_reconnect' when
-%% present or true will automatically attempt to reconnect to the
-%% server if the connection fails or is lost.
--type client_options() :: [client_option()]. %% A list of client options.
--type client_id() :: binary(). %% A client identifier, used for differentiating client processes
--type bucket() :: binary(). %% A bucket name.
--type key() :: binary(). %% A key name.
--type riakc_obj() :: riakc_obj:riakc_obj(). %% An object (bucket, key, metadata, value) stored in Riak.
--type req_id() :: non_neg_integer(). %% Request identifier for streaming requests.
--type rpb_req() :: atom() | tuple().
 -type ctx() :: any().
+-type rpb_req() :: atom() | tuple().
 -type rpb_resp() :: atom() | tuple().
--type server_prop() :: {node, binary()} | {server_version, binary()}. %% Server properties, as returned by the `get_server_info/1' call.
--type server_info() :: [server_prop()]. %% A response from the `get_server_info/1' call.
--type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}. %% Bucket property definitions.
--type bucket_props() :: [bucket_prop()]. %% Bucket properties
--type quorum() :: non_neg_integer() | one | all | quorum | default.  %% A quorum setting for get/put/delete requests.
--type read_quorum() :: {r, ReadQuorum::quorum()} |
-                       {pr, PrimaryReadQuorum::quorum()}. %% Valid quorum options for get requests.
--type write_quorum() :: {w, WriteQuorum::quorum()} |
-                        {dw, DurableWriteQuorum::quorum()} |
-                        {pw, PrimaryWriteQuorum::quorum()}. %% Valid quorum options for write requests.
--type delete_quorum() :: read_quorum() |
-                         write_quorum() |
-                         {rw, ReadWriteQuorum::quorum()}. %% Valid quorum options for delete requests. Note that `rw' is deprecated in Riak 1.0 and later.
--type get_option() :: read_quorum() |
-                      {if_modified, riakc_obj:vclock()} |
-                      {notfound_ok, boolean()} |
-                      {basic_quorum, boolean()} |
-                      head | deletedvclock.
-%% Valid request options for get requests. When `if_modified' is
-%% specified with a vclock, the request will fail if the object has
-%% not changed. When `head' is specified, only the metadata will be
-%% returned. When `deletedvclock' is specified, the vector clock of
-%% the tombstone will be returned if the object has been recently
-%% deleted.
--type put_option() :: write_quorum() | return_body | return_head | if_not_modified | if_none_match.
-%% Valid request options for put requests. `return_body' returns the
-%% entire result of storing the object. `return_head' returns the
-%% metadata from the result of storing the object. `if_not_modified'
-%% will cause the request to fail if the local and remote vclocks do
-%% not match. `if_none_match' will cause the request to fail if the
-%% object already exists in Riak.
--type get_options() :: [get_option()]. %% A list of options for a get request.
--type put_options() :: [put_option()]. %% A list of options for a put request.
--type delete_options() :: [delete_quorum()]. %% A list of options for a delete request.
--type mapred_queryterm() ::  {map, mapred_funterm(), Arg::term(), Accumulate :: boolean()} |
-                             {reduce, mapred_funterm(), Arg::term(),Accumulate :: boolean()} |
-                             {link, Bucket :: riakc_obj:bucket(), Tag :: term(), Accumulate :: boolean()}.
-%% A MapReduce phase specification. `map' functions operate on single
-%% K/V objects. `reduce' functions operate across collections of
-%% inputs from other phases. `link' is a special type of map phase
-%% that matches links in the fetched objects. The `Arg' parameter will
-%% be passed as the last argument to the phase function. The
-%% `Accumulate' param determines whether results from this phase will
-%% be returned to the client.
--type mapred_funterm() :: {modfun, Module :: atom(), Function :: atom()} |
-                          {qfun, function()} |
-                          {strfun, list() | binary()}.
-%% A MapReduce phase function specification. `modfun' requires that
-%% the compiled module be available on all Riak nodes. `qfun' will
-%% only work from the shell (compiled fun() terms refer to compiled
-%% code only). `strfun' contains the textual source of an Erlang
-%% function but the functionality must be enabled on the Riak cluster.
--type mapred_result() :: [term()].
-%% The results of a MapReduce job.
--type mapred_inputs() :: [{bucket(), key()} | {bucket(), key(), term()}] |
-                         {modfun, Module::atom(), Function::atom(), [term()]} |
-                         bucket() |
-                         {index, bucket(), Index::binary(), key()} |
-                         {index, bucket(), Index::binary(), StartKey::key(), EndKey::key()}.
-%% Inputs for a MapReduce job.
--type connection_failure() :: {Reason::term(), FailureCount::integer()}.
-%% The reason for connection failure and how many times that type of
-%% failure has occurred since startup.
--type timeout_name() :: ping_timeout | get_client_id_timeout |
-                           set_client_id_timeout | get_server_info_timeout |
-                           get_timeout | put_timeout | delete_timeout |
-                           list_buckets_timeout | list_buckets_call_timeout |
-                           list_keys_timeout | stream_list_keys_timeout |
-                           stream_list_keys_call_timeout | get_bucket_timeout |
-                           get_bucket_call_timeout | set_bucket_timeout |
-                           set_bucket_call_timeout | mapred_timeout |
-                           mapred_call_timeout | mapred_stream_timeout |
-                           mapred_stream_call_timeout | mapred_bucket_timeout |
-                           mapred_bucket_call_timeout | mapred_bucket_stream_call_timeout |
-                           search_timeout | search_call_timeout | timeout.
 %% Which client operation the default timeout is being requested
 %% for. `timeout' is the global default timeout. Any of these defaults
 %% can be overridden by setting the application environment variable
@@ -169,6 +74,9 @@
 %% `application:set_env(riakc, ping_timeout, 5000).'
 -record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
                   tref :: reference() | undefined }).
+
+-type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
+-type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
 -record(state, {address :: address(),    % address to connect to
                 port :: portnum(),       % port to connect to
                 auto_reconnect = false :: boolean(), % if true, automatically reconnects to server
@@ -181,7 +89,6 @@
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
-
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
@@ -706,125 +613,74 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, CallTimeout) ->
 
 
 %% @doc Execute a search query. This command will return an error
-%%      unless executed against a Riak Search cluster.  Because
-%%      Protocol Buffers has no native Search interface, this uses the
-%%      search inputs to MapReduce.
--spec search(pid(), bucket(), string()) ->  {ok, mapred_result()} | {error, term()}.
-search(Pid, Bucket, SearchQuery) ->
-    %% Run a MapReduce operation using reduce_identity to get a list
-    %% of BKeys.
-    IdentityQuery = [{reduce,
-                      {modfun, riak_kv_mapreduce, reduce_identity},
-                      [{reduce_phase_only_1, true}],
-                      true}],
-    case search(Pid, Bucket, SearchQuery, IdentityQuery,
-                default_timeout(search_timeout)) of
-        {ok, [{_, Results}]} ->
-            %% Unwrap the results.
-            {ok, Results};
-        Other -> Other
-    end.
-
-%% @doc Execute a search query and feed the results into a MapReduce
-%%      query.  This command will return an error
 %%      unless executed against a Riak Search cluster.
-%% @equiv search(Pid, Bucket, SearchQuery, MRQuery, Timeout, default_timeout(search_call_timeout))
--spec search(pid(), bucket(), string(), [mapred_queryterm()], timeout()) ->
-                    {ok, mapred_result()} | {error, term()}.
-search(Pid, Bucket, SearchQuery, MRQuery, Timeout) ->
-    search(Pid, Bucket, SearchQuery, MRQuery, Timeout,
-           default_timeout(search_call_timeout)).
+-spec search(pid(), binary(), binary()) ->
+                    {ok, search_result()} | {error, term()}.
+search(Pid, Index, SearchQuery) ->
+    search(Pid, Index, SearchQuery, []).
 
+%% @doc Execute a search query. This command will return an error
+%%      unless executed against a Riak Search cluster.
+-spec search(pid(), binary(), binary(), search_options()) ->
+                    {ok, search_result()} | {error, term()}.
+search(Pid, Index, SearchQuery, Options) ->
+    Timeout = default_timeout(search_timeout),
+    search(Pid, Index, SearchQuery, Options, Timeout).
 
-%% @doc Execute a search query and feed the results into a MapReduce
-%%      query with a timeout on the call. This command will return
-%%      an error unless executed against a Riak Search cluster.
--spec search(pid(), bucket(), string(), [mapred_queryterm()], timeout(), timeout()) ->
-                    {ok, mapred_result()} | {error, term()}.
-search(Pid, Bucket, SearchQuery, MRQuery, Timeout, CallTimeout) ->
-    Inputs = {modfun, riak_search, mapred_search, [Bucket, SearchQuery]},
-    mapred(Pid, Inputs, MRQuery, Timeout, CallTimeout).
+%% @doc Execute a search query. This command will return an error
+%%      unless executed against a Riak Search cluster.
+-spec search(pid(), binary(), binary(), search_options(), timeout()) ->
+                    {ok, search_result()} | {error, term()}.
+search(Pid, Index, SearchQuery, Options, Timeout) ->
+    CallTimeout = default_timeout(search_call_timeout),
+    search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout).
+
+%% @doc Execute a search query. This command will return an error
+%%      unless executed against a Riak Search cluster.
+-spec search(pid(), binary(), binary(), search_options(), timeout(), timeout()) ->
+                    {ok, search_result()} | {error, term()}.
+search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout) ->
+    Req = search_options(Options, #rpbsearchqueryreq{q = SearchQuery, index = Index}),
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Execute a secondary index equality query. This functionality
 %% is implemented via executing a MapReduce job with an index as the
 %% input.
 -spec get_index(pid(), bucket(), binary(), key() | integer()) ->
-                       {ok, mapred_result()} | {error, term()}.
+                       {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, Key) ->
-    %% Run a MapReduce operation using reduce_identity to get a list
-    %% of BKeys.
-    Input = {index, Bucket, Index, Key},
-    IdentityQuery = [{reduce,
-                      {modfun, riak_kv_mapreduce, reduce_identity},
-                      [{reduce_phase_only_1, true}],
-                      true}],
-    case mapred(Pid, Input, IdentityQuery) of
-        {ok, [{_, Results}]} ->
-            %% Unwrap the results.
-            {ok, Results};
-        Other -> Other
-    end.
+    Timeout = default_timeout(get_index_timeout),
+    CallTimeout = default_timeout(get_index_call_timeout),
+    get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout).
 
 %% @doc Execute a secondary index equality query with specified
 %% timeouts. This behavior is implemented via executing a MapReduce
 %% job with an index as the input.
 -spec get_index(pid(), bucket(), binary(), key() | integer(), timeout(), timeout()) ->
-                       {ok, mapred_result()} | {error, term()}.
+                       {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
-    %% Run a MapReduce operation using reduce_identity to get a list
-    %% of BKeys.
-    Input = {index, Bucket, Index, Key},
-    IdentityQuery = [{reduce,
-                      {modfun, riak_kv_mapreduce, reduce_identity},
-                      [{reduce_phase_only_1, true}],
-                      true}],
-    case mapred(Pid, Input, IdentityQuery, Timeout, CallTimeout) of
-        {ok, [{_, Results}]} ->
-            %% Unwrap the results.
-            {ok, Results};
-        Other -> Other
-    end.
-
+    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq, key=Key},
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Execute a secondary index range query. This behavior is
 %% implemented via executing a MapReduce job with an index as the
 %% input.
 -spec get_index(pid(), bucket(), binary(), key() | integer(), key() | integer()) ->
-                       {ok, mapred_result()} | {error, term()}.
+                       {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, StartKey, EndKey) ->
-    %% Run a MapReduce operation using reduce_identity to get a list
-    %% of BKeys.
-    Input = {index, Bucket, Index, StartKey, EndKey},
-    IdentityQuery = [{reduce,
-                      {modfun, riak_kv_mapreduce, reduce_identity},
-                      [{reduce_phase_only_1, true}],
-                      true}],
-    case mapred(Pid, Input, IdentityQuery) of
-        {ok, [{_, Results}]} ->
-            %% Unwrap the results.
-            {ok, Results};
-        Other -> Other
-    end.
+    Timeout = default_timeout(get_index_timeout),
+    CallTimeout = default_timeout(get_index_call_timeout),
+    get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout).
 
 %% @doc Execute a secondary index range query with specified
 %% timeouts. This behavior is implemented via executing a MapReduce
 %% job with an index as the input.
 -spec get_index(pid(), bucket(), binary(), key() | integer(), key() | integer(), timeout(), timeout()) ->
-                       {ok, mapred_result()} | {error, term()}.
+                       {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
-    %% Run a MapReduce operation using reduce_identity to get a list
-    %% of BKeys.
-    Input = {index, Bucket, Index, StartKey, EndKey},
-    IdentityQuery = [{reduce,
-                      {modfun, riak_kv_mapreduce, reduce_identity},
-                      [{reduce_phase_only_1, true}],
-                      true}],
-    case mapred(Pid, Input, IdentityQuery, Timeout, CallTimeout) of
-        {ok, [{_, Results}]} ->
-            %% Unwrap the results.
-            {ok, Results};
-        Other -> Other
-    end.
+  Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
+                       range_min=StartKey, range_max=EndKey},
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 
 %% @doc Return the default timeout for an operation if none is provided.
@@ -1069,6 +925,26 @@ delete_options([{pw, PW} | Rest], Req) ->
 delete_options([{dw, DW} | Rest], Req) ->
     delete_options(Rest, Req#rpbdelreq{dw = riak_pb_kv_codec:encode_quorum(DW)}).
 
+
+search_options([], Req) ->
+    Req;
+search_options([{rows, Rows} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{rows=Rows});
+search_options([{start, Start} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{start=Start});
+search_options([{sort, Sort} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{sort=Sort});
+search_options([{filter, Filter} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{filter=Filter});
+search_options([{df, DF} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{df=DF});
+search_options([{op, OP} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{op=OP});
+search_options([{fl, FL} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{fl=FL});
+search_options([{presort, Presort} | Rest], Req) ->
+    search_options(Rest, Req#rpbsearchqueryreq{presort=Presort}).
+
 %% Process response from the server - passes back in the request and
 %% context the request was issued with.
 %% Return noreply if the request is completed, but no reply needed
@@ -1193,7 +1069,23 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
             {reply, done, State};
         _ ->
             {pending, State}
-    end.
+    end;
+
+process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
+    {reply, {ok, []}, State};
+process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys}, State) ->
+    {reply, {ok, Keys}, State};
+
+
+process_response(#request{msg = #rpbsearchqueryreq{}}, prbsearchqueryresp, State) ->
+    {reply, {error, notfound}, State};
+process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
+                 #rpbsearchqueryresp{docs=PBDocs,max_score=MaxScore,
+                                     num_found=NumFound}, State) ->
+    Values = [ {Index, [ riak_pb_codec:decode_pair(Field) || Field <- Doc#rpbsearchdoc.fields] }
+               || Doc <- PBDocs ],
+    Result = #search_results{docs=Values, maxscore=MaxScore, num_found=NumFound},
+    {reply, {ok, Result}, State}.
 
 %%
 %% Called after sending a message - supports returning a
@@ -1473,7 +1365,7 @@ finish_mapred_many(Acc) ->
     [ {P, lists:reverse(A)} || {P, A} <- lists:keysort(1, Acc) ].
 
 %% Receive one mapred message.
--spec receive_mapred(reference(), timeout()) ->
+-spec receive_mapred(req_id(), timeout()) ->
          done | {mapred, integer(), [term()]} | {error, term()} | timeout.
 receive_mapred(ReqId, Timeout) ->
     receive {ReqId, Msg} ->
