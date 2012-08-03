@@ -1084,7 +1084,7 @@ process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
                                      num_found=NumFound}, State) ->
     Values = [ {Index, [ riak_pb_codec:decode_pair(Field) || Field <- Doc#rpbsearchdoc.fields] }
                || Doc <- PBDocs ],
-    Result = #search_results{docs=Values, maxscore=MaxScore, num_found=NumFound},
+    Result = #search_results{docs=Values, max_score=MaxScore, num_found=NumFound},
     {reply, {ok, Result}, State}.
 
 %%

@@ -134,9 +134,9 @@
 -type search_number_found() :: non_neg_integer().
 
 -record(search_results, {
-          docs :: [search_doc()], %% version number of the riak_kv app
-          maxscore :: float(), %% version number of the riak_kv app
-          num_found :: non_neg_integer()    %% instance of riak_core_ring()
+          docs :: [search_doc()],         %% Result documents
+          max_score :: float(),           %% Maximum score
+          num_found :: non_neg_integer()  %% Number of results
          }).
 
 -type search_result() :: #search_results{}.
