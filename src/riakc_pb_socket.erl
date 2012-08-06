@@ -889,8 +889,9 @@ get_options([{if_modified, VClock} | Rest], Req) ->
 get_options([head | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{head = true});
 get_options([deletedvclock | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{deletedvclock = true}).
-
+    get_options(Rest, Req#rpbgetreq{deletedvclock = true});
+get_options([{_, _} | _Rest], _Req) ->
+    erlang:error(badarg).
 
 put_options([], Req) ->
     Req;
@@ -907,7 +908,9 @@ put_options([return_head | Rest], Req) ->
 put_options([if_not_modified | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{if_not_modified = true});
 put_options([if_none_match | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{if_none_match = true}).
+    put_options(Rest, Req#rpbputreq{if_none_match = true});
+put_options([{_, _} | _Rest], _Req) ->
+    erlang:error(badarg).
 
 
 delete_options([], Req) ->
@@ -923,8 +926,9 @@ delete_options([{pr, PR} | Rest], Req) ->
 delete_options([{pw, PW} | Rest], Req) ->
     delete_options(Rest, Req#rpbdelreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
 delete_options([{dw, DW} | Rest], Req) ->
-    delete_options(Rest, Req#rpbdelreq{dw = riak_pb_kv_codec:encode_quorum(DW)}).
-
+    delete_options(Rest, Req#rpbdelreq{dw = riak_pb_kv_codec:encode_quorum(DW)});
+delete_options([{_, _} | _Rest], _Req) ->
+    erlang:error(badarg).
 
 search_options([], Req) ->
     Req;
@@ -943,7 +947,9 @@ search_options([{op, OP} | Rest], Req) ->
 search_options([{fl, FL} | Rest], Req) ->
     search_options(Rest, Req#rpbsearchqueryreq{fl=FL});
 search_options([{presort, Presort} | Rest], Req) ->
-    search_options(Rest, Req#rpbsearchqueryreq{presort=Presort}).
+    search_options(Rest, Req#rpbsearchqueryreq{presort=Presort});
+search_options([{_, _} | _Rest], _Req) ->
+    erlang:error(badarg).
 
 %% Process response from the server - passes back in the request and
 %% context the request was issued with.
