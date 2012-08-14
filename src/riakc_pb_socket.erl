@@ -66,8 +66,10 @@
          terminate/2, code_change/3]).
 
 -type ctx() :: any().
--type rpb_req() :: atom() | tuple().
+-type rpb_req() :: {tunneled, msg_id(), binary()} | atom() | tuple().
 -type rpb_resp() :: atom() | tuple().
+-type msg_id() :: non_neg_integer(). %% Request identifier for tunneled message types
+
 %% Which client operation the default timeout is being requested
 %% for. `timeout' is the global default timeout. Any of these defaults
 %% can be overridden by setting the application environment variable
