@@ -59,14 +59,17 @@
          mapred_bucket_stream/5, mapred_bucket_stream/6,
          search/3, search/4, search/5, search/6,
          get_index/4, get_index/5, get_index/6, get_index/7,
-         default_timeout/1]).
+         default_timeout/1,
+         tunnel/4]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
 -type ctx() :: any().
--type rpb_req() :: atom() | tuple().
+-type rpb_req() :: {tunneled, msg_id(), binary()} | atom() | tuple().
 -type rpb_resp() :: atom() | tuple().
+-type msg_id() :: non_neg_integer(). %% Request identifier for tunneled message types
+
 %% Which client operation the default timeout is being requested
 %% for. `timeout' is the global default timeout. Any of these defaults
 %% can be overridden by setting the application environment variable
@@ -699,6 +702,13 @@ default_timeout(OpTimeout) ->
             end
     end.
 
+%% @doc Send a pre-encoded msg over the protocol buffer connection
+%% Returns {ok, Response} or {error, Reason}
+-spec tunnel(pid(), msg_id(), binary(), timeout()) -> {ok, binary()} | {error, term()}.
+tunnel(Pid, MsgId, Pkt, Timeout) ->
+    Req = {tunneled, MsgId, Pkt},
+    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -773,7 +783,13 @@ handle_info({tcp_closed, _Socket}, State) ->
 %% it should drop through and be ignored.
 handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
     [MsgCode|MsgData] = Data,
-    Resp = riak_pb_codec:decode(MsgCode, MsgData),
+    Resp = case Active#request.msg of
+        {tunneled, _MsgID} ->
+            %% don't decode tunneled replies, we may not recognize the msgid
+            {MsgCode, MsgData};
+        _ ->
+            riak_pb_codec:decode(MsgCode, MsgData)
+    end,
     case Resp of
         #rpberrorresp{} ->
             NewState1 = maybe_reply(on_error(Active, Resp, State)),
@@ -1082,7 +1098,6 @@ process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
 process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys}, State) ->
     {reply, {ok, Keys}, State};
 
-
 process_response(#request{msg = #rpbsearchqueryreq{}}, prbsearchqueryresp, State) ->
     {reply, {error, notfound}, State};
 process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
@@ -1091,7 +1106,15 @@ process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
     Values = [ {Index, [ riak_pb_codec:decode_pair(Field) || Field <- Doc#rpbsearchdoc.fields] }
                || Doc <- PBDocs ],
     Result = #search_results{docs=Values, max_score=MaxScore, num_found=NumFound},
-    {reply, {ok, Result}, State}.
+    {reply, {ok, Result}, State};
+
+process_response(#request{msg={tunneled,_MsgId}}, Reply, State) ->
+    %% Tunneled msg response
+    {reply, {ok, Reply}, State};
+
+process_response(Request, Reply, State) ->
+    %% Unknown request/response combo
+    {reply, {error, {unknown_response, Request, Reply}}, State}.
 
 %%
 %% Called after sending a message - supports returning a
@@ -1243,6 +1266,13 @@ increase_reconnect_interval(State) ->
 
 %% Send a request to the server and prepare the state for the response
 %% @private
+%% Already encoded (for tunneled messages), but must provide Message Id
+%% for responding to the second form of send_request.
+send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.active =:= undefined ->
+    Request = Msg#request{msg = {tunneled,MsgId}},
+    ok = gen_tcp:send(State#state.sock, [MsgId|Pkt]),
+    State#state{active = Request};
+%% Unencoded Request (the normal PB client path)
 send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riak_pb_codec:encode(Request#request.msg),
     ok = gen_tcp:send(State#state.sock, Pkt),
