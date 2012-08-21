@@ -1,7 +1,4 @@
-.eunit/*
 deps/*
-priv/*
-*.o
-*.beam
-include/riakclient_pb.hrl
-doc/*
+rel/maelstrom/*
+log/*
+ebin/*

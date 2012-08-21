@@ -1,4 +1,4 @@
-.PHONY: deps doc
+.PHONY: deps doc rel
 
 all: deps compile
 
