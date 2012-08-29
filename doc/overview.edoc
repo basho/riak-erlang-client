@@ -1,6 +1,6 @@
 @author Basho Technologies, Inc.
 @copyright 2010-2012 Basho Technologies, Inc.
-@version 1.2.1
+@version 1.3.0
 @title Riak Client for Erlang
 @doc <p>The <code>riakc</code> application encapsulates the Erlang
 client for Riak. This client uses the Protocol Buffers transport
@@ -12,9 +12,9 @@ href="https://github.com/basho/rebar">rebar</a>. Add a dependency like
 the one below to the <code>rebar.config</code> in your project.</p>
 
 <pre>{deps, [
-        {riakc, "1.2.1", 
+        {riakc, "1.3.0",
           {git, "git://github.com/basho/riak-erlang-client", 
-             {tag, "1.2.1"}}}
+             {tag, "1.3.0"}}}
        ]}.</pre>
 
 <p>The application consists of 3 modules (and a generated module for the Protocol Buffers messages):</p>
