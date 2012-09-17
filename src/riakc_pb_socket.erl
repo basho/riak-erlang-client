@@ -646,9 +646,7 @@ search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout) ->
     Req = search_options(Options, #rpbsearchqueryreq{q = SearchQuery, index = Index}),
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
-%% @doc Execute a secondary index equality query. This functionality
-%% is implemented via executing a MapReduce job with an index as the
-%% input.
+%% @doc Execute a secondary index equality query.
 -spec get_index(pid(), bucket(), binary(), key() | integer()) ->
                        {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, Key) ->
@@ -657,17 +655,15 @@ get_index(Pid, Bucket, Index, Key) ->
     get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout).
 
 %% @doc Execute a secondary index equality query with specified
-%% timeouts. This behavior is implemented via executing a MapReduce
-%% job with an index as the input.
+%% timeouts.
 -spec get_index(pid(), bucket(), binary(), key() | integer(), timeout(), timeout()) ->
                        {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
-    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq, key=Key},
+    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq,
+                       key=encode_2i(Key)},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
-%% @doc Execute a secondary index range query. This behavior is
-%% implemented via executing a MapReduce job with an index as the
-%% input.
+%% @doc Execute a secondary index range query.
 -spec get_index(pid(), bucket(), binary(), key() | integer(), key() | integer()) ->
                        {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, StartKey, EndKey) ->
@@ -676,15 +672,22 @@ get_index(Pid, Bucket, Index, StartKey, EndKey) ->
     get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout).
 
 %% @doc Execute a secondary index range query with specified
-%% timeouts. This behavior is implemented via executing a MapReduce
-%% job with an index as the input.
--spec get_index(pid(), bucket(), binary(), key() | integer(), key() | integer(), timeout(), timeout()) ->
+%% timeouts.
+-spec get_index(pid(), bucket(), binary(), key() | integer() | list(),
+                key() | integer() | list(), timeout(), timeout()) ->
                        {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
-  Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
-                       range_min=StartKey, range_max=EndKey},
+    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
+                       range_min=encode_2i(StartKey),
+                       range_max=encode_2i(EndKey)},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
+encode_2i(Value) when is_integer(Value) ->
+    list_to_binary(integer_to_list(Value));
+encode_2i(Value) when is_list(Value) ->
+    list_to_binary(Value);
+encode_2i(Value) when is_binary(Value) ->
+    Value.
 
 %% @doc Return the default timeout for an operation if none is provided.
 %%      Falls back to the default timeout.
