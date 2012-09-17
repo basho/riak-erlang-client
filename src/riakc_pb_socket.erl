@@ -659,7 +659,8 @@ get_index(Pid, Bucket, Index, Key) ->
 -spec get_index(pid(), bucket(), binary(), key() | integer(), timeout(), timeout()) ->
                        {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
-    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq, key=Key},
+    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq,
+                       key=encode_2i(Key)},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Execute a secondary index range query.
@@ -677,15 +678,15 @@ get_index(Pid, Bucket, Index, StartKey, EndKey) ->
                        {ok, index_result()} | {error, term()}.
 get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
-                       range_min=encode_range_value(StartKey),
-                       range_max=encode_range_value(EndKey)},
+                       range_min=encode_2i(StartKey),
+                       range_max=encode_2i(EndKey)},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
-encode_range_value(Value) when is_integer(Value) ->
+encode_2i(Value) when is_integer(Value) ->
     list_to_binary(integer_to_list(Value));
-encode_range_value(Value) when is_list(Value) ->
+encode_2i(Value) when is_list(Value) ->
     list_to_binary(Value);
-encode_range_value(Value) when is_binary(Value) ->
+encode_2i(Value) when is_binary(Value) ->
     Value.
 
 %% @doc Return the default timeout for an operation if none is provided.
