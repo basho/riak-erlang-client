@@ -675,26 +675,18 @@ get_index(Pid, Bucket, Index, StartKey, EndKey) ->
 -spec get_index(pid(), bucket(), binary(), key() | integer() | list(),
                 key() | integer() | list(), timeout(), timeout()) ->
                        {ok, index_result()} | {error, term()}.
-
-get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout)
-        when is_integer(StartKey) andalso is_integer(EndKey) ->
-    get_index(Pid, Bucket, Index,
-              integer_to_list(StartKey),
-              integer_to_list(EndKey),
-              Timeout, CallTimeout);
-
-get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout)
-        when is_list(StartKey) andalso is_list(EndKey) ->
-    get_index(Pid, Bucket, Index,
-              list_to_binary(StartKey),
-              list_to_binary(EndKey),
-              Timeout, CallTimeout);
-
-get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout)
-        when is_binary(StartKey) andalso is_binary(EndKey) ->
-  Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
-                       range_min=StartKey, range_max=EndKey},
+get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
+    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
+                       range_min=encode_range_value(StartKey),
+                       range_max=encode_range_value(EndKey)},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+encode_range_value(Value) when is_integer(Value) ->
+    list_to_binary(integer_to_list(Value));
+encode_range_value(Value) when is_list(Value) ->
+    list_to_binary(Value);
+encode_range_value(Value) when is_binary(Value) ->
+    Value.
 
 %% @doc Return the default timeout for an operation if none is provided.
 %%      Falls back to the default timeout.
