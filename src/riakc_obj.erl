@@ -110,7 +110,7 @@ key(O) ->
     O#riakc_obj.key.
 
 %% @doc  Return the vector clock for this riakc_obj.
--spec vclock(Object::riakc_obj()) -> vclock().
+-spec vclock(Object::riakc_obj()) -> vclock() | undefined.
 vclock(O) ->
     O#riakc_obj.vclock.
 

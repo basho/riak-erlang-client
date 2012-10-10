@@ -235,7 +235,7 @@ put(Pid, Obj) ->
 %% @equiv put(Pid, Obj, Options, Timeout)
 %% @see put/4
 -spec put(pid(), riakc_obj(), TimeoutOrOptions::timeout() | put_options()) ->
-                 ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
+                 ok | {ok, riakc_obj()} |  riakc_obj() | {ok, key()} | {error, term()}.
 put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     put(Pid, Obj, [], Timeout);
 put(Pid, Obj, Options) ->
@@ -253,7 +253,7 @@ put(Pid, Obj, Options) ->
 %% @throws siblings
 %% @end
 -spec put(pid(), riakc_obj(), put_options(), timeout()) ->
-                 ok | {ok, riakc_obj()} | {ok, key()} | {error, term()}.
+                 ok | {ok, riakc_obj()} | riakc_obj() | {ok, key()} | {error, term()}.
 put(Pid, Obj, Options, Timeout) ->
     Content = riak_pb_kv_codec:encode_content({riakc_obj:get_update_metadata(Obj),
                                                riakc_obj:get_update_value(Obj)}),
