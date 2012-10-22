@@ -282,7 +282,7 @@ Here's an example of getting/setting properties
     {ok,[{n_val,7},{allow_mult,true}]}
 
 
-Object Metadata
+Custom Metadata
 ==================
 
 Object metadata can be manipulated by using the `update_metadata/2`, `get_metadata/1` and `get_update_metadata/1` functions.
@@ -292,12 +292,13 @@ Object metadata can be manipulated by using the `update_metadata/2`, `get_metada
 The following example illustrates setting and getting metadata.
 
 	Object = riakc_obj:new(<<"groceries">>, <<"mine">>, <<"eggs & bacon">>).
-	MetaData  = dict:from_list([{<<"X-Riak-Meta">>, [{"Foo", "Bar"}]}]),
+	MetaData  = dict:from_list([{<<"X-Riak-Meta">>, [{"Foo", "Bar"}]}]), %% see comment below
 	Object2 = riakc_obj:update_metadata(Object, MetaData).
 	riakc_pb_socket:put(Pid, Object2).
 	{ok, O} = riakc_pb_socket:get(Pid, <<"groceries">>, <<"mine">>).
 	{ok, MD} = dict:find(<<"X-Riak-Meta">>, riakc_obj:get_metadata(O)).
 
+* **Note**: In this example, creating a new metadata dict will blow away any content-type or other metadata that was set previously. 
 
 
 Troubleshooting
