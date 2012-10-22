@@ -281,6 +281,25 @@ Here's an example of getting/setting properties
     7> riakc_pb_socket:get_bucket(Pid, <<"groceries">>).
     {ok,[{n_val,7},{allow_mult,true}]}
 
+
+Object Metadata
+==================
+
+Object metadata can be manipulated by using the `update_metadata/2`, `get_metadata/1` and `get_update_metadata/1` functions.
+
+*Object metadata needs to be specified in a dict under the key `<<"X-Riak-Meta">>`.*
+
+The following example illustrates setting and getting metadata.
+
+	Object = riakc_obj:new(<<"groceries">>, <<"mine">>, <<"eggs & bacon">>).
+	MetaData  = dict:from_list([{<<"X-Riak-Meta">>, [{"Foo", "Bar"}]}]),
+	Object2 = riakc_obj:update_metadata(Object, MetaData).
+	riakc_pb_socket:put(Pid, Object2).
+	{ok, O} = riakc_pb_socket:get(Pid, <<"groceries">>, <<"mine">>).
+	{ok, MD} = dict:find(<<"X-Riak-Meta">>, riakc_obj:get_metadata(O)).
+
+
+
 Troubleshooting
 ==================
 
