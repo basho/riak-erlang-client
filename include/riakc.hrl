@@ -88,15 +88,22 @@
 %% be returned to the client.
 -type mapred_funterm() :: {modfun, Module :: atom(), Function :: atom()} |
                           {qfun, function()} |
-                          {strfun, list() | binary()}.
+                          {strfun, list() | binary()},
+                          {jsanon, binary() | {bucket(), key()},
+                          {jsfun, binary()}.
 %% A MapReduce phase function specification. `modfun' requires that
 %% the compiled module be available on all Riak nodes. `qfun' will
 %% only work from the shell (compiled fun() terms refer to compiled
 %% code only). `strfun' contains the textual source of an Erlang
 %% function but the functionality must be enabled on the Riak cluster.
+%% `jsanon' contains either contains javascript code that will be
+%% evaluated as an anonymous function, or a bucket-value pair, pointing
+%% to a record containing the source for an anonymous javascript function.
+%% `jsfun' contains the name that when evaluated points to a built-in
+%% javascript function.
 -type mapred_result() :: [term()].
 %% The results of a MapReduce job.
--type mapred_inputs() :: [{bucket(), key()} | {bucket(), key(), term()}] |
+-type mapred_inputs() :: [{bucket(), key()} | {{bucket(), key()}, term()}] |
                          {modfun, Module::atom(), Function::atom(), [term()]} |
                          bucket() |
                          {index, bucket(), Index::binary(), key()} |
