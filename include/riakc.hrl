@@ -103,7 +103,7 @@
 %% function, that when evaluated points to a built-in javascript function.
 -type mapred_result() :: [term()].
 %% The results of a MapReduce job.
--type mapred_inputs() :: [{bucket(), key()} | {bucket(), key(), term()}] |
+-type mapred_inputs() :: [{bucket(), key()} | {{bucket(), key()}, term()}] |
                          {modfun, Module::atom(), Function::atom(), [term()]} |
                          bucket() |
                          {index, bucket(), Index::binary(), key()} |
