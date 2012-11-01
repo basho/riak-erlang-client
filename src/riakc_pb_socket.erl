@@ -31,6 +31,7 @@
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -include_lib("riak_pb/include/riak_search_pb.hrl").
+%% @headerfile "riakc.hrl"
 -include("riakc.hrl").
 -behaviour(gen_server).
 
