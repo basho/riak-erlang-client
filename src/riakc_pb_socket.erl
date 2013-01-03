@@ -208,18 +208,18 @@ get(Pid, Bucket, Key) ->
 %%      Will return {error, notfound} if the key is not on the server.
 %% @equiv get(Pid, Bucket, Key, Options, Timeout)
 -spec get(pid(), bucket(), key(), TimeoutOrOptions::timeout() |  get_options()) ->
-                 {ok, riakc_obj()} | {error, term() | unchanged}.
+                 {ok, riakc_obj()} | {error, term()} | unchanged.
 get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get(Pid, Bucket, Key, [], Timeout);
 get(Pid, Bucket, Key, Options) ->
     get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
 
 %% @doc Get bucket/key from the server supplying options and timeout.
-%%      <code>{error, unchanged}</code> will be returned when the
+%%      <code>unchanged> will be returned when the
 %%      <code>{if_modified, Vclock}</code> option is specified and the
 %%      object is unchanged.
 -spec get(pid(), bucket(), key(), get_options(), timeout()) ->
-                 {ok, riakc_obj()} | {error, term() | unchanged}.
+                 {ok, riakc_obj()} | {error, term()} | unchanged.
 get(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
