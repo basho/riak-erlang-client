@@ -215,7 +215,7 @@ get(Pid, Bucket, Key, Options) ->
     get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
 
 %% @doc Get bucket/key from the server supplying options and timeout.
-%%      <code>unchanged> will be returned when the
+%%      <code>unchanged</code> will be returned when the
 %%      <code>{if_modified, Vclock}</code> option is specified and the
 %%      object is unchanged.
 -spec get(pid(), bucket(), key(), get_options(), timeout()) ->
