@@ -125,7 +125,10 @@
                         mapred_bucket_call_timeout | mapred_bucket_stream_call_timeout |
                         search_timeout | search_call_timeout |
                         timeout.
+
+-type secondary_index_id() :: {binary_index, string()} | {integer_index, string()}.
 -type index_result() :: [key()].
+
 -type search_option() ::
         {rows, non_neg_integer()} |  %% Limit rows
         {start, non_neg_integer()} | %% Starting offset

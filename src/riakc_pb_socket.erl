@@ -648,8 +648,15 @@ search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout) ->
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Execute a secondary index equality query.
--spec get_index(pid(), bucket(), binary(), key() | integer()) ->
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer()) ->
                        {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, {binary_index, Name}, Key) when is_binary(Key) ->
+    Index = list_to_binary(lists:append([Name, "_bin"])),
+    get_index(Pid, Bucket, Index, Key);
+get_index(Pid, Bucket, {integer_index, Name}, Key) when is_integer(Key) ->
+    Index = list_to_binary(lists:append([Name, "_int"])),
+    BinKey = list_to_binary(integer_to_list(Key)),
+    get_index(Pid, Bucket, Index, BinKey);
 get_index(Pid, Bucket, Index, Key) ->
     Timeout = default_timeout(get_index_timeout),
     CallTimeout = default_timeout(get_index_call_timeout),
@@ -657,16 +664,31 @@ get_index(Pid, Bucket, Index, Key) ->
 
 %% @doc Execute a secondary index equality query with specified
 %% timeouts.
--spec get_index(pid(), bucket(), binary(), key() | integer(), timeout(), timeout()) ->
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), timeout(), timeout()) ->
                        {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, {binary_index, Name}, Key, Timeout, CallTimeout) when is_binary(Key) ->
+    Index = list_to_binary(lists:append([Name, "_bin"])),
+    get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout);
+get_index(Pid, Bucket, {integer_index, Name}, Key, Timeout, CallTimeout) when is_integer(Key) ->
+    Index = list_to_binary(lists:append([Name, "_int"])),
+    BinKey = list_to_binary(integer_to_list(Key)),
+    get_index(Pid, Bucket, Index, BinKey, Timeout, CallTimeout);
 get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq,
                        key=encode_2i(Key)},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Execute a secondary index range query.
--spec get_index(pid(), bucket(), binary(), key() | integer(), key() | integer()) ->
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), key() | integer()) ->
                        {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, {binary_index, Name}, StartKey, EndKey) when is_binary(StartKey) andalso is_binary(EndKey) ->
+    Index = list_to_binary(lists:append([Name, "_bin"])),
+    get_index(Pid, Bucket, Index, StartKey, EndKey);
+get_index(Pid, Bucket, {integer_index, Name}, StartKey, EndKey) when is_integer(StartKey) andalso is_integer(EndKey)  ->
+    Index = list_to_binary(lists:append([Name, "_int"])),
+    BinStartKey = list_to_binary(integer_to_list(StartKey)),
+    BinEndKey = list_to_binary(integer_to_list(EndKey)),
+    get_index(Pid, Bucket, Index, BinStartKey, BinEndKey);
 get_index(Pid, Bucket, Index, StartKey, EndKey) ->
     Timeout = default_timeout(get_index_timeout),
     CallTimeout = default_timeout(get_index_call_timeout),
@@ -674,9 +696,17 @@ get_index(Pid, Bucket, Index, StartKey, EndKey) ->
 
 %% @doc Execute a secondary index range query with specified
 %% timeouts.
--spec get_index(pid(), bucket(), binary(), key() | integer() | list(),
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer() | list(),
                 key() | integer() | list(), timeout(), timeout()) ->
                        {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, {binary_index, Name}, StartKey, EndKey, Timeout, CallTimeout) when is_binary(StartKey) andalso is_binary(EndKey) ->
+    Index = list_to_binary(lists:append([Name, "_bin"])),
+    get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout);
+get_index(Pid, Bucket, {integer_index, Name}, StartKey, EndKey, Timeout, CallTimeout) when is_integer(StartKey) andalso is_integer(EndKey) ->
+    Index = list_to_binary(lists:append([Name, "_int"])),
+    BinStartKey = list_to_binary(integer_to_list(StartKey)),
+    BinEndKey = list_to_binary(integer_to_list(EndKey)),
+    get_index(Pid, Bucket, Index, BinStartKey, BinEndKey, Timeout, CallTimeout);
 get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
                        range_min=encode_2i(StartKey),
@@ -2340,6 +2370,71 @@ live_node_tests() ->
                     ?assertEqual(<<>>, riakc_obj:get_value(Obj)),
                     {ok, Obj2} = ?MODULE:put(Pid, PO, [return_head]),
                     ?assertEqual([<<>>, <<>>], riakc_obj:get_values(Obj2))
+             end)},
+
+    {"user metadata manipulation",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    O0 = riakc_obj:new(<<"b">>, <<"key0">>, <<"value0">>),
+                    MD0 = riakc_obj:get_update_metadata(O0),
+                    MD1 = riakc_obj:set_metadata_entry(MD0, {<<"Key1">>,<<"Val1">>}),
+                    O1 = riakc_obj:update_metadata(O0, MD1),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O1)),
+                    {ok, O2} = ?MODULE:get(Pid, <<"b">>, <<"key0">>),
+                    MD2 = riakc_obj:get_update_metadata(O2),
+                    ?assertEqual([{<<"Key1">>,<<"Val1">>}], riakc_obj:get_metadata_entries(MD2)),
+                    MD3 = riakc_obj:set_metadata_entry(MD2, {<<"Key2">>,<<"Val2">>}),
+                    O3 = riakc_obj:update_metadata(O2, MD3),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O3)),
+                    {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key0">>),
+                    ?assertEqual(2, length(riakc_obj:get_metadata_entries(riakc_obj:get_update_metadata(O4))))
+             end)},
+    {"binary secondary index manipulation",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    O0 = riakc_obj:new(<<"b">>, <<"key1">>, <<"value1">>),
+                    MD0 = riakc_obj:get_update_metadata(O0),
+                    MD1 = riakc_obj:set_secondary_index(MD0, [{{binary_index, "idx"},[<<"aaa">>]}]),
+                    O1 = riakc_obj:update_metadata(O0, MD1),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O1)),
+                    {ok, O2} = ?MODULE:get(Pid, <<"b">>, <<"key1">>),
+                    MD2 = riakc_obj:get_update_metadata(O2),
+                    ?assertEqual([<<"aaa">>], lists:sort(riakc_obj:get_secondary_index(MD2,{binary_index,"idx"}))),
+                    MD3 = riakc_obj:add_secondary_index(MD2, [{{binary_index, "idx"},[<<"bbb">>,<<"aaa">>,<<"ccc">>]}]),
+                    O3 = riakc_obj:update_metadata(O2, MD3),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O3)),                    
+                    ?assertEqual({ok,[<<"key1">>]}, ?MODULE:get_index(Pid, <<"b">>, {binary_index, "idx"}, <<"bbb">>)),
+                    {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key1">>),
+                    MD4 = riakc_obj:get_update_metadata(O4),
+                    ?assertEqual([<<"aaa">>,<<"bbb">>,<<"ccc">>], lists:sort(riakc_obj:get_secondary_index(MD4, {binary_index, "idx"}))),
+                    MD5 = riakc_obj:delete_secondary_index(MD4,{binary_index,"idx"}),
+                    O5 = riakc_obj:update_metadata(O4, MD5),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O5))
+             end)},
+     {"integer secondary index manipulation",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    O0 = riakc_obj:new(<<"b">>, <<"key2">>, <<"value2">>),
+                    MD0 = riakc_obj:get_update_metadata(O0),
+                    MD1 = riakc_obj:set_secondary_index(MD0, [{{integer_index, "idx"},[67]}]),
+                    O1 = riakc_obj:update_metadata(O0, MD1),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O1)),
+                    {ok, O2} = ?MODULE:get(Pid, <<"b">>, <<"key2">>),
+                    MD2 = riakc_obj:get_update_metadata(O2),
+                    ?assertEqual([67], lists:sort(riakc_obj:get_secondary_index(MD2,{integer_index,"idx"}))),
+                    MD3 = riakc_obj:add_secondary_index(MD2, [{{integer_index, "idx"},[56,10000,100]}]),
+                    O3 = riakc_obj:update_metadata(O2, MD3),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O3)),
+                    ?assertEqual({ok,[<<"key2">>]}, ?MODULE:get_index(Pid, <<"b">>, {integer_index, "idx"}, 50, 60)),
+                    {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key2">>),
+                    MD4 = riakc_obj:get_update_metadata(O4),
+                    ?assertEqual([56,67,100,10000], lists:sort(riakc_obj:get_secondary_index(MD4, {integer_index, "idx"}))),
+                    MD5 = riakc_obj:delete_secondary_index(MD4,{integer_index,"idx"}),
+                    O5 = riakc_obj:update_metadata(O4, MD5),
+                    ?assertEqual(ok, ?MODULE:put(Pid, O5))
              end)}
 
      ].

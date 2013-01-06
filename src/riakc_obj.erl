@@ -48,7 +48,18 @@
          get_update_content_type/1,
          get_update_value/1,
          md_ctype/1,
-         set_vclock/2
+         set_vclock/2,
+         get_metadata_entry/2,
+         get_metadata_entries/1,
+         clear_metadata_entries/1,
+         delete_metadata_entry/2,
+         set_metadata_entry/2,
+         get_secondary_index/2,
+         get_secondary_indexes/1,
+         clear_secondary_indexes/1,
+         delete_secondary_index/2,
+         set_secondary_index/2,
+         add_secondary_index/2
         ]).
 %% Internal library use only
 -export([new_obj/4]).
@@ -65,6 +76,18 @@
 -type content_type() :: string(). %% The media type of a value
 -type value() :: binary(). %% An opaque value
 -type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
+-type binary_index_id() :: {binary_index, string()}.
+-type binary_index_value() :: binary_index().
+-type binary_index() :: {binary_index_id(), [binary_index_value()]}.
+-type integer_index_id() :: {integer_index, string()}.
+-type integer_index_value() :: integer().
+-type integer_index() :: {integer_index_id(), [integer_index_value()]}.
+-type secondary_index_id() :: binary_index_id() | integer_index_id().
+-type secondary_index_value() :: integer_index_value() | binary_index_value().
+-type secondary_index() :: binary_index() | integer_index().
+-type metadata_key() :: binary().
+-type metadata_value() :: binary().
+-type metadata_entry() :: {metadata_key(), metadata_value()}.
 
 -record(riakc_obj, {
           bucket :: bucket(),
@@ -76,7 +99,9 @@
          }).
 
 -type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
--export_type([riakc_obj/0, bucket/0, key/0, vclock/0, contents/0, metadata/0, value/0]).
+-export_type([riakc_obj/0, bucket/0, key/0, vclock/0, contents/0, metadata/0, value/0,
+              binary_index_id/0, binary_index/0, integer_index_id/0, integer_index/0, 
+              secondary_index/0, metadata_key/0, metadata_value/0, metadata_entry/0]).
 
 %% ====================================================================
 %% object functions
@@ -257,6 +282,172 @@ md_ctype(MetaData) ->
 set_vclock(Object=#riakc_obj{}, Vclock) ->
     Object#riakc_obj{vclock=Vclock}.
 
+%% @doc  Get specific metadata entry
+-spec get_metadata_entry(metadata(), metadata_key()) -> metadata_value() | notfound.
+get_metadata_entry(MD, Key) ->
+    case dict:find(?MD_USERMETA, MD) of
+        {ok, Entries} -> 
+            case [V || {K, V} <- Entries, K == Key] of
+                [] ->
+                    notfound;
+                [Value] ->
+                    Value
+            end;
+        error ->
+            notfound
+    end.
+
+%% @doc  Get all metadata entries
+-spec get_metadata_entries(metadata()) -> [metadata_entry()].
+get_metadata_entries(MD) ->
+    case dict:find(?MD_USERMETA, MD) of
+        {ok, Entries} -> 
+            Entries;
+        error ->
+            []
+    end.
+
+%% @doc  Clear all metadata entries
+-spec clear_metadata_entries(metadata()) -> metadata().
+clear_metadata_entries(MD) ->
+    dict:erase(?MD_USERMETA, MD).
+
+%% @doc  Delete specific metadata entry
+-spec delete_metadata_entry(metadata(), metadata_key()) -> metadata().
+delete_metadata_entry(MD, Key) ->
+    case dict:find(?MD_USERMETA, MD) of
+        {ok, Entries} -> 
+            case [{K, V} || {K, V} <- Entries, K /= Key] of
+                [] ->
+                    dict:erase(?MD_USERMETA, MD);
+                NewList ->
+                    dict:store(?MD_USERMETA, NewList, MD)
+            end;
+        error ->
+            MD
+    end.
+
+%% @doc  Set a metadata entry
+-spec set_metadata_entry(metadata(), metadata_entry()) -> metadata().
+set_metadata_entry(MD, {Key, Value}) ->
+    case dict:find(?MD_USERMETA, MD) of
+        {ok, Entries} ->
+            case [{K, V} || {K, V} <- Entries, K /= Key] of
+                [] ->
+                    dict:store(?MD_USERMETA, [{Key, Value}], MD);
+                List ->
+                    dict:store(?MD_USERMETA, lists:append([List, [{Key, Value}]]), MD)
+            end;
+        error ->
+            dict:store(?MD_USERMETA, [{Key, Value}], MD)
+    end.
+
+%% @doc  Get value(s) for specific secondary index
+-spec get_secondary_index(metadata(), secondary_index_id()) -> [secondary_index_value()] | notfound.
+get_secondary_index(MD, {Type, Name}) ->
+    IndexName = index_id_to_bin({Type, Name}),
+    case dict:find(?MD_INDEX, MD) of
+        {ok, Entries} ->
+            case {Type, [V || {K, V} <- Entries, K == IndexName]} of
+                {_, []} ->
+                    notfound;
+                {binary_index, List} ->
+                    List;
+                {integer_index, List} ->
+                    lists:map(fun(I) -> list_to_integer(binary_to_list(I)) end, List)
+            end;
+        error ->
+            notfound
+    end.
+
+%% @doc  Get all secondary indexes
+-spec get_secondary_indexes(metadata()) -> [secondary_index()].
+get_secondary_indexes(MD) ->
+    case dict:find(?MD_INDEX, MD) of
+        {ok, Entries} ->
+            dict:to_list(lists:foldl(fun({N, V}, D) ->
+                                        case bin_to_index_id(N) of
+                                            {binary_index, Name} ->
+                                                add_to_dict_list(D, {binary_index, Name}, V);
+                                            {integer_index, Name} ->
+                                                Int = list_to_integer(binary_to_list(V)),
+                                                add_to_dict_list(D, {integer_index, Name}, Int)
+                                        end
+                                    end, dict:new(), Entries));
+        error ->
+            []
+    end.
+
+%% @doc  Clear all secondary indexes 
+-spec clear_secondary_indexes(metadata()) -> metadata().
+clear_secondary_indexes(MD) ->
+    dict:erase(?MD_INDEX, MD).
+
+%% @doc  Delete specific secondary index
+-spec delete_secondary_index(metadata(), secondary_index_id()) -> metadata().
+delete_secondary_index(MD, IndexId) ->
+    IndexName = index_id_to_bin(IndexId),
+    case dict:find(?MD_INDEX, MD) of
+        {ok, Entries} ->
+            List = [{N, V} || {N, V} <- Entries, N /= IndexName],
+            dict:store(?MD_INDEX, List, MD);
+        error ->
+            MD
+    end.
+
+%% @doc  Set a secondary index
+-spec set_secondary_index(metadata(), [secondary_index()]) -> metadata().
+set_secondary_index(MD, []) ->
+    MD;
+set_secondary_index(MD, [{{binary_index, Name}, BinList} | Rest]) ->
+    IndexName = index_id_to_bin({binary_index, Name}),
+    set_secondary_index(MD, [{IndexName, BinList} | Rest]);
+set_secondary_index(MD, [{{integer_index, Name}, IntList} | Rest]) ->
+    IndexName = index_id_to_bin({integer_index, Name}),
+    BinList = lists:map(fun(V) ->
+                            list_to_binary(integer_to_list(V))
+                        end, IntList),
+    set_secondary_index(MD, [{IndexName, BinList} | Rest]);
+set_secondary_index(MD, [{Id, BinList} | Rest]) when is_binary(Id) ->
+    List = [{Id, V} || V <- BinList],
+    case dict:find(?MD_INDEX, MD) of
+        {ok, Entries} ->
+            OtherEntries = [{N, V} || {N, V} <- Entries, N /= Id],
+            NewList = sets:to_list(sets:from_list(lists:append(OtherEntries, List))),
+            MD2 = dict:store(?MD_INDEX, NewList, MD),
+            set_secondary_index(MD2, Rest);
+        error ->
+            NewList = sets:to_list(sets:from_list(List)),
+            MD2 = dict:store(?MD_INDEX, NewList, MD),
+            set_secondary_index(MD2, Rest)
+    end.
+
+%% @doc  Add a secondary index
+-spec add_secondary_index(metadata(), [secondary_index()]) -> metadata().
+add_secondary_index(MD, []) ->
+    MD;
+add_secondary_index(MD, [{{binary_index, Name}, BinList} | Rest]) ->
+    IndexName = index_id_to_bin({binary_index, Name}),
+    add_secondary_index(MD, [{IndexName, BinList} | Rest]);
+add_secondary_index(MD, [{{integer_index, Name}, IntList} | Rest]) ->
+    IndexName = index_id_to_bin({integer_index, Name}),
+    BinList = lists:map(fun(V) ->
+                            list_to_binary(integer_to_list(V))
+                        end, IntList),
+    add_secondary_index(MD, [{IndexName, BinList} | Rest]);
+add_secondary_index(MD, [{Id, BinList} | Rest]) when is_binary(Id) ->
+    List = [{Id, V} || V <- BinList],
+    case dict:find(?MD_INDEX, MD) of
+        {ok, Entries} ->
+            NewList = sets:to_list(sets:from_list(lists:append(Entries, List))),
+            MD2 = dict:store(?MD_INDEX, NewList, MD),
+            add_secondary_index(MD2, Rest);
+        error ->
+            NewList = sets:to_list(sets:from_list(List)),
+            MD2 = dict:store(?MD_INDEX, NewList, MD),
+            add_secondary_index(MD2, Rest)
+    end.
+
 %% @doc  INTERNAL USE ONLY.  Set the contents of riakc_obj to the
 %%       {Metadata, Value} pairs in MVs. Normal clients should use the
 %%       set_update_[value|metadata]() + apply_updates() method for changing
@@ -265,6 +456,39 @@ set_vclock(Object=#riakc_obj{}, Vclock) ->
 -spec new_obj(bucket(), key(), vclock(), contents()) -> riakc_obj().
 new_obj(Bucket, Key, Vclock, Contents) ->
     #riakc_obj{bucket = Bucket, key = Key, vclock = Vclock, contents = Contents}.
+
+%% @doc  INTERNAL USE ONLY.  Convert binary secondary index name to index id tuple.
+%% @private
+-spec bin_to_index_id(binary()) -> secondary_index_id().
+bin_to_index_id(Index) ->
+    Str = binary_to_list(Index),
+    case lists:sublist(Str, (length(Str) - 3), 4) of
+        "_bin" ->
+            Name = lists:sublist(Str, (length(Str) - 4)),
+            {binary_index, Name};
+        "_int" ->
+            Name = lists:sublist(Str, (length(Str) - 4)),
+            {integer_index, Name}
+    end.
+
+%% @doc  INTERNAL USE ONLY.  Convert index id tuple to binary index name
+%% @private
+-spec index_id_to_bin(secondary_index_id()) -> binary().
+index_id_to_bin({binary_index, Name}) ->
+    list_to_binary(lists:append([Name, "_bin"]));
+index_id_to_bin({integer_index, Name}) ->
+    list_to_binary(lists:append([Name, "_int"])).
+
+%% @doc  INTERNAL USE ONLY.  Append entry to dict list item
+%% @private
+-spec add_to_dict_list(dict(), secondary_index_id(), secondary_index_value()) -> dict().
+add_to_dict_list(D, IndexId, IndexValue) ->
+    case dict:find(IndexId, D) of
+        {ok, List} ->
+            dict:store(IndexId, lists:append(List, [IndexValue]), D);
+        error ->
+            dict:store(IndexId, [IndexValue], D)
+    end.
 
 %% ===================================================================
 %% Unit Tests
@@ -423,7 +647,53 @@ select_sibling_test() ->
     ?assertEqual("application/json", get_update_content_type(O2)),
     ?assertEqual(<<"sib_two">>, get_update_value(O2)).
    
-    
-    
+metadata_utilities_test() ->
+    MD0 = dict:new(),
+    ?assertEqual(dict:to_list(MD0), dict:to_list(delete_metadata_entry(MD0, <<"None">>))),
+    MD1 = set_metadata_entry(MD0,{<<"Key1">>, <<"Value0">>}),
+    ?assertEqual([{<<"Key1">>, <<"Value0">>}], get_metadata_entries(MD1)),
+    MD2 = set_metadata_entry(MD1,{<<"Key1">>, <<"Value1">>}),
+    ?assertEqual([{<<"Key1">>, <<"Value1">>}], get_metadata_entries(MD2)),
+    ?assertEqual(notfound, get_metadata_entry(MD2, <<"WrongKey">>)),
+    MD3 = set_metadata_entry(MD2,{<<"Key2">>, <<"Value2">>}),
+    ?assertEqual(<<"Value2">>, get_metadata_entry(MD3, <<"Key2">>)),
+    ?assertEqual(2, length(get_metadata_entries(MD3))),
+    MD4 = delete_metadata_entry(MD3, <<"Key1">>),
+    ?assertEqual([{<<"Key2">>, <<"Value2">>}], get_metadata_entries(MD4)),
+    MD5 = clear_metadata_entries(MD4),
+    ?assertEqual([], get_metadata_entries(MD5)),
+    MD6 = delete_metadata_entry(MD1, <<"Key1">>),
+    ?assertEqual([], get_metadata_entries(MD6)),
+    ?assertEqual(notfound, get_metadata_entry(MD6, <<"Key1">>)).
+   
+secondary_index_utilities_test() ->
+    MD0 = dict:new(),
+    ?assertEqual([], get_secondary_indexes(MD0)),
+    ?assertEqual(notfound, get_secondary_index(MD0, {binary_index,"none"})),
+    ?assertEqual(notfound, get_secondary_index(MD0, {integer_index,"none"})),
+    MD1 = set_secondary_index(MD0, [{{integer_index,"idx"}, [12,4,56]}]),
+    ?assertEqual([4,12,56], lists:sort(get_secondary_index(MD1,{integer_index,"idx"}))),
+    MD2 = add_secondary_index(MD1, [{{integer_index,"idx"}, [4,15,34]}]),
+    ?assertEqual([4,12,15,34,56], lists:sort(get_secondary_index(MD2,{integer_index,"idx"}))),
+    MD3 = set_secondary_index(MD2, [{{integer_index,"idx"}, [7]}]),
+    ?assertEqual([7], lists:sort(get_secondary_index(MD3,{integer_index,"idx"}))),
+    MD4 = set_secondary_index(MD3, [{{binary_index,"idx"}, [<<"12">>,<<"4">>,<<"56">>]}]),
+    ?assertEqual([<<"12">>,<<"4">>,<<"56">>], lists:sort(get_secondary_index(MD4,{binary_index,"idx"}))),
+    MD5 = add_secondary_index(MD4, [{{binary_index,"idx"}, [<<"4">>,<<"15">>,<<"34">>]}]),
+    ?assertEqual([<<"12">>,<<"15">>,<<"34">>,<<"4">>,<<"56">>], lists:sort(get_secondary_index(MD5,{binary_index,"idx"}))),
+    MD6 = set_secondary_index(MD5, [{{binary_index,"idx"}, [<<"7">>]}]),
+    ?assertEqual([<<"7">>], lists:sort(get_secondary_index(MD6,{binary_index,"idx"}))),
+    ?assertEqual(2, length(get_secondary_indexes(MD6))),
+    ?assertEqual(notfound, get_secondary_index(MD6,{binary_index,"error"})),
+    MD7 = delete_secondary_index(MD6,{binary_index,"idx"}),
+    ?assertEqual([{{integer_index,"idx"},[7]}], get_secondary_indexes(MD7)),
+    MD8 = clear_secondary_indexes(MD7),
+    ?assertEqual([], get_secondary_indexes(MD8)),
+    MD9 = delete_secondary_index(MD8,{binary_index,"none"}),
+    ?assertEqual([], get_secondary_indexes(MD9)),
+    MD10 = add_secondary_index(MD9, [{{integer_index,"idx2"}, [23,4,34]}]),
+    ?assertEqual([4,23,34], lists:sort(get_secondary_index(MD10,{integer_index,"idx2"}))),
+
+    ?assertEqual([], get_secondary_indexes(MD0)).
 
 -endif.
