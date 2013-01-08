@@ -396,9 +396,13 @@ delete_secondary_index(MD, IndexId) ->
     end.
 
 %% @doc  Set a secondary index
--spec set_secondary_index(metadata(), [secondary_index()]) -> metadata().
+-spec set_secondary_index(metadata(), secondary_index() | [secondary_index()]) -> metadata().
 set_secondary_index(MD, []) ->
     MD;
+set_secondary_index(MD, {{binary_index, Name}, BinList}) ->
+    set_secondary_index(MD, [{{binary_index, Name}, BinList}]);
+set_secondary_index(MD, {{integer_index, Name}, IntList}) ->
+    set_secondary_index(MD, [{{integer_index, Name}, IntList}]);
 set_secondary_index(MD, [{{binary_index, Name}, BinList} | Rest]) ->
     IndexName = index_id_to_bin({binary_index, Name}),
     set_secondary_index(MD, [{IndexName, BinList} | Rest]);
@@ -423,9 +427,13 @@ set_secondary_index(MD, [{Id, BinList} | Rest]) when is_binary(Id) ->
     end.
 
 %% @doc  Add a secondary index
--spec add_secondary_index(metadata(), [secondary_index()]) -> metadata().
+-spec add_secondary_index(metadata(), secondary_index() | [secondary_index()]) -> metadata().
 add_secondary_index(MD, []) ->
     MD;
+add_secondary_index(MD, {{binary_index, Name}, BinList}) ->
+    add_secondary_index(MD, [{{binary_index, Name}, BinList}]);
+add_secondary_index(MD, {{integer_index, Name}, IntList}) ->
+    add_secondary_index(MD, [{{integer_index, Name}, IntList}]);
 add_secondary_index(MD, [{{binary_index, Name}, BinList} | Rest]) ->
     IndexName = index_id_to_bin({binary_index, Name}),
     add_secondary_index(MD, [{IndexName, BinList} | Rest]);
@@ -675,13 +683,13 @@ secondary_index_utilities_test() ->
     ?assertEqual([4,12,56], lists:sort(get_secondary_index(MD1,{integer_index,"idx"}))),
     MD2 = add_secondary_index(MD1, [{{integer_index,"idx"}, [4,15,34]}]),
     ?assertEqual([4,12,15,34,56], lists:sort(get_secondary_index(MD2,{integer_index,"idx"}))),
-    MD3 = set_secondary_index(MD2, [{{integer_index,"idx"}, [7]}]),
+    MD3 = set_secondary_index(MD2, {{integer_index,"idx"}, [7]}),
     ?assertEqual([7], lists:sort(get_secondary_index(MD3,{integer_index,"idx"}))),
     MD4 = set_secondary_index(MD3, [{{binary_index,"idx"}, [<<"12">>,<<"4">>,<<"56">>]}]),
     ?assertEqual([<<"12">>,<<"4">>,<<"56">>], lists:sort(get_secondary_index(MD4,{binary_index,"idx"}))),
     MD5 = add_secondary_index(MD4, [{{binary_index,"idx"}, [<<"4">>,<<"15">>,<<"34">>]}]),
     ?assertEqual([<<"12">>,<<"15">>,<<"34">>,<<"4">>,<<"56">>], lists:sort(get_secondary_index(MD5,{binary_index,"idx"}))),
-    MD6 = set_secondary_index(MD5, [{{binary_index,"idx"}, [<<"7">>]}]),
+    MD6 = set_secondary_index(MD5, {{binary_index,"idx"}, [<<"7">>]}),
     ?assertEqual([<<"7">>], lists:sort(get_secondary_index(MD6,{binary_index,"idx"}))),
     ?assertEqual(2, length(get_secondary_indexes(MD6))),
     ?assertEqual(notfound, get_secondary_index(MD6,{binary_index,"error"})),
