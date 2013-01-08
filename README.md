@@ -282,24 +282,122 @@ Here's an example of getting/setting properties
     {ok,[{n_val,7},{allow_mult,true}]}
 
 
-Custom Metadata
+User Metadata
 ==================
 
-Object metadata can be manipulated by using the `update_metadata/2`, `get_metadata/1` and `get_update_metadata/1` functions.
+User metadata are stored in the object metadata dictionary, and can be manipulated by using the `get_metadata_entry/2`, `get_metadata_entries/1`, `clear_metadata_entries/1`, `delete_metadata_entry/2` and `set_metadata_entry/2` functions.
 
-*Object metadata needs to be specified in a dict under the key `<<"X-Riak-Meta">>`.*
+These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
 The following example illustrates setting and getting metadata.
 
-	Object = riakc_obj:new(<<"groceries">>, <<"mine">>, <<"eggs & bacon">>).
-	MetaData  = dict:from_list([{<<"X-Riak-Meta">>, [{"Foo", "Bar"}]}]), %% see comment below
-	Object2 = riakc_obj:update_metadata(Object, MetaData).
-	riakc_pb_socket:put(Pid, Object2).
-	{ok, O} = riakc_pb_socket:get(Pid, <<"groceries">>, <<"mine">>).
-	{ok, MD} = dict:find(<<"X-Riak-Meta">>, riakc_obj:get_metadata(O)).
+    %% Create new object
+    13> Object = riakc_obj:new(<<"test">>, <<"usermeta">>, <<"data">>).
+    {riakc_obj,<<"test">>,<<"usermeta">>,undefined,[],undefined,
+           <<"data">>}
+    14> MD1 = riakc_obj:get_update_metadata(Object).
+    {dict,0,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}}
+    15> riakc_obj:get_metadata_entries(MD1).
+    []
+    16> MD2 = riakc_obj:set_metadata_entry(MD1,{<<"Key1">>,<<"Value1">>}).
+    {dict,1,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
+        [[<<"X-Ri"...>>,{...}]]}}}
+    17> MD3 = riakc_obj:set_metadata_entry(MD2,{<<"Key2">>,<<"Value2">>}).  
+    {dict,1,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
+        [[<<"X-Ri"...>>,{...}|...]]}}}
+    18> riakc_obj:get_metadata_entry(MD3, <<"Key1">>).
+    <<"Value1">>
+    19> MD4 = riakc_obj:delete_metadata_entry(MD3, <<"Key1">>).
+    {dict,1,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
+        [[<<"X-Ri"...>>,{...}]]}}}
+    20> riakc_obj:get_metadata_entries(MD4).
+    [{<<"Key2">>,<<"Value2">>}]
+    %% Store updated metadata back to the object 
+    21> Object2 = riakc_obj:update_metadata(Object,MD4).
+    {riakc_obj,<<"test">>,<<"usermeta">>,undefined,[],
+           {dict,1,16,16,8,80,48,
+                 {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                 {{[],[],[],[],[],[],[],[],[],[],[],[],[],...}}},
+           <<"data">>}
+    22> riakc_pb_socket:put(Pid, Object2).
+    ok
+    23> {ok, O1} = riakc_pb_socket:get(Pid, <<"test">>, <<"usermeta">>).
+    {ok,{riakc_obj,<<"test">>,<<"usermeta">>,
+               <<107,206,97,96,96,96,204,96,202,5,82,28,202,156,255,126,
+                 6,220,157,173,153,193,148,...>>,
+               [{{dict,3,16,16,8,80,48,
+                       {[],[],[],[],[],[],[],[],[],[],[],[],...},
+                       {{[],[],[],[],[],[],[],[],[],[],...}}},
+                 <<"data">>}],
+               undefined,undefined}}
+    24> riakc_obj:get_metadata_entries(riakc_obj:get_update_metadata(O1)).
+    [{<<"Key2">>,<<"Value2">>}]
 
-* **Note**: In this example, creating a new metadata dict will blow away any content-type or other metadata that was set previously. 
 
+Secondary Indexes
+==================
+
+Secondary indexes are set through the object metadata dictionary, and can be manipulated by using the `get_secondary_index/2`, `get_secondary_indexes/1`, `clear_secondary_indexes/1`, `delete_secondary_index/2`, `set_secondary_index/2` and `add_secondary_index/2` functions. These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+
+When using these functions, secondary indexes are identified by a tuple, `{binary_index, string()}` or `{integer_index, string()}`, where the string is the name of the index. `{integer_index, "id"}` therefore corresponds to the index "id_int". As secondary indexes may have more than one value, the index values are specified as lists of integers or binaries, depending on index type.
+
+The following example illustrates getting and setting secondary indexes.
+
+    %% Create new object
+    13> Obj = riakc_obj:new(<<"test">>, <<"2i_1">>, <<"John Robert Doe, 25">>).
+    {riakc_obj,<<"test">>,<<"2i_1">>,undefined,[],undefined,
+           <<"John Robert Doe, 25">>}
+    14> MD1 = riakc_obj:get_update_metadata(Obj).
+    {dict,0,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}}
+    15> MD2 = riakc_obj:set_secondary_index(MD1, [{{integer_index, "age"}, [25]},{{binary_index, "name"}, [<<"John">>,<<"Doe">>]}]).
+    {dict,1,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],
+        [[<<"index">>,
+          {<<"name_bin">>,<<"Doe">>},
+          {<<"name_bin">>,<<"John">>},
+          {<<"age_"...>>,<<...>>}]],
+        [],[],[],[]}}}
+    16> riakc_obj:get_secondary_index(MD2, {binary_index, "name"}).
+    [<<"Doe">>,<<"John">>]
+    17> MD3 = riakc_obj:add_secondary_index(MD2, [{{binary_index, "name"}, [<<"Robert">>]}]).
+    {dict,1,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],
+        [[<<"index">>,
+          {<<"name_bin">>,<<"Doe">>},
+          {<<"name_bin">>,<<"John">>},
+          {<<"age_"...>>,<<...>>},
+          {<<...>>,...}]],
+        [],[],[],[]}}}
+    18> riakc_obj:get_secondary_indexes(MD3).
+    [{{binary_index,"name"},[<<"Doe">>,<<"John">>,<<"Robert">>]},{{integer_index,"age"},[25]}]
+    19> Obj2 = riakc_obj:update_metadata(Obj,MD3).
+    {riakc_obj,<<"test">>,<<"2i_1">>,undefined,[],
+           {dict,1,16,16,8,80,48,
+                 {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                 {{[],[],[],[],[],[],[],[],[],[],[],[[...]],[],...}}},
+           <<"John Robert Doe, 25">>}
+    20> riakc_pb_socket:put(Pid, Obj2).
+    
+In order to query based on secondary indexes, the `get_index/4`, `get_index/5`, `get_index/6` and `get_index/7` functions can be used. These functions also allows secondary indexes to be specifiued using the tuple described above.
+
+The following example illustrates how to perform exact match as well as range queries based on the record and associated indexes created above.
+    
+    21> riakc_pb_socket:get_index(Pid, <<"test">>, {binary_index, "name"}, <<"John">>).
+    {ok,[<<"2i_1">>]}
+    22> riakc_pb_socket:get_index(Pid, <<"test">>, {integer_index, "age"}, 20, 30).
+    {ok,[<<"2i_1">>]}
 
 Troubleshooting
 ==================
