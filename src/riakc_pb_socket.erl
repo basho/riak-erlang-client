@@ -155,7 +155,7 @@ is_connected(Pid, Timeout) ->
 
 %% @doc Ping the server
 %% @equiv ping(Pid, default_timeout(ping_timeout))
--spec ping(pid()) -> ok | {error, term()}.
+-spec ping(pid()) -> pong | {error, term()}.
 ping(Pid) ->
     ping(Pid, default_timeout(ping_timeout)).
 
