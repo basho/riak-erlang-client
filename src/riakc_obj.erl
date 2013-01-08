@@ -693,7 +693,15 @@ secondary_index_utilities_test() ->
     ?assertEqual([], get_secondary_indexes(MD9)),
     MD10 = add_secondary_index(MD9, [{{integer_index,"idx2"}, [23,4,34]}]),
     ?assertEqual([4,23,34], lists:sort(get_secondary_index(MD10,{integer_index,"idx2"}))),
-
-    ?assertEqual([], get_secondary_indexes(MD0)).
+    MD11 = dict:new(),
+    ?assertEqual([], get_secondary_indexes(MD11)),
+    ?assertEqual(notfound, get_secondary_index(MD11, {binary_index,"none"})),
+    ?assertEqual(notfound, get_secondary_index(MD11, {integer_index,"none"})),
+    MD12 = set_secondary_index(MD11, [{{integer_index,"itest"}, [12,4,56]},{{binary_index,"btest"}, [<<"test1">>]}]),
+    ?assertEqual([4,12,56], lists:sort(get_secondary_index(MD12,{integer_index,"itest"}))),
+    ?assertEqual([<<"test1">>], lists:sort(get_secondary_index(MD12,{binary_index,"btest"}))),
+    MD13 = add_secondary_index(MD12, [{{integer_index,"itest"}, [4,15,34]},{{binary_index,"btest"}, [<<"test2">>]}]),
+    ?assertEqual([4,12,15,34,56], lists:sort(get_secondary_index(MD13,{integer_index,"itest"}))),
+    ?assertEqual([<<"test1">>,<<"test2">>], lists:sort(get_secondary_index(MD13,{binary_index,"btest"}))).
 
 -endif.
