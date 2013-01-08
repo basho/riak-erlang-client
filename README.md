@@ -285,7 +285,7 @@ Here's an example of getting/setting properties
 User Metadata
 ==================
 
-User metadata are stored in the object metadata dictionary, and can be manipulated by using the `get_metadata_entry/2`, `get_metadata_entries/1`, `clear_metadata_entries/1`, `delete_metadata_entry/2` and `set_metadata_entry/2` functions.
+User metadata are stored in the object metadata dictionary, and can be manipulated by using the `get_user_metadata_entry/2`, `get_user_metadata_entries/1`, `clear_user_metadata_entries/1`, `delete_user_metadata_entry/2` and `set_user_metadata_entry/2` functions.
 
 These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
@@ -299,26 +299,26 @@ The following example illustrates setting and getting metadata.
     {dict,0,16,16,8,80,48,
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}}
-    15> riakc_obj:get_metadata_entries(MD1).
+    15> riakc_obj:get_user_metadata_entries(MD1).
     []
-    16> MD2 = riakc_obj:set_metadata_entry(MD1,{<<"Key1">>,<<"Value1">>}).
+    16> MD2 = riakc_obj:set_user_metadata_entry(MD1,{<<"Key1">>,<<"Value1">>}).
     {dict,1,16,16,8,80,48,
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
         [[<<"X-Ri"...>>,{...}]]}}}
-    17> MD3 = riakc_obj:set_metadata_entry(MD2,{<<"Key2">>,<<"Value2">>}).  
+    17> MD3 = riakc_obj:set_user_metadata_entry(MD2,{<<"Key2">>,<<"Value2">>}).  
     {dict,1,16,16,8,80,48,
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
         [[<<"X-Ri"...>>,{...}|...]]}}}
-    18> riakc_obj:get_metadata_entry(MD3, <<"Key1">>).
+    18> riakc_obj:get_user_metadata_entry(MD3, <<"Key1">>).
     <<"Value1">>
-    19> MD4 = riakc_obj:delete_metadata_entry(MD3, <<"Key1">>).
+    19> MD4 = riakc_obj:delete_user_metadata_entry(MD3, <<"Key1">>).
     {dict,1,16,16,8,80,48,
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
         [[<<"X-Ri"...>>,{...}]]}}}
-    20> riakc_obj:get_metadata_entries(MD4).
+    20> riakc_obj:get_user_metadata_entries(MD4).
     [{<<"Key2">>,<<"Value2">>}]
     %% Store updated metadata back to the object 
     21> Object2 = riakc_obj:update_metadata(Object,MD4).
@@ -338,7 +338,7 @@ The following example illustrates setting and getting metadata.
                        {{[],[],[],[],[],[],[],[],[],[],...}}},
                  <<"data">>}],
                undefined,undefined}}
-    24> riakc_obj:get_metadata_entries(riakc_obj:get_update_metadata(O1)).
+    24> riakc_obj:get_user_metadata_entries(riakc_obj:get_update_metadata(O1)).
     [{<<"Key2">>,<<"Value2">>}]
 
 

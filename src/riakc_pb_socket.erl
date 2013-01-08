@@ -2378,17 +2378,17 @@ live_node_tests() ->
                     {ok, Pid} = start_link(test_ip(), test_port()),
                     O0 = riakc_obj:new(<<"b">>, <<"key0">>, <<"value0">>),
                     MD0 = riakc_obj:get_update_metadata(O0),
-                    MD1 = riakc_obj:set_metadata_entry(MD0, {<<"Key1">>,<<"Val1">>}),
+                    MD1 = riakc_obj:set_user_metadata_entry(MD0, {<<"Key1">>,<<"Val1">>}),
                     O1 = riakc_obj:update_metadata(O0, MD1),
                     ?assertEqual(ok, ?MODULE:put(Pid, O1)),
                     {ok, O2} = ?MODULE:get(Pid, <<"b">>, <<"key0">>),
                     MD2 = riakc_obj:get_update_metadata(O2),
-                    ?assertEqual([{<<"Key1">>,<<"Val1">>}], riakc_obj:get_metadata_entries(MD2)),
-                    MD3 = riakc_obj:set_metadata_entry(MD2, {<<"Key2">>,<<"Val2">>}),
+                    ?assertEqual([{<<"Key1">>,<<"Val1">>}], riakc_obj:get_user_metadata_entries(MD2)),
+                    MD3 = riakc_obj:set_user_metadata_entry(MD2, {<<"Key2">>,<<"Val2">>}),
                     O3 = riakc_obj:update_metadata(O2, MD3),
                     ?assertEqual(ok, ?MODULE:put(Pid, O3)),
                     {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key0">>),
-                    ?assertEqual(2, length(riakc_obj:get_metadata_entries(riakc_obj:get_update_metadata(O4))))
+                    ?assertEqual(2, length(riakc_obj:get_user_metadata_entries(riakc_obj:get_update_metadata(O4))))
              end)},
     {"binary secondary index manipulation",
          ?_test(begin
