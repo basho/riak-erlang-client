@@ -521,9 +521,9 @@ It is possible to define a wide range of inputs for a mapreduce job. Some exampl
 
 **All keys in a bucket:** `<<"bucket1">>`
 
-**Result of exact secondary index match:** `{index, <<"bucket1">>, {binary_index, "idx"}, <<"key">>}`**,** `{index, <<"bucket1">>, <<"idx_bin">>, <<"key">>}`
+**Result of exact secondary index match:** `{index, <<"bucket1">>, {binary_index, "idx"}, <<"key">>}`, `{index, <<"bucket1">>, <<"idx_bin">>, <<"key">>}`
 
-**Result of secondary index range query:** `{index, <<"bucket1">>, {integer_index, "idx"}, 1, 100}`**,** `{index, <<"bucket1">>, <<"idx_int">>, <<"1">>, <<"100">>}`
+**Result of secondary index range query:** `{index, <<"bucket1">>, {integer_index, "idx"}, 1, 100}`, `{index, <<"bucket1">>, <<"idx_int">>, <<"1">>, <<"100">>}`
 
 The query is given as a list of `map`, `reduce` and `link` phases. Map and reduce phases are each expressed as tuples in the following form:
 
