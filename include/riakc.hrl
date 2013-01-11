@@ -106,8 +106,8 @@
 -type mapred_inputs() :: [{bucket(), key()} | {{bucket(), key()}, term()}] |
                          {modfun, Module::atom(), Function::atom(), [term()]} |
                          bucket() |
-                         {index, bucket(), Index::binary(), key()} |
-                         {index, bucket(), Index::binary(), StartKey::key(), EndKey::key()}.
+                         {index, bucket(), Index::binary()|secondary_index_id(), key()|integer()} |
+                         {index, bucket(), Index::binary()|secondary_index_id(), StartKey::key()|integer(), EndKey::key()|integer()}.
 %% Inputs for a MapReduce job.
 -type connection_failure() :: {Reason::term(), FailureCount::integer()}.
 %% The reason for connection failure and how many times that type of

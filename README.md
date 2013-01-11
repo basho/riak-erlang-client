@@ -233,14 +233,69 @@ If a bucket is configured to allow conflicts (allow_mult=true) then the result o
 The values can be listed with
 
     2> riakc_obj:get_values(Obj).
-    \[<<"{\"k1\":\"v1\"}">>,<<"{\"k1\":\"v1\"}">>\]
+    \[<<"{\"k1\":\"v1\"}">>,<<"{\"k1\":\"v2\"}">>\]
 
 And the content types as
 
     3> riakc_obj:get_content_types(Obj).
     []
 
-Siblings are resolved by calling `riakc_obj:update_value` with the winning value on an object returned by get or put with return_body.
+It is also possible to get a list of tuples representing the siblings through the `riakc_obj:get_contents` function. This returns a list of tuples in the form `{metadata(), value()}` which can be used to reconcile siblings and determine the reconciled metadata dict and value. 
+
+Siblings are resolved by calling `riakc_obj:update_value` with the winning value on an object returned by get or put with return_body. If metadata or content type also needs to be updated/selected, this can be done through the `riakc_obj:update_metadata` and `riakc_obj:update_content_type`.
+
+Below is an example where the sibling with the largest value is selected together with its corresponding metadata. 
+
+    3> %% Obj contains 2 siblings with different values
+    3> riakc_obj:value_count(Obj).
+    2
+    4> riakc_obj:get_values(Obj).
+    [<<"small_value">>,<<"larger_value">>]
+    5> C = riakc_obj:get_contents(Obj).
+    [{{dict,0,16,16,8,80,48,
+        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
+      <<"small_value">>},
+     {{dict,0,16,16,8,80,48,
+        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
+      <<"larger_value">>}]
+    6> [{M,V} | _] = lists:sort(fun({_,V1}, {_,V2}) -> byte_size(V2) =< byte_size(V1) end, C).
+    [{{dict,0,16,16,8,80,48,
+        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
+      <<"larger_value">>},
+     {{dict,0,16,16,8,80,48,
+        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
+      <<"small_value">>}]
+    7> Obj2 = riakc_obj:update_value(Obj, V).
+    {riakc_obj,<<"b">>,<<"k">>,<<>>,
+           [{{dict,0,16,16,8,80,48,
+                   {[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                   {{[],[],[],[],[],[],[],[],[],[],[],[],...}}},
+             <<"small_value">>},
+            {{dict,0,16,16,8,80,48,
+                   {[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                   {{[],[],[],[],[],[],[],[],[],[],[],...}}},
+             <<"larger_value">>}],
+           undefined,<<"larger_value">>}
+    8> Obj3 = riakc_obj:update_metadata(Obj2, M).
+    {riakc_obj,<<"b">>,<<"k">>,<<>>,
+           [{{dict,0,16,16,8,80,48,
+                   {[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                   {{[],[],[],[],[],[],[],[],[],[],[],[],...}}},
+             <<"small_value">>},
+            {{dict,0,16,16,8,80,48,
+                   {[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                   {{[],[],[],[],[],[],[],[],[],[],[],...}}},
+             <<"larger_value">>}],
+           {dict,0,16,16,8,80,48,
+                 {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                 {{[],[],[],[],[],[],[],[],[],[],[],[],[],...}}},
+           <<"larger_value">>}
+    9> riakc_obj:get_update_value(Obj3).
+    <<"larger_value">>
 
 Listing Keys
 =============
@@ -387,7 +442,7 @@ The following example illustrates getting and setting secondary indexes.
            {dict,1,16,16,8,80,48,
                  {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
                  {{[],[],[],[],[],[],[],[],[],[],[],[[...]],[],...}}},
-           <<"John Robert Doe, 25">>}
+           <<"John Robert Doe, 25">>}    
     20> riakc_pb_socket:put(Pid, Obj2).
     
 In order to query based on secondary indexes, the `get_index/4`, `get_index/5`, `get_index/6` and `get_index/7` functions can be used. These functions also allows secondary indexes to be specifiued using the tuple described above.
@@ -398,6 +453,148 @@ The following example illustrates how to perform exact match as well as range qu
     {ok,[<<"2i_1">>]}
     22> riakc_pb_socket:get_index(Pid, <<"test">>, {integer_index, "age"}, 20, 30).
     {ok,[<<"2i_1">>]}
+
+Links
+=====
+
+Links are also stored in the object metadata dictionary, and can be manipulated by using the `get_link/2`, `get_links/1`, `clear_links/1`, `delete_link/2`, `set_link/2` and `add_link/2` functions. When using these functions, a link is identified by a tag, and may therefore contain multiple record IDs.
+
+These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+
+The following example illustrates setting and getting links.
+
+    %% Create new object
+    10> Obj = riakc_obj:new(<<"person">>, <<"sarah">>, <<"Sarah, 30">>).
+    {riakc_obj,<<"person">>,<<"sarah">>,undefined,[],undefined,
+           <<"Sarah, 30">>}
+    11> MD1 = riakc_obj:get_update_metadata(Obj).
+    {dict,0,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}}
+    12> riakc_obj:get_links(MD1).
+    []
+    13> MD2 = riakc_obj:set_link(MD1, [{<<"friend">>, [{<<"person">>,<<"jane">>},{<<"person">>,<<"richard">>}]}]).
+    {dict,1,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],
+        [[<<"Links">>,
+          {{<<"person">>,<<"jane">>},<<"friend">>},
+          {{<<"person">>,<<"richard">>},<<"friend">>}]],
+        [],[],[],[],[],[],[],[],[],[],[],[],[]}}}
+    14> MD3 = riakc_obj:add_link(MD2, [{<<"sibling">>, [{<<"test">>,<<"mark">>}]}]).
+    {dict,1,16,16,8,80,48,
+      {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
+      {{[],[],
+        [[<<"Links">>,
+          {{<<"person">>,<<"jane">>},<<"friend">>},
+          {{<<"person">>,<<"richard">>},<<"friend">>},
+          {{<<"test">>,<<"mark">>},<<"sibling">>}]],
+        [],[],[],[],[],[],[],[],[],[],[],[],[]}}}
+    15> riakc_obj:get_links(MD3).
+    [{<<"friend">>,
+        [{<<"person">>,<<"jane">>},{<<"person">>,<<"richard">>}]},
+         {<<"sibling">>,[{<<"test">>,<<"mark">>}]}]
+    16> Obj2 = riakc_obj:update_metadata(Obj,MD3).
+    {riakc_obj,<<"person">>,<<"sarah">>,undefined,[],
+           {dict,1,16,16,8,80,48,
+                 {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
+                 {{[],[],
+                   [[<<"Links">>,
+                     {{<<"person">>,<<"jane">>},<<"friend">>},
+                     {{<<"person">>,<<"richard">>},<<"friend">>},
+                     {{<<"test">>,<<"mark">>},<<"sibling">>}]],
+                   [],[],[],[],[],[],[],[],[],[],...}}},
+           <<"Sarah, 30">>}
+    17> riakc_pb_socket:put(Pid, Obj2).
+    ok
+
+MapReduce
+=========
+
+MapReduce jobs can be executed using the `riakc_obj:mapred` function. This takes an input specification as well as a list of mapreduce phase specifications as arguments. It also allows a non-default timeout to be specified if required.
+
+The function `riakc_obj:mapred` uses `riakc_obj:mapred_stream` under the hood, and if results need to be processed as they are streamed to the client, this function can be used instead. The implementation of `riakc_obj:mapred` provides a good example of how to implement this.
+
+It is possible to define a wide range of inputs for a mapreduce job. Examples are given in the table below: 
+
+<table border="1">
+    <th>Type of Input</th>
+    <th>Example</th>
+    <tr>
+        <td>Bucket/Key list</td>
+        <td><code>[{<<"bucket1">>,<<"key1">>},{<<"bucket1">>,<<"key2">>}]</code></td>
+    </tr>
+    <tr>
+        <td>All keys in a bucket</td>
+        <td><code><<"bucket1">></code></td>
+    </tr>
+    <tr>
+        <td>Result of exact secondary index match</td>
+        <td><code>{index, <<"bucket1">>, {binary_index, "idx"}, <<"key">>}</code> or <code>{index, <<"bucket1">>, <<"idx_bin">>, <<"key">>}</code></td>
+    </tr>
+    <tr>
+        <td>Result of secondary index range query</td>
+        <td><code>{index, <<"bucket1">>, {integer_index, "idx"}, 1, 100}</code> or <code>{index, <<"bucket1">>, <<"idx_int">>, <<"1">>, <<"100">>}</code></td>
+    </tr>
+</table>
+
+The query is given as a list of `map`, `reduce` and `link` phases. Map and reduce phases are each expressed as tuples in the following form:
+
+`{Type, FunTerm, Arg, Keep}`
+
+Type is an atom, either map or reduce. Arg is a static argument (any Erlang term) to pass to each execution of the phase. Keep is either true or false and determines whether results from the phase will be included in the final value of the query. Riak assumes the final phase will return results.
+
+`FunTerm` is a reference to the function that the phase will execute and takes any of the following forms:
+
+`{modfun, Module, Function}` where Module and Function are atoms that name an Erlang function in a specific module.
+
+`{qfun,Fun}` where Fun is a callable fun term (closure or anonymous function).
+
+`{jsfun,Name}` where Name is a binary that, when evaluated in Javascript, points to a built-in Javascript function.
+
+`{jsanon, Source}` where Source is a binary that, when evaluated in Javascript is an anonymous function.
+
+`{jsanon, {Bucket, Key}}` where the object at {Bucket, Key} contains the source for an anonymous Javascript function.
+
+Below are a few examples of different types of mapreduce queries. These assume that the following test data has been created:
+
+**Test Data**
+
+Create two test records in the `<<"mr">>` bucket with secondary indexes and a link as follows:
+
+    12> O1 = riakc_obj:new(<<"mr">>, <<"bob">>, <<"Bob, 26">>).
+    13> M0 = dict:new().
+    14> M1 = riakc_obj:set_secondary_index(M0, {{integer_index,"age"}, [26]}).
+    15> O2 = riakc_obj:update_metadata(O1, M1).
+    16> riakc_pb_socket:put(Pid, O2).
+    17> O3 = riakc_obj:new(<<"mr">>, <<"john">>, <<"John, 23">>).
+    18> M2 = riakc_obj:set_secondary_index(M0, {{integer_index,"age"}, [23]}).
+    19> M3 = riakc_obj:set_link(M2, [{<<"friend">>, [{<<"mr">>,<<"bob">>}]}]).
+    20> O4 = riakc_obj:update_metadata(O3, M3).
+    21> riakc_pb_socket:put(Pid, O4).
+
+**Example 1: Link Walk**
+
+Get all friends linked to *john* in the *mr* bucket.
+
+    6> {ok, [{N1, R1}]} = riakc_pb_socket:mapred(Pid,[{<<"mr">>, <<"john">>}],[{link, <<"mr">>, <<"friend">>, true}]).
+    {ok,[{0,[[<<"mr">>,<<"bob">>,<<"friend">>]]}]}
+
+As expected, the link information for `bob` is returned.
+
+**Example 2: Determine total object size using a qfun**
+
+Create a qfun that returns the size of the record and feed this into the existing reduce function `riak_kv_mapreduce:reduce_sum` to get total size.
+
+    6> RecSize = fun(G, _, _) -> [byte_size(riak_object:get_value(G))] end.
+    #Fun<erl_eval.18.82930912>
+    7> {ok, [{N2, R2}]} = riakc_pb_socket:mapred(Pid,
+                {index, <<"mr">>, {integer_index, "age"}, 20, 30},
+                [{map, {qfun, RecSize}, none, false},
+                 {reduce, {modfun, 'riak_kv_mapreduce', 'reduce_sum'}, none, true}]).
+    {ok,[{1,[15]}]}
+ 
+ As expected, total size of data is 15 bytes.   
 
 Troubleshooting
 ==================

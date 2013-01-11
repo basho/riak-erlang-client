@@ -59,7 +59,13 @@
          clear_secondary_indexes/1,
          delete_secondary_index/2,
          set_secondary_index/2,
-         add_secondary_index/2
+         add_secondary_index/2,
+         get_link/2,
+         get_links/1,
+         clear_links/1,
+         delete_link/2,
+         set_link/2,
+         add_link/2
         ]).
 %% Internal library use only
 -export([new_obj/4]).
@@ -71,6 +77,7 @@
 
 -type bucket() :: binary(). %% A bucket name
 -type key() :: binary() | 'undefined'. %% A key name
+-type id() :: {bucket(), key()}.
 -type vclock() :: binary(). %% An opaque vector clock
 -type metadata() :: dict(). %% Value metadata
 -type content_type() :: string(). %% The media type of a value
@@ -88,6 +95,8 @@
 -type metadata_key() :: binary().
 -type metadata_value() :: binary().
 -type metadata_entry() :: {metadata_key(), metadata_value()}.
+-type tag() :: binary().
+-type link() :: {tag(), [id()]}.
 
 -record(riakc_obj, {
           bucket :: bucket(),
@@ -450,6 +459,88 @@ add_secondary_index(MD, [{Id, BinList} | Rest]) when is_binary(Id) ->
             add_secondary_index(MD2, Rest)
     end.
 
+%% @doc  Get links for a specific tag
+-spec get_link(metadata(), tag()) -> [id()] | notfound.
+get_link(MD, Tag) ->
+    case dict:find(?MD_LINKS, MD) of
+        {ok, Links} ->
+            case [I || {I, T} <- Links, T == Tag] of
+                [] ->
+                    notfound;
+                List ->
+                    List
+            end;
+        error ->
+            notfound
+    end.
+
+%% @doc  Get all links
+-spec get_links(metadata()) -> [link()].
+get_links(MD) ->
+    case dict:find(?MD_LINKS, MD) of
+        {ok, Links} ->
+            dict:to_list(lists:foldl(fun({I, T}, D) ->
+                                        dict:append(T, I, D) 
+                                    end, dict:new(), Links));
+        error ->
+            []
+    end.
+
+%% @doc  Clear all links
+-spec clear_links(metadata()) -> metadata().
+clear_links(MD) ->
+    dict:erase(?MD_LINKS, MD).
+
+%% @doc  Delete links for a specific tag
+-spec delete_link(metadata(), tag()) -> metadata().
+delete_link(MD, Tag) ->
+    case dict:find(?MD_LINKS, MD) of
+        {ok, Links} ->
+            List = [{I, T} || {I, T} <- Links, T /= Tag],
+            dict:store(?MD_LINKS, List, MD);
+        error ->
+            MD
+    end.
+
+%% @doc  Set links for a specific tag
+-spec set_link(metadata(), link() | [link()]) -> metadata().
+set_link(MD, []) ->
+    MD;
+set_link(MD, Link) when is_tuple(Link) ->
+    set_link(MD, [Link]);
+set_link(MD, [{T, IdList} | Rest]) ->
+    List = [{I, T} || I <- IdList],
+    case dict:find(?MD_LINKS, MD) of
+        {ok, Links} ->
+            OtherLinks = [{N, Tag} || {N, Tag} <- Links, Tag /= T],
+            NewList = lists:usort(lists:append(OtherLinks, List)),
+            MD2 = dict:store(?MD_LINKS, NewList, MD),
+            set_link(MD2, Rest);
+        error ->
+            NewList = lists:usort(List),
+            MD2 = dict:store(?MD_LINKS, NewList, MD),
+            set_link(MD2, Rest)
+    end.
+
+%% @doc  Add links for a specific tag
+-spec add_link(metadata(), secondary_index() | [secondary_index()]) -> metadata().
+add_link(MD, []) ->
+    MD;
+add_link(MD, Link) when is_tuple(Link) ->
+    add_link(MD, [Link]);
+add_link(MD, [{T, IdList} | Rest]) ->
+    List = [{I, T} || I <- IdList],
+    case dict:find(?MD_LINKS, MD) of
+        {ok, Links} ->
+            NewList = lists:usort(lists:append(Links, List)),
+            MD2 = dict:store(?MD_LINKS, NewList, MD),
+            add_link(MD2, Rest);
+        error ->
+            NewList = lists:usort(List),
+            MD2 = dict:store(?MD_LINKS, NewList, MD),
+            add_link(MD2, Rest)
+    end.
+
 %% @doc  INTERNAL USE ONLY.  Set the contents of riakc_obj to the
 %%       {Metadata, Value} pairs in MVs. Normal clients should use the
 %%       set_update_[value|metadata]() + apply_updates() method for changing
@@ -654,6 +745,24 @@ user_metadata_utilities_test() ->
     MD6 = delete_user_metadata_entry(MD1, <<"Key1">>),
     ?assertEqual([], get_user_metadata_entries(MD6)),
     ?assertEqual(notfound, get_user_metadata_entry(MD6, <<"Key1">>)).
+
+link_utilities_test() ->
+    MD0 = dict:new(),
+    ?assertEqual(notfound, get_link(MD0, <<"Tag1">>)),
+    ?assertEqual([], get_links(MD0)),
+    MD1 = set_link(MD0, [{<<"Tag1">>, [{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>}]}]),
+    ?assertEqual([{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>}], lists:sort(get_link(MD1,<<"Tag1">>))),
+    MD2 = add_link(MD1, [{<<"Tag1">>, [{<<"B">>,<<"K1">>},{<<"B">>,<<"K3">>}]}]),
+    ?assertEqual([{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>},{<<"B">>,<<"K3">>}], lists:sort(get_link(MD2,<<"Tag1">>))),
+    MD3 = set_link(MD2, [{<<"Tag1">>, [{<<"B">>,<<"K4">>}]}]),
+    ?assertEqual([{<<"B">>,<<"K4">>}], lists:sort(get_link(MD3,<<"Tag1">>))),
+    ?assertEqual([{<<"Tag1">>,[{<<"B">>,<<"K4">>}]}], get_links(MD3)),
+    MD4 = set_link(MD3, [{<<"Tag2">>, [{<<"B">>,<<"K1">>}]}]),
+    ?assertEqual([{<<"B">>,<<"K1">>}], lists:sort(get_link(MD4,<<"Tag2">>))),
+    MD5 = delete_link(MD4,<<"Tag1">>),
+    ?assertEqual([{<<"Tag2">>,[{<<"B">>,<<"K1">>}]}], get_links(MD5)),
+    MD6 = clear_links(MD5),
+    ?assertEqual([], get_links(MD6)).
    
 secondary_index_utilities_test() ->
     MD0 = dict:new(),

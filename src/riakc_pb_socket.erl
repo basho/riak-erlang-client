@@ -536,6 +536,27 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
                            {error, {badqterm, mapred_queryterm()}} |
                            {error, timeout} |
                            {error, Err :: term()}.
+mapred_stream(Pid, {index,Bucket,{binary_index, Name},Key}, Query, ClientPid, Timeout, CallTimeout) ->
+    Index = list_to_binary(lists:append([Name, "_bin"])),
+    mapred_stream(Pid, {index,Bucket,Index,Key}, Query, ClientPid, Timeout, CallTimeout);
+mapred_stream(Pid, {index,Bucket,{binary_index, Name},StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) ->
+    Index = list_to_binary(lists:append([Name, "_int"])),
+    mapred_stream(Pid, {index,Bucket,Index,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout);
+mapred_stream(Pid, {index,Bucket,{integer_index, Name},Key}, Query, ClientPid, Timeout, CallTimeout) ->
+    Index = list_to_binary(lists:append([Name, "_int"])),
+    mapred_stream(Pid, {index,Bucket,Index,Key}, Query, ClientPid, Timeout, CallTimeout);
+mapred_stream(Pid, {index,Bucket,{integer_index, Name},StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) ->
+    Index = list_to_binary(lists:append([Name, "_int"])),
+    mapred_stream(Pid, {index,Bucket,Index,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout);
+mapred_stream(Pid, {index,Bucket,Name,Key}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(Key) ->
+    BinKey = list_to_binary(integer_to_list(Key)),
+    mapred_stream(Pid, {index,Bucket,Name,BinKey}, Query, ClientPid, Timeout, CallTimeout);
+mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(StartKey) ->
+    BinStartKey = list_to_binary(integer_to_list(StartKey)),
+    mapred_stream(Pid, {index,Bucket,Name,BinStartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout);
+mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(EndKey) ->
+    BinEndKey = list_to_binary(integer_to_list(EndKey)),
+    mapred_stream(Pid, {index,Bucket,Name,StartKey,BinEndKey}, Query, ClientPid, Timeout, CallTimeout);
 mapred_stream(Pid, Inputs, Query, ClientPid, Timeout, CallTimeout) ->
     MapRed = [{'inputs', Inputs},
               {'query', Query},
