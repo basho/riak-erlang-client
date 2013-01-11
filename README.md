@@ -515,28 +515,15 @@ MapReduce jobs can be executed using the `riakc_obj:mapred` function. This takes
 
 The function `riakc_obj:mapred` uses `riakc_obj:mapred_stream` under the hood, and if results need to be processed as they are streamed to the client, this function can be used instead. The implementation of `riakc_obj:mapred` provides a good example of how to implement this.
 
-It is possible to define a wide range of inputs for a mapreduce job. Examples are given in the table below: 
+It is possible to define a wide range of inputs for a mapreduce job. Some examples are given below: 
 
-<table border="1">
-    <th>Type of Input</th>
-    <th>Example</th>
-    <tr>
-        <td>Bucket/Key list</td>
-        <td><code>[{<<"bucket1">>,<<"key1">>},{<<"bucket1">>,<<"key2">>}]</code></td>
-    </tr>
-    <tr>
-        <td>All keys in a bucket</td>
-        <td><code><<"bucket1">></code></td>
-    </tr>
-    <tr>
-        <td>Result of exact secondary index match</td>
-        <td><code>{index, <<"bucket1">>, {binary_index, "idx"}, <<"key">>}</code> or <code>{index, <<"bucket1">>, <<"idx_bin">>, <<"key">>}</code></td>
-    </tr>
-    <tr>
-        <td>Result of secondary index range query</td>
-        <td><code>{index, <<"bucket1">>, {integer_index, "idx"}, 1, 100}</code> or <code>{index, <<"bucket1">>, <<"idx_int">>, <<"1">>, <<"100">>}</code></td>
-    </tr>
-</table>
+**Bucket/Key list:** `[{<<"bucket1">>,<<"key1">>},{<<"bucket1">>,<<"key2">>}]`
+
+**All keys in a bucket:** `<<"bucket1">>`
+
+**Result of exact secondary index match:** `{index, <<"bucket1">>, {binary_index, "idx"}, <<"key">>}`**,** `{index, <<"bucket1">>, <<"idx_bin">>, <<"key">>}`
+
+**Result of secondary index range query:** `{index, <<"bucket1">>, {integer_index, "idx"}, 1, 100}`**,** `{index, <<"bucket1">>, <<"idx_int">>, <<"1">>, <<"100">>}`
 
 The query is given as a list of `map`, `reduce` and `link` phases. Map and reduce phases are each expressed as tuples in the following form:
 
