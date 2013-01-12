@@ -221,7 +221,6 @@ The initial release of the erlang protocol buffers client treats all values as b
       riakc_obj:update_value(Object, term_to_binary(Term, [compressed]),
       <<"application/x-erlang-term">>).
 
-
 Siblings
 ==================
 
@@ -240,62 +239,11 @@ And the content types as
     3> riakc_obj:get_content_types(Obj).
     []
 
-It is also possible to get a list of tuples representing the siblings through the `riakc_obj:get_contents` function. This returns a list of tuples in the form `{metadata(), value()}` which can be used to reconcile siblings and determine the reconciled metadata dict and value. 
+If resolution simply requires one of the existing siblings to be selected, this can be done through the `riakc_obj:select_sibling` function. This function updates the record with the value and metadata of the selected Nth sibling.
 
-Siblings are resolved by calling `riakc_obj:update_value` with the winning value on an object returned by get or put with return_body. If metadata or content type also needs to be updated/selected, this can be done through the `riakc_obj:update_metadata` and `riakc_obj:update_content_type`.
+It is also possible to get a list of tuples representing all the siblings through the `riakc_obj:get_contents` function. This returns a list of tuples in the form `{metadata(), value()}` which can be used when more complex sibling resolution is required.
 
-Below is an example where the sibling with the largest value is selected together with its corresponding metadata. 
-
-    3> %% Obj contains 2 siblings with different values
-    3> riakc_obj:value_count(Obj).
-    2
-    4> riakc_obj:get_values(Obj).
-    [<<"small_value">>,<<"larger_value">>]
-    5> C = riakc_obj:get_contents(Obj).
-    [{{dict,0,16,16,8,80,48,
-        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
-        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
-      <<"small_value">>},
-     {{dict,0,16,16,8,80,48,
-        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
-        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
-      <<"larger_value">>}]
-    6> [{M,V} | _] = lists:sort(fun({_,V1}, {_,V2}) -> byte_size(V2) =< byte_size(V1) end, C).
-    [{{dict,0,16,16,8,80,48,
-        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
-        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
-      <<"larger_value">>},
-     {{dict,0,16,16,8,80,48,
-        {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
-        {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}},
-      <<"small_value">>}]
-    7> Obj2 = riakc_obj:update_value(Obj, V).
-    {riakc_obj,<<"b">>,<<"k">>,<<>>,
-           [{{dict,0,16,16,8,80,48,
-                   {[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
-                   {{[],[],[],[],[],[],[],[],[],[],[],[],...}}},
-             <<"small_value">>},
-            {{dict,0,16,16,8,80,48,
-                   {[],[],[],[],[],[],[],[],[],[],[],[],[],...},
-                   {{[],[],[],[],[],[],[],[],[],[],[],...}}},
-             <<"larger_value">>}],
-           undefined,<<"larger_value">>}
-    8> Obj3 = riakc_obj:update_metadata(Obj2, M).
-    {riakc_obj,<<"b">>,<<"k">>,<<>>,
-           [{{dict,0,16,16,8,80,48,
-                   {[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
-                   {{[],[],[],[],[],[],[],[],[],[],[],[],...}}},
-             <<"small_value">>},
-            {{dict,0,16,16,8,80,48,
-                   {[],[],[],[],[],[],[],[],[],[],[],[],[],...},
-                   {{[],[],[],[],[],[],[],[],[],[],[],...}}},
-             <<"larger_value">>}],
-           {dict,0,16,16,8,80,48,
-                 {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
-                 {{[],[],[],[],[],[],[],[],[],[],[],[],[],...}}},
-           <<"larger_value">>}
-    9> riakc_obj:get_update_value(Obj3).
-    <<"larger_value">>
+Once the correct combination of metadata and value has been determined, the record can be updated with these using the `riakc_obj:update_value` and `riakc_obj:update_metadata` functions. If the resulting content type needs to be updated, the `riakc_obj:update_content_type` can be used.   
 
 Listing Keys
 =============
