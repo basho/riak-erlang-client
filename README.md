@@ -393,7 +393,7 @@ The following example illustrates getting and setting secondary indexes.
            <<"John Robert Doe, 25">>}    
     20> riakc_pb_socket:put(Pid, Obj2).
     
-In order to query based on secondary indexes, the `get_index/4`, `get_index/5`, `get_index/6` and `get_index/7` functions can be used. These functions also allows secondary indexes to be specifiued using the tuple described above.
+In order to query based on secondary indexes, the `riakc_pb_socket:get_index/4`, `riakc_pb_socket:get_index/5`, `riakc_pb_socket:get_index/6` and `riakc_pb_socket:get_index/7` functions can be used. These functions also allows secondary indexes to be specifiued using the tuple described above.
 
 The following example illustrates how to perform exact match as well as range queries based on the record and associated indexes created above.
     
@@ -405,7 +405,7 @@ The following example illustrates how to perform exact match as well as range qu
 Links
 =====
 
-Links are also stored in the object metadata dictionary, and can be manipulated by using the `get_link/2`, `get_links/1`, `clear_links/1`, `delete_link/2`, `set_link/2` and `add_link/2` functions. When using these functions, a link is identified by a tag, and may therefore contain multiple record IDs.
+Links are also stored in the object metadata dictionary, and can be manipulated by using the `get_links/2`, `get_all_links/1`, `clear_links/1`, `delete_links/2`, `set_link/2` and `add_link/2` functions. When using these functions, a link is identified by a tag, and may therefore contain multiple record IDs.
 
 These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
@@ -429,19 +429,19 @@ The following example illustrates setting and getting links.
           {{<<"person">>,<<"jane">>},<<"friend">>},
           {{<<"person">>,<<"richard">>},<<"friend">>}]],
         [],[],[],[],[],[],[],[],[],[],[],[],[]}}}
-    14> MD3 = riakc_obj:add_link(MD2, [{<<"sibling">>, [{<<"test">>,<<"mark">>}]}]).
+    14> MD3 = riakc_obj:add_link(MD2, [{<<"sibling">>, [{<<"person">>,<<"mark">>}]}]).
     {dict,1,16,16,8,80,48,
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],
         [[<<"Links">>,
           {{<<"person">>,<<"jane">>},<<"friend">>},
           {{<<"person">>,<<"richard">>},<<"friend">>},
-          {{<<"test">>,<<"mark">>},<<"sibling">>}]],
+          {{<<"person">>,<<"mark">>},<<"sibling">>}]],
         [],[],[],[],[],[],[],[],[],[],[],[],[]}}}
-    15> riakc_obj:get_links(MD3).
+    15> riakc_obj:get_all_links(MD3).
     [{<<"friend">>,
         [{<<"person">>,<<"jane">>},{<<"person">>,<<"richard">>}]},
-         {<<"sibling">>,[{<<"test">>,<<"mark">>}]}]
+         {<<"sibling">>,[{<<"person">>,<<"mark">>}]}]
     16> Obj2 = riakc_obj:update_metadata(Obj,MD3).
     {riakc_obj,<<"person">>,<<"sarah">>,undefined,[],
            {dict,1,16,16,8,80,48,
@@ -450,7 +450,7 @@ The following example illustrates setting and getting links.
                    [[<<"Links">>,
                      {{<<"person">>,<<"jane">>},<<"friend">>},
                      {{<<"person">>,<<"richard">>},<<"friend">>},
-                     {{<<"test">>,<<"mark">>},<<"sibling">>}]],
+                     {{<<"person">>,<<"mark">>},<<"sibling">>}]],
                    [],[],[],[],[],[],[],[],[],[],...}}},
            <<"Sarah, 30">>}
     17> riakc_pb_socket:put(Pid, Obj2).
@@ -459,9 +459,9 @@ The following example illustrates setting and getting links.
 MapReduce
 =========
 
-MapReduce jobs can be executed using the `riakc_obj:mapred` function. This takes an input specification as well as a list of mapreduce phase specifications as arguments. It also allows a non-default timeout to be specified if required.
+MapReduce jobs can be executed using the `riakc_pb_socket:mapred` function. This takes an input specification as well as a list of mapreduce phase specifications as arguments. It also allows a non-default timeout to be specified if required.
 
-The function `riakc_obj:mapred` uses `riakc_obj:mapred_stream` under the hood, and if results need to be processed as they are streamed to the client, this function can be used instead. The implementation of `riakc_obj:mapred` provides a good example of how to implement this.
+The function `riakc_pb_socket:mapred` uses `riakc_pb_socket:mapred_stream` under the hood, and if results need to be processed as they are streamed to the client, this function can be used instead. The implementation of `riakc_pb_socket:mapred` provides a good example of how to implement this.
 
 It is possible to define a wide range of inputs for a mapreduce job. Some examples are given below: 
 

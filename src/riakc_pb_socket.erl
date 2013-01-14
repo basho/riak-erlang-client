@@ -536,17 +536,11 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
                            {error, {badqterm, mapred_queryterm()}} |
                            {error, timeout} |
                            {error, Err :: term()}.
-mapred_stream(Pid, {index,Bucket,{binary_index, Name},Key}, Query, ClientPid, Timeout, CallTimeout) ->
-    Index = list_to_binary(lists:append([Name, "_bin"])),
+mapred_stream(Pid, {index,Bucket,Name,Key}, Query, ClientPid, Timeout, CallTimeout) when is_tuple(Name) ->
+    Index = riakc_obj:index_id_to_bin(Name),
     mapred_stream(Pid, {index,Bucket,Index,Key}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, {index,Bucket,{binary_index, Name},StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) ->
-    Index = list_to_binary(lists:append([Name, "_int"])),
-    mapred_stream(Pid, {index,Bucket,Index,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, {index,Bucket,{integer_index, Name},Key}, Query, ClientPid, Timeout, CallTimeout) ->
-    Index = list_to_binary(lists:append([Name, "_int"])),
-    mapred_stream(Pid, {index,Bucket,Index,Key}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, {index,Bucket,{integer_index, Name},StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) ->
-    Index = list_to_binary(lists:append([Name, "_int"])),
+mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) when is_tuple(Name) ->
+    Index = riakc_obj:index_id_to_bin(Name),
     mapred_stream(Pid, {index,Bucket,Index,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout);
 mapred_stream(Pid, {index,Bucket,Name,Key}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(Key) ->
     BinKey = list_to_binary(integer_to_list(Key)),
@@ -2192,7 +2186,6 @@ live_node_tests() ->
                                                undefined, false},
                                               {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
              end)},
-
      {"erlang_map_reduce_test()",
       ?_test(begin
                  reset_riak(),
@@ -2216,6 +2209,54 @@ live_node_tests() ->
                                                                   reduce_set_union},
                                                          undefined, true}]),
                  ?assertEqual([<<"2">>, <<"3">>, <<"4">>], lists:sort(Results))
+             end)},
+     {"erlang_map_reduce_binary_2i_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 Store = fun({K,V,I}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 MD=riakc_obj:add_secondary_index(dict:new(), I),
+                                 O2=riakc_obj:update_metadata(O,MD),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O2, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>, {{binary_index, "idx"}, [<<"a">>]}},
+                                      {<<"bar">>, <<"3">>, {{binary_index, "idx"}, [<<"b">>]}},
+                                      {<<"baz">>, <<"4">>, {{binary_index, "idx"}, [<<"a">>]}}]],
+
+                 {ok, [{1, Results}]} = ?MODULE:mapred(Pid,
+                                                       {index,<<"bucket">>,{binary_index, "idx"}, <<"a">>},
+                                                       [{map, {modfun, riak_kv_mapreduce,
+                                                               map_object_value},
+                                                         undefined, false},
+                                                        {reduce, {modfun, riak_kv_mapreduce,
+                                                                  reduce_set_union},
+                                                         undefined, true}]),
+                 ?assertEqual([<<"2">>, <<"4">>], lists:sort(Results))
+             end)},
+     {"erlang_map_reduce_integer_2i_test()",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 Store = fun({K,V,I}) ->
+                                 O=riakc_obj:new(<<"bucket">>, K),
+                                 MD=riakc_obj:add_secondary_index(dict:new(), I),
+                                 O2=riakc_obj:update_metadata(O,MD),
+                                 ?MODULE:put(Pid,riakc_obj:update_value(O2, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>, {{integer_index, "idx"}, [4]}},
+                                      {<<"bar">>, <<"3">>, {{integer_index, "idx"}, [7]}},
+                                      {<<"baz">>, <<"4">>, {{integer_index, "idx"}, [4]}}]],
+
+                 {ok, [{1, Results}]} = ?MODULE:mapred(Pid,
+                                                       {index,<<"bucket">>,{integer_index, "idx"},3,5},
+                                                       [{map, {modfun, riak_kv_mapreduce,
+                                                               map_object_value},
+                                                         undefined, false},
+                                                        {reduce, {modfun, riak_kv_mapreduce,
+                                                                  reduce_set_union},
+                                                         undefined, true}]),
+                 ?assertEqual([<<"2">>, <<"4">>], lists:sort(Results))
              end)},
      {"missing_key_erlang_map_reduce_test()",
       ?_test(begin

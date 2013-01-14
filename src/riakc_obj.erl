@@ -60,15 +60,15 @@
          delete_secondary_index/2,
          set_secondary_index/2,
          add_secondary_index/2,
-         get_link/2,
-         get_links/1,
+         get_links/2,
+         get_all_links/1,
          clear_links/1,
-         delete_link/2,
+         delete_links/2,
          set_link/2,
          add_link/2
         ]).
 %% Internal library use only
--export([new_obj/4]).
+-export([new_obj/4,index_id_to_bin/1]).
 
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -ifdef(TEST).
@@ -460,8 +460,8 @@ add_secondary_index(MD, [{Id, BinList} | Rest]) when is_binary(Id) ->
     end.
 
 %% @doc  Get links for a specific tag
--spec get_link(metadata(), tag()) -> [id()] | notfound.
-get_link(MD, Tag) ->
+-spec get_links(metadata(), tag()) -> [id()] | notfound.
+get_links(MD, Tag) ->
     case dict:find(?MD_LINKS, MD) of
         {ok, Links} ->
             case [I || {I, T} <- Links, T == Tag] of
@@ -475,8 +475,8 @@ get_link(MD, Tag) ->
     end.
 
 %% @doc  Get all links
--spec get_links(metadata()) -> [link()].
-get_links(MD) ->
+-spec get_all_links(metadata()) -> [link()].
+get_all_links(MD) ->
     case dict:find(?MD_LINKS, MD) of
         {ok, Links} ->
             dict:to_list(lists:foldl(fun({I, T}, D) ->
@@ -492,8 +492,8 @@ clear_links(MD) ->
     dict:erase(?MD_LINKS, MD).
 
 %% @doc  Delete links for a specific tag
--spec delete_link(metadata(), tag()) -> metadata().
-delete_link(MD, Tag) ->
+-spec delete_links(metadata(), tag()) -> metadata().
+delete_links(MD, Tag) ->
     case dict:find(?MD_LINKS, MD) of
         {ok, Links} ->
             List = [{I, T} || {I, T} <- Links, T /= Tag],
@@ -748,21 +748,21 @@ user_metadata_utilities_test() ->
 
 link_utilities_test() ->
     MD0 = dict:new(),
-    ?assertEqual(notfound, get_link(MD0, <<"Tag1">>)),
-    ?assertEqual([], get_links(MD0)),
+    ?assertEqual(notfound, get_links(MD0, <<"Tag1">>)),
+    ?assertEqual([], get_all_links(MD0)),
     MD1 = set_link(MD0, [{<<"Tag1">>, [{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>}]}]),
-    ?assertEqual([{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>}], lists:sort(get_link(MD1,<<"Tag1">>))),
+    ?assertEqual([{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>}], lists:sort(get_links(MD1,<<"Tag1">>))),
     MD2 = add_link(MD1, [{<<"Tag1">>, [{<<"B">>,<<"K1">>},{<<"B">>,<<"K3">>}]}]),
-    ?assertEqual([{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>},{<<"B">>,<<"K3">>}], lists:sort(get_link(MD2,<<"Tag1">>))),
+    ?assertEqual([{<<"B">>,<<"K1">>},{<<"B">>,<<"K2">>},{<<"B">>,<<"K3">>}], lists:sort(get_links(MD2,<<"Tag1">>))),
     MD3 = set_link(MD2, [{<<"Tag1">>, [{<<"B">>,<<"K4">>}]}]),
-    ?assertEqual([{<<"B">>,<<"K4">>}], lists:sort(get_link(MD3,<<"Tag1">>))),
-    ?assertEqual([{<<"Tag1">>,[{<<"B">>,<<"K4">>}]}], get_links(MD3)),
+    ?assertEqual([{<<"B">>,<<"K4">>}], lists:sort(get_links(MD3,<<"Tag1">>))),
+    ?assertEqual([{<<"Tag1">>,[{<<"B">>,<<"K4">>}]}], get_all_links(MD3)),
     MD4 = set_link(MD3, [{<<"Tag2">>, [{<<"B">>,<<"K1">>}]}]),
-    ?assertEqual([{<<"B">>,<<"K1">>}], lists:sort(get_link(MD4,<<"Tag2">>))),
-    MD5 = delete_link(MD4,<<"Tag1">>),
-    ?assertEqual([{<<"Tag2">>,[{<<"B">>,<<"K1">>}]}], get_links(MD5)),
+    ?assertEqual([{<<"B">>,<<"K1">>}], lists:sort(get_links(MD4,<<"Tag2">>))),
+    MD5 = delete_links(MD4,<<"Tag1">>),
+    ?assertEqual([{<<"Tag2">>,[{<<"B">>,<<"K1">>}]}], get_all_links(MD5)),
     MD6 = clear_links(MD5),
-    ?assertEqual([], get_links(MD6)).
+    ?assertEqual([], get_all_links(MD6)).
    
 secondary_index_utilities_test() ->
     MD0 = dict:new(),
