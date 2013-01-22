@@ -292,6 +292,7 @@ contents0_test() ->
     ?assertEqual([], get_metadatas(O)),
     ?assertEqual([], get_values(O)),
     ?assertEqual([], get_contents(O)),
+    ?assertEqual(dict:new(), get_metadata(O)),
     ?assertThrow(no_value, get_value(O)).
 
 contents1_test() ->
