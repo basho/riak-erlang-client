@@ -133,14 +133,13 @@ get_contents(O) ->
 
 %% @doc Assert that this riakc_obj has no siblings and return its
 %%       associated metadata.  This function will throw `siblings' if
-%%       the object has siblings (value_count() > 1), or `no_metadata'
-%%       if the object has no metadata.
-%% @throws siblings | no_metadata
+%%       the object has siblings (value_count() > 1).
+%% @throws siblings
 -spec get_metadata(Object::riakc_obj()) -> metadata().
 get_metadata(O=#riakc_obj{}) ->
     case get_contents(O) of
         [] ->
-            throw(no_metadata);
+            dict:new();
         [{MD,_V}] ->
             MD;
         _ ->
@@ -154,7 +153,7 @@ get_metadatas(#riakc_obj{contents=Contents}) ->
 
 %% @doc Return the content type of the value if there are no siblings.
 %% @see get_metadata/1
-%% @throws siblings | no_metadata
+%% @throws siblings
 -spec get_content_type(Object::riakc_obj()) -> content_type().
 get_content_type(Object=#riakc_obj{}) ->
     UM = get_metadata(Object),
@@ -216,12 +215,7 @@ update_value(Object=#riakc_obj{}, V, CT) ->
 get_update_metadata(#riakc_obj{updatemetadata=UM}=Object) ->
     case UM of
         undefined ->
-            try
-                get_metadata(Object)
-            catch 
-                throw:no_metadata ->
-                    dict:new()
-            end;
+            get_metadata(Object);
         UM ->
             UM
     end.
@@ -290,7 +284,6 @@ newcontent0_test() ->
     ?assertEqual([], get_metadatas(O)),
     ?assertEqual([], get_values(O)),
     ?assertEqual([], get_contents(O)),
-    ?assertThrow(no_metadata, get_metadata(O)),
     ?assertThrow(no_value, get_value(O)).    
 
 contents0_test() ->
@@ -299,7 +292,7 @@ contents0_test() ->
     ?assertEqual([], get_metadatas(O)),
     ?assertEqual([], get_values(O)),
     ?assertEqual([], get_contents(O)),
-    ?assertThrow(no_metadata, get_metadata(O)),
+    ?assertEqual(dict:new(), get_metadata(O)),
     ?assertThrow(no_value, get_value(O)).
 
 contents1_test() ->
