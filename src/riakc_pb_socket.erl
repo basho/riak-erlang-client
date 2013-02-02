@@ -155,12 +155,12 @@ is_connected(Pid, Timeout) ->
 
 %% @doc Ping the server
 %% @equiv ping(Pid, default_timeout(ping_timeout))
--spec ping(pid()) -> ok | {error, term()}.
+-spec ping(pid()) -> pong.  % or gen_server:call exception on timeout
 ping(Pid) ->
     ping(Pid, default_timeout(ping_timeout)).
 
 %% @doc Ping the server specifying timeout
--spec ping(pid(), timeout()) -> ok | {error, term()}.
+-spec ping(pid(), timeout()) -> pong.  % or gen_server:call exception on timeout
 ping(Pid, Timeout) ->
     gen_server:call(Pid, {req, rpbpingreq, Timeout}, infinity).
 

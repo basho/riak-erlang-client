@@ -27,6 +27,7 @@
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
 -type client_option()  :: queue_if_disconnected | {queue_if_disconnected, boolean()} |
+                   {connect_timeout, integer()} |
                    auto_reconnect | {auto_reconnect, boolean()}.
 %% Options for starting or modifying the connection:
 %% `queue_if_disconnected' when present or true will cause requests to
