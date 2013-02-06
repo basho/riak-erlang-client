@@ -1642,7 +1642,7 @@ reset_ring() ->
 %% Finds the pid of the PB listener process
 riak_pb_listener_pid() ->
     {Children, Proc} = case riak_version() of
-                           [1,Two|_] when Two == 2->
+                           [1,Two|_] when Two >= 2->
                                {supervisor:which_children({riak_api_sup, test_riak_node()}),
                                 riak_api_pb_listener};
                            _ ->
