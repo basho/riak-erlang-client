@@ -1323,7 +1323,8 @@ send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.a
         ok ->
             State#state{active = Request};
         {error, closed} ->
-            maybe_enqueue_and_reconnect(Msg, disconnect(State))
+            gen_tcp:close(State#state.sock),
+            maybe_enqueue_and_reconnect(Msg, State#state{sock=undefined})
     end;
 %% Unencoded Request (the normal PB client path)
 send_request(Request, State) when State#state.active =:= undefined ->
@@ -1332,7 +1333,8 @@ send_request(Request, State) when State#state.active =:= undefined ->
         ok ->
             maybe_reply(after_send(Request, State#state{active = Request}));
         {error, closed} ->
-            maybe_enqueue_and_reconnect(Request, disconnect(State))
+            gen_tcp:close(State#state.sock),
+            maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
     end.
 
 %% If the socket was closed, see if we can enqueue the request and
