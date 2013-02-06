@@ -1319,13 +1319,40 @@ increase_reconnect_interval(State) ->
 %% for responding to the second form of send_request.
 send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.active =:= undefined ->
     Request = Msg#request{msg = {tunneled,MsgId}},
-    ok = gen_tcp:send(State#state.sock, [MsgId|Pkt]),
-    State#state{active = Request};
+    case gen_tcp:send(State#state.sock, [MsgId|Pkt]) of
+        ok ->
+            State#state{active = Request};
+        {error, closed} ->
+            maybe_enqueue_and_reconnect(Msg, disconnect(State))
+    end;
 %% Unencoded Request (the normal PB client path)
 send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riak_pb_codec:encode(Request#request.msg),
-    ok = gen_tcp:send(State#state.sock, Pkt),
-    maybe_reply(after_send(Request, State#state{active = Request})).
+    case gen_tcp:send(State#state.sock, Pkt) of
+        ok ->
+            maybe_reply(after_send(Request, State#state{active = Request}));
+        {error, closed} ->
+            maybe_enqueue_and_reconnect(Request, disconnect(State))
+    end.
+
+%% If the socket was closed, see if we can enqueue the request and
+%% trigger a reconnect. Otherwise, return an error to the requestor.
+maybe_enqueue_and_reconnect(Request, State) ->
+    maybe_reconnect(State),
+    enqueue_or_reply_error(Request, State).
+
+%% Trigger an immediate reconnect if automatic reconnection is
+%% enabled.
+maybe_reconnect(#state{auto_reconnect=true}) -> self() ! reconnect;
+maybe_reconnect(_) -> ok.
+
+%% If we can queue while disconnected, do so, otherwise tell the
+%% caller that the socket was disconnected.
+enqueue_or_reply_error(Request, #state{queue_if_disconnected=true}=State) ->
+    queue_request(Request, State);
+enqueue_or_reply_error(Request, State) ->
+    send_caller({error, disconnected}, Request),
+    State.
 
 %% Queue up a request if one is pending
 %% @private
@@ -1545,7 +1572,8 @@ test_cookie() ->
 %% of integers.
 riak_version() ->
     StrVersion = element(2, rpc:call(test_riak_node(), init, script_id, [])),
-    [ list_to_integer(V) || V <- string:tokens(StrVersion, ".") ].
+    {match, [Major, Minor, Patch|_]} = re:run(StrVersion, "\\d+", [global, {capture, first, list}]),
+    [ list_to_integer(V) || [V] <- [Major, Minor, Patch]].
 
 %% Resets the riak node
 reset_riak() ->
