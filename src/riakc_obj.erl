@@ -84,7 +84,7 @@
 -type value() :: binary(). %% An opaque value
 -type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
 -type binary_index_id() :: {binary_index, string()}.
--type binary_index_value() :: binary_index().
+-type binary_index_value() :: binary().
 -type binary_index() :: {binary_index_id(), [binary_index_value()]}.
 -type integer_index_id() :: {integer_index, string()}.
 -type integer_index_value() :: integer().
