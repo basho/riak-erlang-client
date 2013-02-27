@@ -198,7 +198,7 @@ get_server_info(Pid, Timeout) ->
     gen_server:call(Pid, {req, rpbgetserverinforeq, Timeout}, infinity).
 
 %% @doc Get bucket/key from the server.
-%%      Will return {error, notfound} if the key is not on the serverk.
+%%      Will return {error, notfound} if the key is not on the server.
 %% @equiv get(Pid, Bucket, Key, [], default_timeout(get_timeout))
 -spec get(pid(), bucket(), key()) -> {ok, riakc_obj()} | {error, term()}.
 get(Pid, Bucket, Key) ->
