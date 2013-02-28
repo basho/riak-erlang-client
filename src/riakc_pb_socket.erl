@@ -448,7 +448,7 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 %% @doc Set bucket properties specifying a server side and local call timeout.
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
-    PbProps = riak_pb_kv_codec:encode_bucket_props(BucketProps),
+    PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
@@ -1117,7 +1117,7 @@ process_response(#request{msg = #rpblistkeysreq{}}=Request,
 
 process_response(#request{msg = #rpbgetbucketreq{}},
                  #rpbgetbucketresp{props = PbProps}, State) ->
-    Props = riak_pb_kv_codec:decode_bucket_props(PbProps),
+    Props = riak_pb_codec:decode_bucket_props(PbProps),
     {reply, {ok, Props}, State};
 
 process_response(#request{msg = #rpbsetbucketreq{}},
