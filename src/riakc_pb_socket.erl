@@ -1154,7 +1154,7 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     {reply, {ok, []}, State};
-process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results, keys=Keys}, State) ->
+process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results}, State) ->
     {reply, {ok, Results}, State};
 process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys}, State) ->
     {reply, {ok, Keys}, State};
