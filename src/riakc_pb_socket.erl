@@ -1898,6 +1898,17 @@ live_node_tests() ->
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
+     {"get should read put with non integer options",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 O0 = riakc_obj:new(<<"b">>, <<"k">>),
+                 O = riakc_obj:update_value(O0, <<"v">>),
+                 {ok, PO} = ?MODULE:put(Pid, O, [{w, all}, {dw, quorum}, return_body]),
+                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>, [{r, one}]),
+                 ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
+             end)},
+
      {"put and delete with timeout",
       ?_test(begin
                  reset_riak(),
@@ -1999,7 +2010,7 @@ live_node_tests() ->
                               lists:sort(Props))
              end)},
 
-     {"get bucket properties test",
+     {"set bucket properties test",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(test_ip(), test_port()),
