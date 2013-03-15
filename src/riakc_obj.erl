@@ -2,7 +2,7 @@
 %%
 %% riakc_obj: Container for Riak data and metadata
 %%
-%% Copyright (c) 2007-2010 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2007-2013 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -27,7 +27,7 @@
 
 
 -module(riakc_obj).
--export([new/2, new/3, new/4,
+-export([new/2, new/3, new/4, new/5,
          bucket/1,
          key/1,
          vclock/1,
@@ -38,14 +38,19 @@
          get_metadatas/1,
          get_content_type/1,
          get_content_types/1,
+         get_charset/1,
+         get_charsets/1,
          get_value/1,
          get_values/1,
          update_metadata/2,
          update_value/2,
          update_value/3,
+         update_value/4,
          update_content_type/2,
+         update_charset/2,
          get_update_metadata/1,
          get_update_content_type/1,
+         get_update_charset/1,
          get_update_value/1,
          md_ctype/1,
          set_vclock/2,
@@ -81,6 +86,7 @@
 -type vclock() :: binary(). %% An opaque vector clock
 -type metadata() :: dict(). %% Value metadata
 -type content_type() :: string(). %% The media type of a value
+-type charset() :: string(). %% The character set of a value
 -type value() :: binary(). %% An opaque value
 -type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
 -type binary_index_id() :: {binary_index, string()}.
@@ -132,6 +138,11 @@ new(Bucket, Key, Value, ContentType) ->
     O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
     update_content_type(O, ContentType).
 
+%% @doc Constructor for new riak client objects with an update value, content type and character set.
+-spec new(bucket(), key(), value(), content_type(), charset()) -> riakc_obj().
+new(Bucket, Key, Value, ContentType, Charset) ->
+    O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
+    update_charset(update_content_type(O, ContentType), Charset).
 
 %% @doc Return the containing bucket for this riakc_obj.
 -spec bucket(Object::riakc_obj()) -> bucket().
@@ -199,6 +210,19 @@ get_content_types(Object=#riakc_obj{}) ->
     F = fun({M,_}) -> md_ctype(M) end,
     [F(C) || C<- get_contents(Object)].
 
+%% @doc Return the character set of the value if there are no siblings.
+%% @see get_metadata/1
+%% @throws siblings
+-spec get_charset(Object::riakc_obj()) -> charset().
+get_charset(Object=#riakc_obj{}) ->
+    UM = get_metadata(Object),
+    md_charset(UM).
+
+%% @doc Return a list of character sets for all siblings.
+-spec get_charsets(Object::riakc_obj()) -> [charset()].
+get_charsets(Object=#riakc_obj{}) ->
+    F = fun({M,_}) -> md_charset(M) end,
+    [F(C) || C<- get_contents(Object)].
 
 %% @doc Assert that this riakc_obj has no siblings and return its
 %%       associated value.  This function will throw `siblings' if the
@@ -234,6 +258,14 @@ update_content_type(Object=#riakc_obj{}, CT) when is_list(CT) ->
     M1 = get_update_metadata(Object),
     Object#riakc_obj{updatemetadata=dict:store(?MD_CTYPE, CT, M1)}.
 
+%% @doc  Set the updated character set of an object to CS.
+-spec update_charset(riakc_obj(),content_type()|binary()) -> riakc_obj().
+update_charset(Object=#riakc_obj{}, CS) when is_binary(CS) ->
+    update_charset(Object, binary_to_list(CS));
+update_charset(Object=#riakc_obj{}, CS) when is_list(CS) ->
+    M1 = get_update_metadata(Object),
+    Object#riakc_obj{updatemetadata=dict:store(?MD_CHARSET, CS, M1)}.
+
 %% @doc  Set the updated value of an object to V
 -spec update_value(riakc_obj(), value()) -> riakc_obj().
 update_value(Object=#riakc_obj{}, V) -> Object#riakc_obj{updatevalue=V}.
@@ -242,6 +274,12 @@ update_value(Object=#riakc_obj{}, V) -> Object#riakc_obj{updatevalue=V}.
 -spec update_value(riakc_obj(), value(), content_type()) -> riakc_obj().
 update_value(Object=#riakc_obj{}, V, CT) -> 
     O1 = update_content_type(Object, CT),
+    O1#riakc_obj{updatevalue=V}.
+
+%% @doc  Set the updated value of an object to V
+-spec update_value(riakc_obj(), value(), content_type(), charset()) -> riakc_obj().
+update_value(Object=#riakc_obj{}, V, CT, CS) -> 
+    O1 = update_charset(update_content_type(Object, CT), CS),
     O1#riakc_obj{updatevalue=V}.
 
 %% @doc  Return the updated metadata of this riakc_obj.
@@ -259,6 +297,12 @@ get_update_metadata(#riakc_obj{updatemetadata=UM}=Object) ->
 get_update_content_type(Object=#riakc_obj{}) ->
     UM = get_update_metadata(Object),
     md_ctype(UM).
+
+%% @doc Return the character set of the update value
+-spec get_update_charset(riakc_obj()) -> charset().
+get_update_charset(Object=#riakc_obj{}) ->
+    UM = get_update_metadata(Object),
+    md_charset(UM).
 
 %% @doc  Return the updated value of this riakc_obj.
 -spec get_update_value(Object::riakc_obj()) -> value().
@@ -278,6 +322,16 @@ md_ctype(MetaData) ->
             undefined;
         {ok, Ctype} ->
             Ctype
+    end.
+
+%% @doc  Return the character set from metadata
+-spec md_charset(dict()) -> undefined | charset().
+md_charset(MetaData) ->
+    case dict:find(?MD_CHARSET, MetaData) of
+        error ->
+            undefined;
+        {ok, Cset} ->
+            Cset   
     end.
 
 %% @doc  Set the vector clock of an object
@@ -653,6 +707,23 @@ update_content_type_test() ->
     undefined = get_update_content_type(O),
     O1 = update_content_type(O, "application/json"),
     ?assertEqual("application/json", get_update_content_type(O1)).
+
+updatevalue_cs_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    ?assertThrow(no_value, get_update_value(O)),
+    O1 = riakc_obj:update_value(O, <<"v">>, "x-application/custom", "UTF-8"),
+    ?assertEqual(<<"v">>, get_update_value(O1)),
+    M1 = dict:from_list([{?MD_VTAG, "tag1"}]),
+    O2 = riakc_obj:update_metadata(O1, M1),
+    ?assertEqual(M1, get_update_metadata(O2)),
+    ?assertEqual("x-application/custom", get_update_content_type(O1)),
+    ?assertEqual("UTF-8", get_update_charset(O1)).
+
+update_charset_test() ->
+    O = riakc_obj:new(<<"b">>, <<"k">>),
+    undefined = get_update_charset(O),
+    O1 = update_charset(O, "UTF-8"),
+    ?assertEqual("UTF-8", get_update_charset(O1)).
 
 binary_content_type_test() ->
     O = riakc_obj:new(<<"b">>, <<"k">>, <<"v">>, <<"application/x-foo">>),
