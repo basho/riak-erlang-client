@@ -54,6 +54,7 @@
          stream_list_keys/2, stream_list_keys/3, stream_list_keys/4,
          get_bucket/2, get_bucket/3, get_bucket/4,
          set_bucket/3, set_bucket/4, set_bucket/5,
+         reset_bucket/2, reset_bucket/3, reset_bucket/4,
          mapred/3, mapred/4, mapred/5,
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
@@ -450,6 +451,24 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+%% @doc Reset bucket properties back to the defaults.
+%% @equiv reset_bucket(Pid, Bucket, default_timeout(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout))
+-spec reset_bucket(pid(), bucket) -> ok | {error, term()}.
+reset_bucket(Pid, Bucket) ->
+    reset_bucket(Pid, Bucket, default_timeout(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout)).
+
+%% @doc Reset bucket properties back to the defaults.
+%% @equiv reset_bucket(Pid, Bucket, Timeout, default_timeout(reset_bucket_call_timeout))
+-spec reset_bucket(pid(), bucket, timeout()) -> ok | {error, term()}.
+reset_bucket(Pid, Bucket, Timeout) ->
+    reset_bucket(Pid, Bucket, Timeout, default_timeout(reset_bucket_call_timeout)).
+
+%% @doc Reset bucket properties back to the defaults.
+-spec reset_bucket(pid(), bucket, timeout(), timeout()) -> ok | {error, term()}.
+reset_bucket(Pid, Bucket, Timeout, CallTimeout) ->
+    Req = #rpbresetbucketreq{bucket = Bucket},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Perform a MapReduce job across the cluster.
@@ -1147,7 +1166,7 @@ process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
 process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys}, State) ->
     {reply, {ok, Keys}, State};
 
-process_response(#request{msg = #rpbsearchqueryreq{}}, prbsearchqueryresp, State) ->
+process_response(#request{msg = #rpbsearchqueryreq{}}, rpbsearchqueryresp, State) ->
     {reply, {error, notfound}, State};
 process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
                  #rpbsearchqueryresp{docs=PBDocs,max_score=MaxScore,
@@ -1156,6 +1175,8 @@ process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
                || Doc <- PBDocs ],
     Result = #search_results{docs=Values, max_score=MaxScore, num_found=NumFound},
     {reply, {ok, Result}, State};
+process_response(#request{msg=#rpbresetbucketreq{}}, rpbresetbucketresp, State) ->
+    {reply, ok, State};
 
 process_response(#request{msg={tunneled,_MsgId}}, Reply, State) ->
     %% Tunneled msg response
