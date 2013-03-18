@@ -419,7 +419,7 @@ The following example illustrates setting and getting links.
     {dict,0,16,16,8,80,48,
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]}}}
-    12> riakc_obj:get_links(MD1).
+    12> riakc_obj:get_all_links(MD1).
     []
     13> MD2 = riakc_obj:set_link(MD1, [{<<"friend">>, [{<<"person">>,<<"jane">>},{<<"person">>,<<"richard">>}]}]).
     {dict,1,16,16,8,80,48,
