@@ -119,19 +119,33 @@
 %% @doc Constructor for new riak client objects.
 -spec new(bucket(), key()) -> riakc_obj().
 new(Bucket, Key) ->
-    #riakc_obj{bucket = Bucket, key = Key, contents = []}.
+    case Key of
+        <<"">> ->
+            error;
+        _ ->
+            #riakc_obj{bucket = Bucket, key = Key, contents = []}
+    end.
 
 %% @doc Constructor for new riak client objects with an update value.
 -spec new(bucket(), key(), value()) -> riakc_obj().
 new(Bucket, Key, Value) ->
-    #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value}.
+    case Key of
+        <<"">> ->
+            error;
+        _ ->
+            #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value}
+    end.
 
 %% @doc Constructor for new riak client objects with an update value and content type.
 -spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
 new(Bucket, Key, Value, ContentType) ->
-    O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
-    update_content_type(O, ContentType).
-
+    case Key of
+        <<"">> ->
+            error;
+        _ ->
+            O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
+            update_content_type(O, ContentType)
+    end.
 
 %% @doc Return the containing bucket for this riakc_obj.
 -spec bucket(Object::riakc_obj()) -> bucket().
@@ -576,6 +590,14 @@ bucket_test() ->
 key_test() ->
     O = riakc_obj:new(<<"b">>, <<"k">>),
     ?assertEqual(<<"k">>, key(O)).
+
+invalid_key_test() ->
+    O1 = riakc_obj:new(<<"b">>, <<"">>),
+    ?assertEqual(O1, error),
+    O2 = riakc_obj:new(<<"b">>, <<"">>, <<"v">>),
+    ?assertEqual(O2, error),
+    O3 = riakc_obj:new(<<"b">>, <<"">>, <<"v">>, <<"application/x-foo">>),
+    ?assertEqual(O3, error).
 
 vclock_test() ->
     %% For internal use only
