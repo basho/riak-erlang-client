@@ -121,7 +121,7 @@
 new(Bucket, Key) ->
     case Key of
         <<"">> ->
-            error;
+            {error, 'Object key may not be empty'};
         _ ->
             #riakc_obj{bucket = Bucket, key = Key, contents = []}
     end.
@@ -131,7 +131,7 @@ new(Bucket, Key) ->
 new(Bucket, Key, Value) ->
     case Key of
         <<"">> ->
-            error;
+            {error, 'Object key may not be empty'};
         _ ->
             #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value}
     end.
@@ -141,7 +141,7 @@ new(Bucket, Key, Value) ->
 new(Bucket, Key, Value, ContentType) ->
     case Key of
         <<"">> ->
-            error;
+            {error, 'Object key may not be empty'};
         _ ->
             O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
             update_content_type(O, ContentType)
@@ -592,11 +592,11 @@ key_test() ->
     ?assertEqual(<<"k">>, key(O)).
 
 invalid_key_test() ->
-    O1 = riakc_obj:new(<<"b">>, <<"">>),
+    {O1, _} = riakc_obj:new(<<"b">>, <<"">>),
     ?assertEqual(O1, error),
-    O2 = riakc_obj:new(<<"b">>, <<"">>, <<"v">>),
+    {O2, _} = riakc_obj:new(<<"b">>, <<"">>, <<"v">>),
     ?assertEqual(O2, error),
-    O3 = riakc_obj:new(<<"b">>, <<"">>, <<"v">>, <<"application/x-foo">>),
+    {O3, _} = riakc_obj:new(<<"b">>, <<"">>, <<"v">>, <<"application/x-foo">>),
     ?assertEqual(O3, error).
 
 vclock_test() ->
