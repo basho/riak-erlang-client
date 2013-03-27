@@ -118,30 +118,30 @@
 
 %% @doc Constructor for new riak client objects.
 -spec new(bucket(), key()) -> riakc_obj().
-new(Bucket, Key) ->
+new(Bucket, Key) when is_binary(Bucket), is_binary(Key) ->
     case Key of
         <<"">> ->
-            {error, 'Object key may not be empty'};
+            {error, zero_length_key};
         _ ->
             #riakc_obj{bucket = Bucket, key = Key, contents = []}
     end.
 
 %% @doc Constructor for new riak client objects with an update value.
 -spec new(bucket(), key(), value()) -> riakc_obj().
-new(Bucket, Key, Value) ->
+new(Bucket, Key, Value) when is_binary(Bucket), is_binary(Key), is_binary(Value) ->
     case Key of
         <<"">> ->
-            {error, 'Object key may not be empty'};
+            {error, zero_length_key};
         _ ->
             #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value}
     end.
 
 %% @doc Constructor for new riak client objects with an update value and content type.
 -spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
-new(Bucket, Key, Value, ContentType) ->
+new(Bucket, Key, Value, ContentType) when is_binary(Bucket), is_binary(Key), is_binary(Value) ->
     case Key of
         <<"">> ->
-            {error, 'Object key may not be empty'};
+            {error, zero_length_key};
         _ ->
             O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
             update_content_type(O, ContentType)
@@ -592,12 +592,16 @@ key_test() ->
     ?assertEqual(<<"k">>, key(O)).
 
 invalid_key_test() ->
-    {O1, _} = riakc_obj:new(<<"b">>, <<"">>),
-    ?assertEqual(O1, error),
-    {O2, _} = riakc_obj:new(<<"b">>, <<"">>, <<"v">>),
-    ?assertEqual(O2, error),
-    {O3, _} = riakc_obj:new(<<"b">>, <<"">>, <<"v">>, <<"application/x-foo">>),
-    ?assertEqual(O3, error).
+    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<"">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<"">>, <<"v">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<"">>, <<"v">>, <<"application/x-foo">>)),
+
+    try riakc_obj:new("bucket","key") of
+        _-> ?assert(false)
+    catch
+        error:Error ->
+            ?assertEqual(Error, function_clause)
+    end.
 
 vclock_test() ->
     %% For internal use only
