@@ -599,13 +599,7 @@ invalid_key_test() ->
     ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>)),
     ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>, <<"v">>)),
     ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>, <<"v">>, <<"application/x-foo">>)),
-
-    try riakc_obj:new("bucket","key") of
-        _-> ?assert(false)
-    catch
-        error:Error ->
-            ?assertEqual(Error, function_clause)
-    end.
+    ?assertError(function_clause, riakc_obj:new("bucket","key")).
 
 vclock_test() ->
     %% For internal use only
