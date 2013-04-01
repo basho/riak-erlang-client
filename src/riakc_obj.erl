@@ -119,33 +119,31 @@
 %% @doc Constructor for new riak client objects.
 -spec new(bucket(), key()) -> riakc_obj().
 new(Bucket, Key) ->
-    build_client_obj(Bucket, Key, undefined).
+    build_client_object(Bucket, Key, undefined).
 
 %% @doc Constructor for new riak client objects with an update value.
 -spec new(bucket(), key(), value()) -> riakc_obj().
 new(Bucket, Key, Value) ->
-    build_client_obj(Bucket, Key, Value).
+    build_client_object(Bucket, Key, Value).
 
 %% @doc Constructor for new riak client objects with an update value and content type.
 -spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
 new(Bucket, Key, Value, ContentType) ->
-    O = build_client_obj(Bucket, Key, Value),
-    case O of
-        {error, _} ->
-            O;
-        _ ->
-        update_content_type(O, ContentType)
+    case build_client_object(Bucket, Key, Value) of
+        {error, Reason} ->
+            {error, Reason};
+        O ->
+            update_content_type(O, ContentType)
     end.
 
 %% @doc Build a new riak client object with non-empty key
--spec build_client_obj(bucket(), key(), value()) -> riakc_obj().
-build_client_obj(Bucket, Key, Value) when is_binary(Bucket), is_binary(Key) ->
-    case Key of
-        <<"">> ->
-            {error, zero_length_key};
-        _ ->
-            #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value}
-    end.
+-spec build_client_object(bucket(), key(), value()) -> riakc_obj().
+build_client_object(<<>>, K, _) when is_binary(K) ->
+    {error, zero_length_bucket};
+build_client_object(B, <<>>, _) when is_binary(B) ->
+    {error, zero_length_key};
+build_client_object(B, K, V) when is_binary(B), is_binary(K) ->
+    #riakc_obj{bucket = B, key = K, contents = [], updatevalue = V}.
 
 %% @doc Return the containing bucket for this riakc_obj.
 -spec bucket(Object::riakc_obj()) -> bucket().
@@ -592,9 +590,15 @@ key_test() ->
     ?assertEqual(<<"k">>, key(O)).
 
 invalid_key_test() ->
-    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<"">>)),
-    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<"">>, <<"v">>)),
-    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<"">>, <<"v">>, <<"application/x-foo">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<>>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<>>, <<"v">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<"b">>, <<>>, <<"v">>, <<"application/x-foo">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<>>, <<"k">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<>>, <<"k">>, <<"v">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<>>, <<"k">>, <<"v">>, <<"application/x-foo">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>, <<"v">>)),
+    ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>, <<"v">>, <<"application/x-foo">>)),
 
     try riakc_obj:new("bucket","key") of
         _-> ?assert(false)
