@@ -118,33 +118,33 @@
 
 %% @doc Constructor for new riak client objects.
 -spec new(bucket(), key()) -> riakc_obj().
-new(Bucket, Key) when is_binary(Bucket), is_binary(Key) ->
-    case Key of
-        <<"">> ->
-            {error, zero_length_key};
-        _ ->
-            #riakc_obj{bucket = Bucket, key = Key, contents = []}
-    end.
+new(Bucket, Key) ->
+    build_client_obj(Bucket, Key, undefined).
 
 %% @doc Constructor for new riak client objects with an update value.
 -spec new(bucket(), key(), value()) -> riakc_obj().
-new(Bucket, Key, Value) when is_binary(Bucket), is_binary(Key), is_binary(Value) ->
+new(Bucket, Key, Value) ->
+    build_client_obj(Bucket, Key, Value).
+
+%% @doc Constructor for new riak client objects with an update value and content type.
+-spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
+new(Bucket, Key, Value, ContentType) ->
+    O = build_client_obj(Bucket, Key, Value),
+    case O of
+        {error, _} ->
+            O;
+        _ ->
+        update_content_type(O, ContentType)
+    end.
+
+%% @doc Build a new riak client object with non-empty key
+-spec build_client_obj(bucket(), key(), value()) -> riakc_obj().
+build_client_obj(Bucket, Key, Value) when is_binary(Bucket), is_binary(Key) ->
     case Key of
         <<"">> ->
             {error, zero_length_key};
         _ ->
             #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value}
-    end.
-
-%% @doc Constructor for new riak client objects with an update value and content type.
--spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
-new(Bucket, Key, Value, ContentType) when is_binary(Bucket), is_binary(Key), is_binary(Value) ->
-    case Key of
-        <<"">> ->
-            {error, zero_length_key};
-        _ ->
-            O = #riakc_obj{bucket = Bucket, key = Key, contents = [], updatevalue = Value},
-            update_content_type(O, ContentType)
     end.
 
 %% @doc Return the containing bucket for this riakc_obj.
