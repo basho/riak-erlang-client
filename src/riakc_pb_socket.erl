@@ -949,6 +949,10 @@ get_options([{r, R} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{r = riak_pb_kv_codec:encode_quorum(R)});
 get_options([{pr, PR} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{pr = riak_pb_kv_codec:encode_quorum(PR)});
+get_options([{timeout, T} | Rest], Req) when is_integer(T)->
+    get_options(Rest, Req#rpbgetreq{timeout = T});
+get_options([{timeout, _T} | _Rest], _Req) -> 
+    erlang:error(badarg);
 get_options([{if_modified, VClock} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{if_modified = VClock});
 get_options([head | Rest], Req) ->
@@ -966,6 +970,10 @@ put_options([{dw, DW} | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{dw = riak_pb_kv_codec:encode_quorum(DW)});
 put_options([{pw, PW} | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
+put_options([{timeout, T} | Rest], Req) when is_integer(T) ->
+    put_options(Rest, Req#rpbputreq{timeout = T});
+put_options([{timeout, _T} | _Rest], _Req) ->
+    erlang:error(badarg);
 put_options([return_body | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{return_body = 1});
 put_options([return_head | Rest], Req) ->
@@ -992,6 +1000,10 @@ delete_options([{pw, PW} | Rest], Req) ->
     delete_options(Rest, Req#rpbdelreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
 delete_options([{dw, DW} | Rest], Req) ->
     delete_options(Rest, Req#rpbdelreq{dw = riak_pb_kv_codec:encode_quorum(DW)});
+delete_options([{timeout, T} | Rest], Req) when is_integer(T) ->
+    delete_options(Rest, Req#rpbdelreq{timeout = T});
+delete_options([{timeout, _T} | _Rest], _Req) ->
+    erlang:error(badarg);
 delete_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
