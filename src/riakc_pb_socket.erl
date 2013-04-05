@@ -751,11 +751,23 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Timeout = proplists:get_value(timeout, Opts, default_timeout(get_index_timeout)),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     ReturnTerms = proplists:get_value(return_terms, Opts),
+    MaxResults = proplists:get_value(max_results, Opts),
+    Stream = proplists:get_value(stream, Opts, false),
+
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
                        range_min=encode_2i(StartKey),
                        range_max=encode_2i(EndKey),
-                       return_terms=ReturnTerms},
-    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+                       return_terms=ReturnTerms,
+                       max_results=MaxResults,
+                       stream=Stream},
+    Call = case Stream of
+               true ->
+                   ReqId = mk_reqid(),
+                   {req, Req, Timeout, {ReqId, self()}};
+               false ->
+                   {req, Req, Timeout}
+           end,
+    gen_server:call(Pid, Call, CallTimeout).
 
 encode_2i(Value) when is_integer(Value) ->
     list_to_binary(integer_to_list(Value));
@@ -1116,7 +1128,7 @@ process_response(#request{ msg = #rpbputreq{}},
     {reply, {ok, Key}, State};
 process_response(#request{msg = #rpbputreq{bucket = Bucket, key = Key}},
                  #rpbputresp{content = RpbContents, vclock = Vclock,
-                     key = NewKey}, State) ->
+                             key = NewKey}, State) ->
     Contents = riak_pb_kv_codec:decode_contents(RpbContents),
     ReturnKey = case NewKey of
                     undefined -> Key;
@@ -1185,6 +1197,25 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     {reply, {ok, []}, State};
+process_response(#request{msg = #rpbindexreq{return_terms=true, index= <<"$key">>, stream=true, bucket=Bucket}}=Request,
+                 #rpbindexresp{objects=Objects, done=Done}, State) -> %% @HACK
+    case Objects of
+        undefined -> ok;
+        _ ->
+            %% make client objects
+            CObjects = lists:foldr(fun(#rpbindexobject{key=Key, object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
+                                           DContents = riak_pb_kv_codec:decode_contents(Contents),
+                                           [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
+                                   [],
+                                   Objects),
+            send_caller({objects, CObjects}, Request)
+    end,
+    Reply = case Done of
+                true -> {reply, done, State};
+                1 -> {reply, done, State};
+                _ -> {pending, State}
+            end,
+    Reply;
 process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results}, State) ->
     {reply, {ok, Results}, State};
 process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys}, State) ->
