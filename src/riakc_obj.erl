@@ -142,7 +142,7 @@ build_client_object(<<>>, K, _) when is_binary(K) ->
     {error, zero_length_bucket};
 build_client_object(B, <<>>, _) when is_binary(B) ->
     {error, zero_length_key};
-build_client_object(B, K, V) when is_binary(B), is_binary(K) ->
+build_client_object(B, K, V) when is_binary(B), is_binary(K) orelse undefined =:= K ->
     #riakc_obj{bucket = B, key = K, contents = [], updatevalue = V}.
 
 %% @doc Return the containing bucket for this riakc_obj.
@@ -599,6 +599,7 @@ invalid_key_test() ->
     ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>)),
     ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>, <<"v">>)),
     ?assertMatch({error, _}, riakc_obj:new(<<>>, <<>>, <<"v">>, <<"application/x-foo">>)),
+    ?assertMatch(#riakc_obj{}, riakc_obj:new(<<"b">>, undefined)),
     ?assertError(function_clause, riakc_obj:new("bucket","key")).
 
 vclock_test() ->
