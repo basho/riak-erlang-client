@@ -768,11 +768,13 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     MaxResults = proplists:get_value(max_results, Opts),
     Stream = proplists:get_value(stream, Opts, false),
+    Continuation = proplists:get_value(continuation, Opts),
 
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq,
                        key=encode_2i(Key),
                        max_results=MaxResults,
-                       stream=Stream},
+                       stream=Stream,
+                       continuation=Continuation},
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
@@ -813,13 +815,15 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     ReturnTerms = proplists:get_value(return_terms, Opts),
     MaxResults = proplists:get_value(max_results, Opts),
     Stream = proplists:get_value(stream, Opts, false),
+    Continuation = proplists:get_value(continuation, Opts),
 
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
                        range_min=encode_2i(StartKey),
                        range_max=encode_2i(EndKey),
                        return_terms=ReturnTerms,
                        max_results=MaxResults,
-                       stream=Stream},
+                       stream=Stream,
+                       continuation=Continuation},
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
@@ -1260,24 +1264,34 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     {reply, {ok, []}, State};
 process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
-                 #rpbindexresp{results=Results, keys=Keys, done=Done}, State) ->
-    case {Terms, Results, Keys} of
-        {_, undefined, undefined} -> ok;
-        {true, Res, _} ->
-            send_caller({results, Res}, Results);
-        {fale, _, Res} ->
-            send_caller({keys, Res}, Request)
+                 #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
+    ToSend = case {Terms, Results, Keys} of
+                 {_, undefined, undefined} -> ok;
+                 {true, Res, _} ->
+                     {results, Res};
+                 {undefined, _, Res} ->
+                     {keys, Res}
+             end,
+
+    case Cont of
+        undefined -> send_caller(ToSend, Request);
+        _ -> send_caller([ToSend, {continuation, Cont}], Request)
     end,
+
     Reply = case Done of
                 true -> {reply, done, State};
                 1 -> {reply, done, State};
                 _ -> {pending, State}
             end,
     Reply;
-process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results}, State) ->
+process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results, continuation=undefined}, State) ->
     {reply, {ok, Results}, State};
-process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys}, State) ->
+process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys, continuation=undefined}, State) ->
     {reply, {ok, Keys}, State};
+process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results, continuation=Cont}, State) ->
+    {reply, {ok, [{results, Results}, {continuation, Cont}]}, State};
+process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys, continuation=Cont}, State) ->
+    {reply, {ok, [{keys, Keys}, {continuation, Cont}]}, State};
 
 process_response(#request{msg = #rpbsearchqueryreq{}}, rpbsearchqueryresp, State) ->
     {reply, {error, notfound}, State};
