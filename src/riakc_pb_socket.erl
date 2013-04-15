@@ -60,6 +60,7 @@
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
          mapred_bucket_stream/5, mapred_bucket_stream/6,
          search/3, search/4, search/5, search/6,
+         get_index/4, get_index/5, get_index/6, get_index/7, %% @deprecated
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
          default_timeout/1,
          tunnel/4]).
@@ -67,11 +68,17 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-deprecated({get_index,'_', eventually}).
+
 -type ctx() :: any().
 -type rpb_req() :: {tunneled, msg_id(), binary()} | atom() | tuple().
 -type rpb_resp() :: atom() | tuple().
 -type msg_id() :: non_neg_integer(). %% Request identifier for tunneled message types
--type index_opt() :: {timeout, timeout()} | {call_timeout, timeout()}.
+-type index_opt() :: {timeout, timeout()} |
+                     {call_timeout, timeout()} |
+                     {stream, boolean()} |
+                     {continuation, binary()} |
+                     {max_results, non_neg_integer() | all}.
 -type index_opts() :: [index_opt()].
 -type range_index_opt() :: {return_terms, boolean()}.
 -type range_index_opts() :: [index_opt() | range_index_opt()].
@@ -685,23 +692,68 @@ search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout) ->
     Req = search_options(Options, #rpbsearchqueryreq{q = SearchQuery, index = Index}),
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
+
+%% Deprecated, argument explosion functions for indexes
+
 %% @doc Execute a secondary index equality query.
+%%
+%% @deprecated use {@link get_index_eq/4}
+%% @see get_index_eq/4
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer()) ->
+                       {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, Index, Key) ->
+    get_index_eq(Pid, Bucket, Index, Key).
+
+%% @doc Execute a secondary index equality query with specified
+%% timeouts.
+%%
+%% @deprecated use {@link get_index_eq/5}
+%% @see get_index_eq/5
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), timeout(), timeout()) ->
+                       {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) when is_binary(Key) ->
+    get_index_eq(Pid, Bucket, Index, Key, [{timeout, Timeout}, {call_timeout, CallTimeout}]).
+
+%% @doc Execute a secondary index range query.
+%%
+%% @deprecated use {@link get_index_range/5}
+%% @see get_index_range/5
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), key() | integer()) ->
+                       {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, Index, StartKey, EndKey) ->
+    get_index_range(Pid, Bucket, Index, StartKey, EndKey).
+
+%% @doc Execute a secondary index range query with specified
+%% timeouts.
+%%
+%% @deprecated use {@link get_index_range/6}
+%% @see get_index_range/6
+-spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer() | list(),
+                key() | integer() | list(), timeout(), timeout()) ->
+                       {ok, index_result()} | {error, term()}.
+get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
+    get_index_range(Pid, Bucket, Index, StartKey, EndKey, [{timeout, Timeout}, {call_timeout, CallTimeout}]).
+
+%% @doc Execute a secondary index equality query.
+%% equivalent to all defaults for the options.
+%% @see get_index_eq/5 for options and their effect
 -spec get_index_eq(pid(), bucket(), binary() | secondary_index_id(), key() | integer()) ->
                        {ok, index_result()} | {error, term()}.
-get_index_eq(Pid, Bucket, {binary_index, Name}, Key) when is_binary(Key) ->
-    Index = list_to_binary(lists:append([Name, "_bin"])),
-    get_index_eq(Pid, Bucket, Index, Key);
-get_index_eq(Pid, Bucket, {integer_index, Name}, Key) when is_integer(Key) ->
-    Index = list_to_binary(lists:append([Name, "_int"])),
-    BinKey = list_to_binary(integer_to_list(Key)),
-    get_index_eq(Pid, Bucket, Index, BinKey);
 get_index_eq(Pid, Bucket, Index, Key) ->
     Timeout = default_timeout(get_index_timeout),
     CallTimeout = default_timeout(get_index_call_timeout),
     get_index_eq(Pid, Bucket, Index, Key, [{timeout, Timeout}, {call_timeout, CallTimeout}]).
 
-%% @doc Execute a secondary index equality query with specified
-%% timeouts.
+%% @doc Execute a secondary index equality query with specified options
+%% <dl>
+%% <dt>timeout:</dt <dd>milliseconds to wait for a response from riak</dd>
+%% <dt>call_timeout:</dt> <dd>milliseoonds to wait for a local gen_server response</dd>
+%% <dt>stream:</dt> <dd> true | false. Stream results to calling process</dd>
+%% <dt>continuation:</dt> <dd> The opaque, binary continuation returned from a previous query.
+%%                             Requests the next results.</dd>
+%% <dt>max_results:</dt> <dd>Positive integer, maximum number of results to return.
+%%                           Expect a `continuation` in the response if this option is used.</dd>
+%% </dl>
 -spec get_index_eq(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), index_opts()) ->
                        {ok, index_result()} | {error, term()}.
 get_index_eq(Pid, Bucket, {binary_index, Name}, Key, Opts) when is_binary(Key) ->
@@ -714,28 +766,36 @@ get_index_eq(Pid, Bucket, {integer_index, Name}, Key, Opts) when is_integer(Key)
 get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Timeout = proplists:get_value(timeout, Opts, default_timeout(get_index_timeout)),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
+    MaxResults = proplists:get_value(max_results, Opts),
+    Stream = proplists:get_value(stream, Opts, false),
+
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq,
-                       key=encode_2i(Key)},
-    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+                       key=encode_2i(Key),
+                       max_results=MaxResults,
+                       stream=Stream},
+    Call = case Stream of
+               true ->
+                   ReqId = mk_reqid(),
+                   {req, Req, Timeout, {ReqId, self()}};
+               false ->
+                   {req, Req, Timeout}
+           end,
+    gen_server:call(Pid, Call, CallTimeout).
 
 %% @doc Execute a secondary index range query.
 -spec get_index_range(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), key() | integer()) ->
                        {ok, index_result()} | {error, term()}.
-get_index_range(Pid, Bucket, {binary_index, Name}, StartKey, EndKey) when is_binary(StartKey) andalso is_binary(EndKey) ->
-    Index = list_to_binary(lists:append([Name, "_bin"])),
-    get_index_range(Pid, Bucket, Index, StartKey, EndKey);
-get_index_range(Pid, Bucket, {integer_index, Name}, StartKey, EndKey) when is_integer(StartKey) andalso is_integer(EndKey)  ->
-    Index = list_to_binary(lists:append([Name, "_int"])),
-    BinStartKey = list_to_binary(integer_to_list(StartKey)),
-    BinEndKey = list_to_binary(integer_to_list(EndKey)),
-    get_index_range(Pid, Bucket, Index, BinStartKey, BinEndKey);
 get_index_range(Pid, Bucket, Index, StartKey, EndKey) ->
     Timeout = default_timeout(get_index_timeout),
     CallTimeout = default_timeout(get_index_call_timeout),
     get_index_range(Pid, Bucket, Index, StartKey, EndKey, [{timeout, Timeout}, {call_timeout, CallTimeout}]).
 
-%% @doc Execute a secondary index range query with specified
-%% timeouts.
+%% @doc Execute a secondary index range query with specified options.
+%% As well as the options documented for `get_index_eq/5', there is a further options
+%% `{returnterms, boolean{}'. When `true' the indexed values will be returned
+%% as well as the primary key. The formt of the returned values is
+%% `{results, [{value, primary_key}]}'
+%% @see get_index_eq/5 for effect of options.
 -spec get_index_range(pid(), bucket(), binary() | secondary_index_id(), key() | integer() | list(),
                 key() | integer() | list(), range_index_opts()) ->
                        {ok, index_result()} | {error, term()}.
@@ -768,6 +828,8 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                    {req, Req, Timeout}
            end,
     gen_server:call(Pid, Call, CallTimeout).
+
+
 
 encode_2i(Value) when is_integer(Value) ->
     list_to_binary(integer_to_list(Value));
@@ -1197,18 +1259,14 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     {reply, {ok, []}, State};
-process_response(#request{msg = #rpbindexreq{return_terms=true, index= <<"$key">>, stream=true, bucket=Bucket}}=Request,
-                 #rpbindexresp{objects=Objects, done=Done}, State) -> %% @HACK
-    case Objects of
-        undefined -> ok;
-        _ ->
-            %% make client objects
-            CObjects = lists:foldr(fun(#rpbindexobject{key=Key, object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
-                                           DContents = riak_pb_kv_codec:decode_contents(Contents),
-                                           [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
-                                   [],
-                                   Objects),
-            send_caller({objects, CObjects}, Request)
+process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
+                 #rpbindexresp{results=Results, keys=Keys, done=Done}, State) ->
+    case {Terms, Results, Keys} of
+        {_, undefined, undefined} -> ok;
+        {true, Res, _} ->
+            send_caller({results, Res}, Results);
+        {fale, _, Res} ->
+            send_caller({keys, Res}, Request)
     end,
     Reply = case Done of
                 true -> {reply, done, State};
@@ -1248,6 +1306,8 @@ process_response(Request, Reply, State) ->
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #rpbindexreq{stream=true}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(_Request, State) ->
     {noreply, State}.
