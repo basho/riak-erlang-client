@@ -49,9 +49,10 @@
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
          delete_obj/2, delete_obj/3, delete_obj/4,
-         list_buckets/1, list_buckets/2, list_buckets/3,
+         list_buckets/1, list_buckets/2,
+         stream_list_buckets/1, stream_list_buckets/2,
          list_keys/2, list_keys/3,
-         stream_list_keys/2, stream_list_keys/3, stream_list_keys/4,
+         stream_list_keys/2, stream_list_keys/3,
          get_bucket/2, get_bucket/3, get_bucket/4,
          set_bucket/3, set_bucket/4, set_bucket/5,
          mapred/3, mapred/4, mapred/5,
@@ -342,39 +343,56 @@ delete_obj(Pid, Obj, Options, Timeout) ->
 %% @equiv list_buckets(Pid, default_timeout(list_buckets_timeout))
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid) ->
-    list_buckets(Pid, default_timeout(list_buckets_timeout)).
+    list_buckets(Pid, []).
 
 %% @doc List all buckets on the server specifying server-side timeout.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
-%% @equiv list_buckets(Pid, Timeout, default_timeout(list_buckets_call_timeout))
--spec list_buckets(pid(), timeout()) -> {ok, [bucket()]} | {error, term()}.
-list_buckets(Pid, Timeout) ->
-    list_buckets(Pid, Timeout, default_timeout(list_buckets_call_timeout)).
-
-%% @doc List all buckets on the server specifying server-side and local
-%%      call timeout.
-%% <em>This is a potentially expensive operation and should not be used in production.</em>
--spec list_buckets(pid(), timeout(), timeout()) -> {ok, [bucket()]} |
+-spec list_buckets(pid(), timeout()|list()) -> {ok, [bucket()]} |
                                                    {error, term()}.
-list_buckets(Pid, Timeout, CallTimeout) ->
-    gen_server:call(Pid, {req, rpblistbucketsreq, Timeout}, CallTimeout).
+list_buckets(Pid, Timeout) when is_integer(Timeout) ->
+    list_buckets(Pid, [{timeout, Timeout}]);
+list_buckets(Pid, Options) ->
+    case stream_list_buckets(Pid, Options) of
+        {ok, ReqId} ->
+            wait_for_list(ReqId);
+        Error ->
+            Error
+    end.
+
+stream_list_buckets(Pid) ->
+    stream_list_buckets(Pid, []).
+
+stream_list_buckets(Pid, Timeout) when is_integer(Timeout) ->
+    stream_list_buckets(Pid, [{timeout, Timeout}]);
+stream_list_buckets(Pid, Options) ->
+    ServerTimeout = 
+        case proplists:get_value(timeout, Options, none) of
+            none -> ?DEFAULT_TIMEOUT;
+            ST -> ST
+        end,
+    ReqId = mk_reqid(),
+    gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
+                          infinity, {ReqId, self()}}, infinity).
 
 %% @doc List all keys in a bucket
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 %% @equiv list_keys(Pid, Bucket, default_timeout(list_keys_timeout))
 -spec list_keys(pid(), bucket()) -> {ok, [key()]} | {error, term()}.
 list_keys(Pid, Bucket) ->
-    list_keys(Pid, Bucket, default_timeout(list_keys_timeout)).
+    list_keys(Pid, Bucket, []).
 
 %% @doc List all keys in a bucket specifying timeout. This is
 %% implemented using {@link stream_list_keys/3} and then waiting for
 %% the results to complete streaming.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
--spec list_keys(pid(), bucket(), timeout()) -> {ok, [key()]} | {error, term()}.
-list_keys(Pid, Bucket, Timeout) ->
-    case stream_list_keys(Pid, Bucket, Timeout) of
+-spec list_keys(pid(), bucket(), list()|timeout()) -> {ok, [key()]} | 
+                                                      {error, term()}.
+list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
+    list_keys(Pid, Bucket, [{timeout, Timeout}]);
+list_keys(Pid, Bucket, Options) ->
+    case stream_list_keys(Pid, Bucket, Options) of
         {ok, ReqId} ->
-            wait_for_listkeys(ReqId, Timeout);
+            wait_for_list(ReqId);
         Error ->
             Error
     end.
@@ -387,7 +405,7 @@ list_keys(Pid, Bucket, Timeout) ->
 %% @equiv stream_list_keys(Pid, Bucket, default_timeout(stream_list_keys_timeout))
 -spec stream_list_keys(pid(), bucket()) -> {ok, req_id()} | {error, term()}.
 stream_list_keys(Pid, Bucket) ->
-    stream_list_keys(Pid, Bucket, default_timeout(stream_list_keys_timeout)).
+    stream_list_keys(Pid, Bucket, []).
 
 %% @doc Stream list of keys in the bucket to the calling process specifying server side
 %%      timeout.
@@ -396,22 +414,21 @@ stream_list_keys(Pid, Bucket) ->
 %%        {ReqId::req_id(), done}'''
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 %% @equiv stream_list_keys(Pid, Bucket, Timeout, default_timeout(stream_list_keys_call_timeout))
--spec stream_list_keys(pid(), bucket(), timeout()) -> {ok, req_id()} | {error, term()}.
-stream_list_keys(Pid, Bucket, Timeout) ->
-    stream_list_keys(Pid, Bucket, Timeout, default_timeout(stream_list_keys_call_timeout)).
-
-%% @doc Stream list of keys in the bucket to the calling process specifying server side
-%%      timeout and local call timeout.
-%%      The process receives these messages.
-%% ```    {ReqId::req_id(), {keys, [key()]}}
-%%        {ReqId::req_id(), done}'''
-%% <em>This is a potentially expensive operation and should not be used in production.</em>
--spec stream_list_keys(pid(), bucket(), timeout(), timeout()) -> {ok, req_id()} |
-                                                                 {error, term()}.
-stream_list_keys(Pid, Bucket, Timeout, CallTimeout) ->
-    ReqMsg = #rpblistkeysreq{bucket = Bucket},
+-spec stream_list_keys(pid(), bucket(), integer()|list()) -> 
+                              {ok, req_id()} | 
+                              {error, term()}.
+stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
+    stream_list_keys(Pid, Bucket, [{timeout, Timeout}]);
+stream_list_keys(Pid, Bucket, Options) ->
+    ServerTimeout = 
+        case proplists:get_value(timeout, Options, none) of
+            none -> ?DEFAULT_TIMEOUT;
+            ST -> ST
+        end,
+    ReqMsg = #rpblistkeysreq{bucket = Bucket, timeout = ServerTimeout},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, Timeout, {ReqId, self()}}, CallTimeout).
+    gen_server:call(Pid, {req, ReqMsg, infinity, {ReqId, self()}}, 
+                    infinity).
 
 %% @doc Get bucket properties.
 %% @equiv get_bucket(Pid, Bucket, default_timeout(get_bucket_timeout))
@@ -1100,14 +1117,24 @@ process_response(#request{msg = #rpbdelreq{}},
     %% server just returned the rpbdelresp code - no message was encoded
     {reply, ok, State};
 
-process_response(#request{msg = rpblistbucketsreq},
-                 #rpblistbucketsresp{buckets = Buckets}, State) ->
-    {reply, {ok, Buckets}, State};
-
-process_response(#request{msg = rpblistbucketsreq},
-                 rpblistbucketsresp, State) ->
-    %% empty buckets generate an empty message
-    {reply, {ok, []}, State};
+process_response(#request{msg = #rpblistbucketsreq{}}=Request,
+                 #rpblistbucketsresp{done = Done, buckets = Buckets}, 
+                 State) ->
+    _ = case Buckets of
+            undefined ->
+                ok;
+            _ ->
+                %% Have to directly use send_caller as may want to reply with done below.
+                send_caller({buckets, Buckets}, Request)
+        end,
+    case Done of
+        true ->
+            {reply, done, State};
+        1 ->
+            {reply, done, State};
+        _ ->
+            {pending, State}
+    end;
 
 process_response(#request{msg = #rpblistkeysreq{}}=Request,
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
@@ -1181,6 +1208,9 @@ process_response(Request, Reply, State) ->
 %% Called after sending a message - supports returning a
 %% request id for streaming calls
 %% @private
+after_send(#request{msg = #rpblistbucketsreq{}, ctx = {ReqId, _Client}}, 
+           State) ->
+    {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
@@ -1400,16 +1430,14 @@ remove_queued_request(Ref, State) ->
 mk_reqid() -> erlang:phash2(erlang:now()). % only has to be unique per-pid
 
 %% @private
-wait_for_listkeys(ReqId, Timeout) ->
-    wait_for_listkeys(ReqId,Timeout,[]).
+wait_for_list(ReqId) ->
+    wait_for_list(ReqId, []).
 %% @private
-wait_for_listkeys(ReqId,Timeout,Acc) ->
+wait_for_list(ReqId, Acc) ->
     receive
         {ReqId, done} -> {ok, lists:flatten(Acc)};
-        {ReqId, {keys,Res}} -> wait_for_listkeys(ReqId,Timeout,[Res|Acc]);
-        {ReqId, {error, Reason}} -> {error, Reason}
-    after Timeout ->
-            {error, {timeout, Acc}}
+        {ReqId, {error, Reason}} -> {error, Reason};
+        {ReqId, {_, Res}} -> wait_for_list(ReqId, [Res|Acc])
     end.
 
 
