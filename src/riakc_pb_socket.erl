@@ -1265,18 +1265,7 @@ process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     {reply, {ok, []}, State};
 process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
-    ToSend = case {Terms, Results, Keys} of
-                 {_, undefined, undefined} -> ok;
-                 {true, Res0, _} ->
-                     %% rpbpair is abused to send Value,Key pairs as Key, Value pairs
-                     %% in a 2i query the 'key' is the index value and the 'value'
-                     %% the indexed objects primary key
-                     Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Res0],
-                     {results, Res};
-                 {undefined, _, Res} ->
-                     {keys, Res}
-             end,
-
+    ToSend = process_index_response(Terms, Keys, Results),
     case Cont of
         undefined -> send_caller(ToSend, Request);
         _ -> send_caller([ToSend, {continuation, Cont}], Request)
@@ -1288,18 +1277,13 @@ process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=R
                 _ -> {pending, State}
             end,
     Reply;
-process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results0, continuation=undefined}, State) ->
-    Results = [{V, K} ||  #rpbpair{key=V, value=K} <- Results0],
-    {reply, {ok, Results}, State};
-process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys, continuation=undefined}, State) ->
-    {reply, {ok, Keys}, State};
-process_response(#request{msg = #rpbindexreq{return_terms=true}}, #rpbindexresp{results=Results0, continuation=Cont}, State) ->
-    Results = [{V, K} ||  #rpbpair{key=V, value=K} <- Results0],
-    {reply, {ok, [{results, Results}, {continuation, Cont}]}, State};
-process_response(#request{msg = #rpbindexreq{}}, #rpbindexresp{keys=Keys, continuation=Cont}, State) ->
-    {reply, {ok, [{keys, Keys}, {continuation, Cont}]}, State};
-
-process_response(#request{msg = #rpbsearchqueryreq{}}, rpbsearchqueryresp, State) ->
+process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=undefined}, State) ->
+    Response = process_index_response(Terms, Keys, Results),
+    {reply, {ok, Response}, State};
+process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
+    Response = process_index_response(Terms, Keys, Results),
+    {reply, {ok, [Response, {continuation, Cont}]}, State};
+process_response(#request{msg = #rpbsearchqueryreq{}}, prbsearchqueryresp, State) ->
     {reply, {error, notfound}, State};
 process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
                  #rpbsearchqueryresp{docs=PBDocs,max_score=MaxScore,
@@ -1318,6 +1302,23 @@ process_response(#request{msg={tunneled,_MsgId}}, Reply, State) ->
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
+
+%% Helper for index responses
+process_index_response(undefined, Keys, _) ->
+    {keys, Keys};
+process_index_response(false, Keys, _) ->
+    {keys, Keys};
+process_index_response(true, [], Results) ->
+    %% rpbpair is abused to send Value,Key pairs as Key, Value pairs
+    %% in a 2i query the 'key' is the index value and the 'value'
+    %% the indexed objects primary key
+    Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Results],
+    {results, Res};
+process_index_response(true, Keys, []) ->
+    {keys, Keys}.
+
+
+
 
 %%
 %% Called after sending a message - supports returning a
