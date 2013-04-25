@@ -1262,7 +1262,7 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
     end;
 
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
-    {reply, {ok, []}, State};
+    {reply, {ok, {keys, []}}, State};
 process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
     ToSend = process_index_response(Terms, Keys, Results),
