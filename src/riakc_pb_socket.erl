@@ -62,6 +62,7 @@
          search/3, search/4, search/5, search/6,
          get_index/4, get_index/5, get_index/6, get_index/7, %% @deprecated
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
+         cs_bucket_fold/3,
          default_timeout/1,
          tunnel/4]).
 
@@ -82,6 +83,14 @@
 -type index_opts() :: [index_opt()].
 -type range_index_opt() :: {return_terms, boolean()}.
 -type range_index_opts() :: [index_opt() | range_index_opt()].
+-type cs_opt() :: {timeout, timeout()} |
+                  {continuation, binary()} |
+                  {max_results, non_neg_integer() | all} |
+                  {start_key, binary()} |
+                  {start_incl, boolean()} |
+                  {end_key, binary()} |
+                  {end_incl, boolean()}.
+-type cs_opts() :: [cs_opt()].
 
 %% Which client operation the default timeout is being requested
 %% for. `timeout' is the global default timeout. Any of these defaults
@@ -833,14 +842,34 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
-
-
 encode_2i(Value) when is_integer(Value) ->
     list_to_binary(integer_to_list(Value));
 encode_2i(Value) when is_list(Value) ->
     list_to_binary(Value);
 encode_2i(Value) when is_binary(Value) ->
     Value.
+
+%% @doc secret function, do not use, or I come to your house and keeel you.
+-spec cs_bucket_fold(pid(), bucket(), cs_opts()) -> {ok, reference()} | {error, term()}.
+cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(get_index_timeout)),
+    StartKey = proplists:get_value(start_key, Opts, <<>>),
+    EndKey = proplists:get_value(end_key, Opts),
+    MaxResults = proplists:get_value(max_results, Opts),
+    StartIncl = proplists:get_value(start_incl, Opts, true),
+    EndIncl = proplists:get_value(end_incl, Opts, false),
+    Continuation = proplists:get_value(continuation, Opts),
+
+    Req = #rpbcsbucketreq{bucket=Bucket,
+                          start_key=StartKey,
+                          end_key=EndKey,
+                          start_incl=StartIncl,
+                          end_incl=EndIncl,
+                          max_results=MaxResults,
+                          continuation=Continuation},
+    ReqId = mk_reqid(),
+    Call = {req, Req, Timeout, {ReqId, self()}},
+    gen_server:call(Pid, Call, Timeout).
 
 %% @doc Return the default timeout for an operation if none is provided.
 %%      Falls back to the default timeout.
@@ -1283,6 +1312,31 @@ process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp
 process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
     Response = process_index_response(Terms, Keys, Results),
     {reply, {ok, [Response, {continuation, Cont}]}, State};
+process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsbucketresp{objects=Objects, done=Done, continuation=Cont}, State) ->
+    %% TEMP - cs specific message for fold_objects
+    ToSend =  case Objects of
+                  undefined -> {objects, []};
+                  _ ->
+                      %% make client objects
+                      CObjects = lists:foldr(fun(#rpbindexobject{key=Key,
+                                                                 object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
+                                                     DContents = riak_pb_kv_codec:decode_contents(Contents),
+                                                     [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
+                                             [],
+                                             Objects),
+                      {objects, CObjects}
+              end,
+    case Cont of
+        undefined ->
+            send_caller(ToSend, Request);
+        _ -> send_caller([ToSend, {continuation, Cont}], Request)
+    end,
+    Reply = case Done of
+                true -> {reply, done, State};
+                1 -> {reply, done, State};
+                _ -> {pending, State}
+            end,
+    Reply;
 process_response(#request{msg = #rpbsearchqueryreq{}}, prbsearchqueryresp, State) ->
     {reply, {error, notfound}, State};
 process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
@@ -1329,6 +1383,8 @@ after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbindexreq{stream=true}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #rpbcsbucketreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(_Request, State) ->
     {noreply, State}.
