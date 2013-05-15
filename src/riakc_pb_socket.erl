@@ -51,6 +51,7 @@
          delete_obj/2, delete_obj/3, delete_obj/4,
          list_buckets/1, list_buckets/2,
          stream_list_buckets/1, stream_list_buckets/2,
+         legacy_list_buckets/2,
          list_keys/2, list_keys/3,
          stream_list_keys/2, stream_list_keys/3,
          get_bucket/2, get_bucket/3, get_bucket/4,
@@ -371,8 +372,19 @@ stream_list_buckets(Pid, Options) ->
             ST -> ST
         end,
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
+    gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout,
+                                                  stream=true},
                           infinity, {ReqId, self()}}, infinity).
+
+legacy_list_buckets(Pid, Options) ->
+    ServerTimeout = 
+        case proplists:get_value(timeout, Options, none) of
+            none -> ?DEFAULT_TIMEOUT;
+            ST -> ST
+        end,
+    gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
+                          infinity}, infinity).
+
 
 %% @doc List all keys in a bucket
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
