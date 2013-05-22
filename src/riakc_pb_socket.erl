@@ -772,7 +772,7 @@ counter_incr(Pid, Bucket, Key, Amount) ->
 %% use the provided `write_quorum()' `Options' for the operation.
 %% A counter increment is a lot like a riak `put' so the semantics
 %% are the same for the given options.
--spec counter_incr(pid(), bucket(), key(), integer(), [write_quorum()]) ->
+-spec counter_incr(pid(), bucket(), key(), integer(), [write_quorum() | returnvalue]) ->
     ok | {error, term()}.
 counter_incr(Pid, Bucket, Key, Amount, Options) ->
     Req = lists:foldl(fun({w, W}, Msg) ->
@@ -780,7 +780,10 @@ counter_incr(Pid, Bucket, Key, Amount, Options) ->
                          ({dw, DW}, Msg) ->
                               Msg#rpbcounterupdatereq{dw=riak_pb_kv_codec:encode_quorum(DW)};
                          ({pw, PW}, Msg) ->
-                              Msg#rpbcounterupdatereq{pw=riak_pb_kv_codec:encode_quorum(PW)}
+                              Msg#rpbcounterupdatereq{pw=riak_pb_kv_codec:encode_quorum(PW)};
+                         (returnvalue, Msg) ->
+                              Msg#rpbcounterupdatereq{returnvalue=true};
+                         (_, Msg) -> Msg
                       end,
                       #rpbcounterupdatereq{bucket=Bucket, key=Key, amount=Amount},
                       Options),
@@ -1211,6 +1214,9 @@ process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
     Result = #search_results{docs=Values, max_score=MaxScore, num_found=NumFound},
     {reply, {ok, Result}, State};
 
+process_response(#request{msg = #rpbcounterupdatereq{returnvalue=true}},
+                 #rpbcounterupdateresp{value=Value}, State) ->
+    {reply, {ok, Value}, State};
 process_response(#request{msg = #rpbcounterupdatereq{}},
                  rpbcounterupdateresp, State) ->
     %% server just returned the rpbputresp code - no message was encoded
