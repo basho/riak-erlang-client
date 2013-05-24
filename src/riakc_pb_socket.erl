@@ -1118,6 +1118,10 @@ put_options([if_not_modified | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{if_not_modified = true});
 put_options([if_none_match | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{if_none_match = true});
+put_options([asis | Rest], Req) ->
+    put_options(Rest, Req#rpbputreq{asis = true});
+put_options([{asis, Val} | Rest], Req) when is_boolean(Val) ->
+    put_options(Rest, Req#rpbputreq{asis = Val});
 put_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
