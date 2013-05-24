@@ -1130,23 +1130,15 @@ process_response(#request{msg = #rpbdelreq{}},
     {reply, ok, State};
 
 process_response(#request{msg = #rpblistbucketsreq{}}=Request,
-                 #rpblistbucketsresp{done = Done, buckets = Buckets}, 
+                 #rpblistbucketsresp{buckets = Buckets, done = undefined}, 
                  State) ->
-    _ = case Buckets of
-            undefined ->
-                ok;
-            _ ->
-                %% Have to directly use send_caller as may want to reply with done below.
-                send_caller({buckets, Buckets}, Request)
-        end,
-    case Done of
-        true ->
-            {reply, done, State};
-        1 ->
-            {reply, done, State};
-        _ ->
-            {pending, State}
-    end;
+    send_caller({buckets, Buckets}, Request),
+    {pending, State};
+
+process_response(#request{msg = #rpblistbucketsreq{}},
+                 #rpblistbucketsresp{done = true}, 
+                 State) ->
+    {reply, done, State};
 
 process_response(#request{msg = #rpblistkeysreq{}}=Request,
                  #rpblistkeysresp{done = Done, keys = Keys}, State) ->
