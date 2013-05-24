@@ -720,7 +720,7 @@ get_index(Pid, Bucket, Index, Key) ->
 %% @see get_index_eq/5
 -spec get_index(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), timeout(), timeout()) ->
                        {ok, index_result()} | {error, term()}.
-get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) when is_binary(Key) ->
+get_index(Pid, Bucket, Index, Key, Timeout, CallTimeout) ->
     get_index_eq(Pid, Bucket, Index, Key, [{timeout, Timeout}, {call_timeout, CallTimeout}]).
 
 %% @doc Execute a secondary index range query.
@@ -803,7 +803,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey) ->
 
 %% @doc Execute a secondary index range query with specified options.
 %% As well as the options documented for `get_index_eq/5', there is a further options
-%% `{returnterms, boolean{}'. When `true' the indexed values will be returned
+%% `{return_terms, boolean{}'. When `true' the indexed values will be returned
 %% as well as the primary key. The formt of the returned values is
 %% `{results, [{value, primary_key}]}'
 %% @see get_index_eq/5 for effect of options.
