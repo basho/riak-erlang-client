@@ -1124,6 +1124,12 @@ get_options([head | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{head = true});
 get_options([deletedvclock | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{deletedvclock = true});
+get_options([{n_val, N} | Rest], Req)
+  when is_integer(N), N > 0 ->
+    get_options(Rest, Req#rpbgetreq{n_val = N});
+get_options([{sloppy_quorum, Bool} | Rest], Req)
+  when Bool == true; Bool == false ->
+    get_options(Rest, Req#rpbgetreq{sloppy_quorum = Bool});
 get_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
@@ -1151,6 +1157,12 @@ put_options([asis | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{asis = true});
 put_options([{asis, Val} | Rest], Req) when is_boolean(Val) ->
     put_options(Rest, Req#rpbputreq{asis = Val});
+put_options([{n_val, N} | Rest], Req)
+  when is_integer(N), N > 0 ->
+    put_options(Rest, Req#rpbputreq{n_val = N});
+put_options([{sloppy_quorum, Bool} | Rest], Req)
+  when Bool == true; Bool == false ->
+    put_options(Rest, Req#rpbputreq{sloppy_quorum = Bool});
 put_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
@@ -1173,6 +1185,12 @@ delete_options([{timeout, T} | Rest], Req) when is_integer(T) ->
     delete_options(Rest, Req#rpbdelreq{timeout = T});
 delete_options([{timeout, _T} | _Rest], _Req) ->
     erlang:error(badarg);
+delete_options([{n_val, N} | Rest], Req)
+  when is_integer(N), N > 0 ->
+    delete_options(Rest, Req#rpbdelreq{n_val = N});
+delete_options([{sloppy_quorum, Bool} | Rest], Req)
+  when Bool == true; Bool == false ->
+    delete_options(Rest, Req#rpbdelreq{sloppy_quorum = Bool});
 delete_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 

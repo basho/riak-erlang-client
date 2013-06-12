@@ -52,6 +52,9 @@
 -type write_quorum() :: {w, WriteQuorum::quorum()} |
                         {dw, DurableWriteQuorum::quorum()} |
                         {pw, PrimaryWriteQuorum::quorum()}. %% Valid quorum options for write requests.
+-type delete_option() :: delete_quorum()  |
+                      {n_val, pos_integer()} |
+                      {sloppy_quorum, boolean()}.
 -type delete_quorum() :: read_quorum() |
                          write_quorum() |
                          {rw, ReadWriteQuorum::quorum()}. %% Valid quorum options for delete requests. Note that `rw' is deprecated in Riak 1.0 and later.
@@ -59,7 +62,9 @@
                       {if_modified, riakc_obj:vclock()} |
                       {notfound_ok, boolean()} |
                       {basic_quorum, boolean()} |
-                      head | deletedvclock.
+                      head | deletedvclock |
+                      {n_val, pos_integer()} |
+                      {sloppy_quorum, boolean()}.
 
 
 %% Valid request options for get requests. When `if_modified' is
@@ -68,7 +73,9 @@
 %% returned. When `deletedvclock' is specified, the vector clock of
 %% the tombstone will be returned if the object has been recently
 %% deleted.
--type put_option() :: write_quorum() | return_body | return_head | if_not_modified | if_none_match.
+-type put_option() :: write_quorum() | return_body | return_head | if_not_modified | if_none_match |
+                      {n_val, pos_integer()} |
+                      {sloppy_quorum, boolean()}.
 %% Valid request options for put requests. `return_body' returns the
 %% entire result of storing the object. `return_head' returns the
 %% metadata from the result of storing the object. `if_not_modified'
@@ -78,7 +85,7 @@
 -type get_options() :: [get_option()]. %% A list of options for a get request.
 -type put_options() :: [put_option()]. %% A list of options for a put request.
 -type search_options() :: [search_option()]. %% A list of options for a search request.
--type delete_options() :: [delete_quorum()]. %% A list of options for a delete request.
+-type delete_options() :: [delete_option()]. %% A list of options for a delete request.
 -type mapred_queryterm() ::  {map, mapred_funterm(), Arg::term(), Accumulate :: boolean()} |
                              {reduce, mapred_funterm(), Arg::term(),Accumulate :: boolean()} |
                              {link, Bucket :: riakc_obj:bucket(), Tag :: term(), Accumulate :: boolean()}.
