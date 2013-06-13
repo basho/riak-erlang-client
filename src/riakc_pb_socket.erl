@@ -68,6 +68,10 @@
          default_timeout/1,
          tunnel/4]).
 
+%% Counter API
+-export([counter_incr/4, counter_val/3]).
+%% with options
+-export([counter_incr/5, counter_val/4]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
@@ -923,6 +927,35 @@ tunnel(Pid, MsgId, Pkt, Timeout) ->
     Req = {tunneled, MsgId, Pkt},
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
+%% @doc increment the counter at `bucket', `key' by `amount'
+-spec counter_incr(pid(), bucket(), key(), integer()) -> ok.
+counter_incr(Pid, Bucket, Key, Amount) ->
+    counter_incr(Pid, Bucket, Key, Amount, []).
+
+%% @doc increment the counter at `Bucket', `Key' by `Amount'.
+%% use the provided `write_quorum()' `Options' for the operation.
+%% A counter increment is a lot like a riak `put' so the semantics
+%% are the same for the given options.
+-spec counter_incr(pid(), bucket(), key(), integer(), [write_quorum()]) ->
+    ok | {error, term()}.
+counter_incr(Pid, Bucket, Key, Amount, Options) ->
+    Req = counter_incr_options(Options, #rpbcounterupdatereq{bucket=Bucket, key=Key, amount=Amount}),
+    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}).
+
+%% @doc get the current value of the counter at `Bucket', `Key'.
+-spec counter_val(pid(), bucket(), key()) ->
+                         {ok, integer()} | {error, notfound}.
+counter_val(Pid, Bucket, Key) ->
+    counter_val(Pid, Bucket, Key, []).
+
+%% @doc get the current value of the counter at `Bucket', `Key' using
+%% the `read_qurom()' `Options' provided.
+-spec counter_val(pid(), bucket(), key(), [read_quorum()]) ->
+                         {ok, integer()} | {error, term()}.
+counter_val(Pid, Bucket, Key, Options) ->
+    Req = counter_val_options(Options, #rpbcountergetreq{bucket=Bucket, key=Key}),
+    gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}).
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -1215,6 +1248,32 @@ search_options([{presort, Presort} | Rest], Req) ->
 search_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
+counter_incr_options([], Req) ->
+    Req;
+counter_incr_options([{w, W} | Rest], Req) ->
+    counter_incr_options(Rest, Req#rpbcounterupdatereq{w=riak_pb_kv_codec:encode_quorum(W)});
+counter_incr_options([{dw, DW} | Rest], Req) ->
+    counter_incr_options(Rest, Req#rpbcounterupdatereq{dw=riak_pb_kv_codec:encode_quorum(DW)});
+counter_incr_options([{pw, PW} | Rest], Req) ->
+    counter_incr_options(Rest, Req#rpbcounterupdatereq{pw=riak_pb_kv_codec:encode_quorum(PW)});
+counter_incr_options([returnvalue | Rest], Req) ->
+    counter_incr_options(Rest, Req#rpbcounterupdatereq{returnvalue=true});
+counter_incr_options([_ | _Rest], _Req) ->
+    erlang:error(badarg).
+
+counter_val_options([], Req) ->
+    Req;
+counter_val_options([{basic_quorum, BQ} | Rest], Req) ->
+    counter_val_options(Rest, Req#rpbcountergetreq{basic_quorum=BQ});
+counter_val_options([{notfound_ok, NFOK} | Rest], Req) ->
+    counter_val_options(Rest, Req#rpbcountergetreq{notfound_ok=NFOK});
+counter_val_options([{r, R} | Rest], Req) ->
+    counter_val_options(Rest, Req#rpbcountergetreq{r=riak_pb_kv_codec:encode_quorum(R)});
+counter_val_options([{pr, PR} | Rest], Req) ->
+    counter_val_options(Rest, Req#rpbcountergetreq{pr=riak_pb_kv_codec:encode_quorum(PR)});
+counter_val_options([_ | _Rest], _Req) ->
+    erlang:error(badarg).
+
 %% Process response from the server - passes back in the request and
 %% context the request was issued with.
 %% Return noreply if the request is completed, but no reply needed
@@ -1401,6 +1460,20 @@ process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
     {reply, {ok, Result}, State};
 process_response(#request{msg=#rpbresetbucketreq{}}, rpbresetbucketresp, State) ->
     {reply, ok, State};
+
+process_response(#request{msg = #rpbcounterupdatereq{returnvalue=true}},
+                 #rpbcounterupdateresp{value=Value}, State) ->
+    {reply, {ok, Value}, State};
+process_response(#request{msg = #rpbcounterupdatereq{}},
+                 rpbcounterupdateresp, State) ->
+    %% server just returned the rpbcounterupdateresp code - no message was encoded
+    {reply, ok, State};
+process_response(#request{msg = #rpbcountergetreq{}},
+                 rpbcountergetresp, State) ->
+    {reply, {error, notfound}, State};
+process_response(#request{msg = #rpbcountergetreq{}},
+                 #rpbcountergetresp{value=Value}, State) ->
+    {reply, {ok, Value}, State};
 
 process_response(#request{msg={tunneled,_MsgId}}, Reply, State) ->
     %% Tunneled msg response
@@ -2805,6 +2878,19 @@ live_node_tests() ->
                     MD5 = riakc_obj:delete_secondary_index(MD4,{integer_index,"idx"}),
                     O5 = riakc_obj:update_metadata(O4, MD5),
                     ?assertEqual(ok, ?MODULE:put(Pid, O5))
+             end)},
+     {"counter increment / decrement / get value",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 Bucket = <<"counter_test_bucket">>,
+                 Key = <<"test_counter">>,
+                 %% counters require allow_mult to be true
+                 ok = set_bucket(Pid, Bucket, [{allow_mult, true}]),
+                 ok = ?MODULE:counter_incr(Pid, Bucket, Key, 10),
+                 ?assertEqual({ok, 10}, ?MODULE:counter_val(Pid, Bucket, Key)),
+                 ok = ?MODULE:counter_incr(Pid, Bucket, Key, -5, [{w, quorum}, {pw, one}, {dw, all}]),
+                 ?assertEqual({ok, 5}, ?MODULE:counter_val(Pid, Bucket, Key, [{pr, one}]))
              end)}
 
      ].
