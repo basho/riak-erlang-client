@@ -137,7 +137,8 @@ new(Bucket, Key, Value, ContentType) ->
     end.
 
 %% @doc Build a new riak client object with non-empty key
--spec build_client_object(bucket(), key(), value()) -> riakc_obj().
+-spec build_client_object(bucket(), key(), undefined | value()) ->
+                                 riakc_obj() | {error, atom()}.
 build_client_object(<<>>, K, _) when is_binary(K) ->
     {error, zero_length_bucket};
 build_client_object(B, <<>>, _) when is_binary(B) ->

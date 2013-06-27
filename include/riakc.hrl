@@ -137,7 +137,7 @@
                         timeout.
 
 -type secondary_index_id() :: {binary_index, string()} | {integer_index, string()}.
--type index_result() :: [key()].
+-type index_result() :: {keys, [key()]}.
 
 -type search_option() ::
         {rows, non_neg_integer()} |  %% Limit rows
