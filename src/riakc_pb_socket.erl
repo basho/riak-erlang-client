@@ -134,6 +134,7 @@
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
+                credentials :: undefined | {string(), string()},
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
@@ -1291,7 +1292,9 @@ parse_options([{auto_reconnect,Bool}|Options], State) when
       Bool =:= true; Bool =:= false ->
     parse_options(Options, State#state{auto_reconnect = Bool});
 parse_options([auto_reconnect|Options], State) ->
-    parse_options([{auto_reconnect, true}|Options], State).
+    parse_options([{auto_reconnect, true}|Options], State);
+parse_options([{credentials, User, Pass}|Options], State) ->
+    parse_options(Options, State#state{credentials={User, Pass}}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -1811,10 +1814,68 @@ connect(State) when State#state.sock =:= undefined ->
                          [binary, {active, once}, {packet, 4}, {header, 1}],
                          State#state.connect_timeout) of
         {ok, Sock} ->
-            {ok, State#state{sock = Sock, connects = Connects+1,
-                             reconnect_interval = ?FIRST_RECONNECT_INTERVAL}};
+            State1 = State#state{sock = Sock, connects = Connects+1,
+                                 reconnect_interval = ?FIRST_RECONNECT_INTERVAL},
+            case State#state.credentials of
+                undefined ->
+                    {ok, State1};
+                _ ->
+                    start_tls(State1)
+            end;
         Error ->
             Error
+    end.
+
+start_tls(State=#state{sock=Sock}) ->
+    %% Send STARTTLS
+    io:format("sending starttls~n"),
+    StartTLSCode = riak_pb_codec:msg_code(rpbstarttls),
+    gen_tcp:send(Sock, <<StartTLSCode:8>>),
+    receive
+        {tcp_error, Sock, Reason} ->
+            {error, Reason};
+        {tcp_closed, Sock} ->
+            {error, closed};
+        {tcp, Sock, Data} ->
+            [MsgCode|MsgData] = Data,
+            case riak_pb_codec:decode(MsgCode, MsgData) of
+                rpbstarttls ->
+                    case ssl:connect(Sock, [{verify, verify_peer},
+                                            {cacertfile,
+                                             "/home/andrew/riak_test/priv/certs/cacert.org/ca/root.crt"}], 1000) of
+                        {ok, SSLSock} ->
+                            io:format("STARTTLS suceeded~n"),
+                            ok = ssl:setopts(SSLSock, [{active, once}]),
+                            start_auth(State#state{sock=SSLSock});
+                        {error, Reason2} ->
+                            {error, Reason2}
+                    end;
+                #rpberrorresp{} ->
+                    %% server doesn't know about STARTTLS or security is
+                    %% disabled, continue as normal
+                    {ok, State}
+            end
+    end.
+
+start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
+    io:format("sending auth~n"),
+    ssl:send(Sock, riak_pb_codec:encode(#rpbauthreq{user=User,
+                                                    password=Pass})),
+    receive
+        {ssl_error, Sock, Reason} ->
+            {error, Reason};
+        {ssl_closed, Sock} ->
+            {error, closed};
+        {ssl, Sock, Data} ->
+            [MsgCode|MsgData] = Data,
+            case riak_pb_codec:decode(MsgCode, MsgData) of
+                rpbauthresp ->
+                    io:format("auth suceeded~n"),
+                    {ok, State};
+                #rpberrorresp{} = Err ->
+                    io:format("auth failed~n"),
+                    fmt_err_msg(Err)
+            end
     end.
 
 %% @private
