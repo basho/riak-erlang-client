@@ -136,8 +136,27 @@
                         search_timeout | search_call_timeout |
                         timeout.
 
+-type continuation() :: 'undefined' | binary().
 -type secondary_index_id() :: {binary_index, string()} | {integer_index, string()}.
--type index_result() :: {keys, [key()]}.
+-type index_term() :: integer() | binary().
+-type keys() :: [binary()] | 'undefined'.
+-type index_terms() :: [{index_term(), binary()}] | 'undefined'.
+
+-record(index_results, {
+        keys :: keys(),
+        terms :: index_terms(),
+        continuation :: continuation()
+        }).
+-type index_results() :: #index_results{}.
+
+-record(index_stream_result, {
+        keys :: keys(),
+        terms :: index_terms()
+        }).
+-type index_stream_result() :: #index_stream_result{}.
+
+-type index_done() :: {'done', continuation()}.
+
 
 -type search_option() ::
         {rows, non_neg_integer()} |  %% Limit rows
