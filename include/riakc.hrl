@@ -26,10 +26,10 @@
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
--type client_option()  :: queue_if_disconnected | 
+-type client_option()  :: queue_if_disconnected |
                           {queue_if_disconnected, boolean()} |
-                          {connect_timeout, pos_integer()} | 
-                          auto_reconnect | 
+                          {connect_timeout, pos_integer()} |
+                          auto_reconnect |
                           {auto_reconnect, boolean()}.
 %% Options for starting or modifying the connection:
 %% `queue_if_disconnected' when present or true will cause requests to
@@ -106,9 +106,9 @@
 %% only work from the shell (compiled fun() terms refer to compiled
 %% code only). `strfun' contains the textual source of an Erlang
 %% function but the functionality must be enabled on the Riak cluster.
-%% `jsanon' either contains javascript code that will be evaluated 
+%% `jsanon' either contains javascript code that will be evaluated
 %% as an anonymous function, or a bucket-value pair, pointing
-%% to a record stored in riak containing the source of an anonymous 
+%% to a record stored in riak containing the source of an anonymous
 %% javascript function. `jsfun' contains the name of a javascript
 %% function, that when evaluated points to a built-in javascript function.
 -type mapred_result() :: [term()].

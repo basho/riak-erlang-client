@@ -391,7 +391,7 @@ stream_list_buckets(Pid) ->
 stream_list_buckets(Pid, Timeout) when is_integer(Timeout) ->
     stream_list_buckets(Pid, [{timeout, Timeout}]);
 stream_list_buckets(Pid, Options) ->
-    ServerTimeout = 
+    ServerTimeout =
         case proplists:get_value(timeout, Options, none) of
             none -> ?DEFAULT_TIMEOUT;
             ST -> ST
@@ -402,7 +402,7 @@ stream_list_buckets(Pid, Options) ->
                           infinity, {ReqId, self()}}, infinity).
 
 legacy_list_buckets(Pid, Options) ->
-    ServerTimeout = 
+    ServerTimeout =
         case proplists:get_value(timeout, Options, none) of
             none -> ?DEFAULT_TIMEOUT;
             ST -> ST
@@ -422,7 +422,7 @@ list_keys(Pid, Bucket) ->
 %% implemented using {@link stream_list_keys/3} and then waiting for
 %% the results to complete streaming.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
--spec list_keys(pid(), bucket(), list()|timeout()) -> {ok, [key()]} | 
+-spec list_keys(pid(), bucket(), list()|timeout()) -> {ok, [key()]} |
                                                       {error, term()}.
 list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     list_keys(Pid, Bucket, [{timeout, Timeout}]);
@@ -451,20 +451,20 @@ stream_list_keys(Pid, Bucket) ->
 %%        {ReqId::req_id(), done}'''
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 %% @equiv stream_list_keys(Pid, Bucket, Timeout, default_timeout(stream_list_keys_call_timeout))
--spec stream_list_keys(pid(), bucket(), integer()|list()) -> 
-                              {ok, req_id()} | 
+-spec stream_list_keys(pid(), bucket(), integer()|list()) ->
+                              {ok, req_id()} |
                               {error, term()}.
 stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Bucket, [{timeout, Timeout}]);
 stream_list_keys(Pid, Bucket, Options) ->
-    ServerTimeout = 
+    ServerTimeout =
         case proplists:get_value(timeout, Options, none) of
             none -> ?DEFAULT_TIMEOUT;
             ST -> ST
         end,
     ReqMsg = #rpblistkeysreq{bucket = Bucket, timeout = ServerTimeout},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, infinity, {ReqId, self()}}, 
+    gen_server:call(Pid, {req, ReqMsg, infinity, {ReqId, self()}},
                     infinity).
 
 %% @doc Get bucket properties.
@@ -1149,7 +1149,7 @@ get_options([{pr, PR} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{pr = riak_pb_kv_codec:encode_quorum(PR)});
 get_options([{timeout, T} | Rest], Req) when is_integer(T)->
     get_options(Rest, Req#rpbgetreq{timeout = T});
-get_options([{timeout, _T} | _Rest], _Req) -> 
+get_options([{timeout, _T} | _Rest], _Req) ->
     erlang:error(badarg);
 get_options([{if_modified, VClock} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{if_modified = VClock});
@@ -1347,13 +1347,13 @@ process_response(#request{msg = #rpbdelreq{}},
     {reply, ok, State};
 
 process_response(#request{msg = #rpblistbucketsreq{}}=Request,
-                 #rpblistbucketsresp{buckets = Buckets, done = undefined}, 
+                 #rpblistbucketsresp{buckets = Buckets, done = undefined},
                  State) ->
     send_caller({buckets, Buckets}, Request),
     {pending, State};
 
 process_response(#request{msg = #rpblistbucketsreq{}},
-                 #rpblistbucketsresp{done = true}, 
+                 #rpblistbucketsresp{done = true},
                  State) ->
     {reply, done, State};
 
@@ -1501,7 +1501,7 @@ index_stream_result_to_index_result(#index_stream_result{keys=Keys,
 %% Called after sending a message - supports returning a
 %% request id for streaming calls
 %% @private
-after_send(#request{msg = #rpblistbucketsreq{}, ctx = {ReqId, _Client}}, 
+after_send(#request{msg = #rpblistbucketsreq{}, ctx = {ReqId, _Client}},
            State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
@@ -2844,7 +2844,7 @@ live_node_tests() ->
                     ?assertEqual([<<"aaa">>], lists:sort(riakc_obj:get_secondary_index(MD2,{binary_index,"idx"}))),
                     MD3 = riakc_obj:add_secondary_index(MD2, [{{binary_index, "idx"},[<<"bbb">>,<<"aaa">>,<<"ccc">>]}]),
                     O3 = riakc_obj:update_metadata(O2, MD3),
-                    ?assertEqual(ok, ?MODULE:put(Pid, O3)),                    
+                    ?assertEqual(ok, ?MODULE:put(Pid, O3)),
                     ?assertEqual({ok,[<<"key1">>]}, ?MODULE:get_index(Pid, <<"b">>, {binary_index, "idx"}, <<"bbb">>)),
                     {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key1">>),
                     MD4 = riakc_obj:get_update_metadata(O4),
