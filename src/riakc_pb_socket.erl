@@ -1369,8 +1369,6 @@ process_response(#request{msg = #rpblistkeysreq{}}=Request,
     case Done of
         true ->
             {reply, done, State};
-        1 ->
-            {reply, done, State};
         _ ->
             {pending, State}
     end;
@@ -1396,8 +1394,6 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
     case Done of
         true ->
             {reply, done, State};
-        1 ->
-            {reply, done, State};
         _ ->
             {pending, State}
     end;
@@ -1412,7 +1408,6 @@ process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=R
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
                 true -> DoneResponse;
-                1 -> DoneResponse;
                 _ -> {pending, State}
     end;
 process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
@@ -1438,7 +1433,6 @@ process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsb
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
         true -> DoneResponse;
-        1 -> DoneResponse;
         _ -> {pending, State}
     end;
 process_response(#request{msg = #rpbsearchqueryreq{}}, prbsearchqueryresp, State) ->
