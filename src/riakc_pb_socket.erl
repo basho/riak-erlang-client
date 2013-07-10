@@ -136,6 +136,8 @@
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
                 credentials :: undefined | {string(), string()},
+                certfile,
+                keyfile,
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
@@ -1309,7 +1311,11 @@ parse_options([{auto_reconnect,Bool}|Options], State) when
 parse_options([auto_reconnect|Options], State) ->
     parse_options([{auto_reconnect, true}|Options], State);
 parse_options([{credentials, User, Pass}|Options], State) ->
-    parse_options(Options, State#state{credentials={User, Pass}}).
+    parse_options(Options, State#state{credentials={User, Pass}});
+parse_options([{certfile, File}|Options], State) ->
+    parse_options(Options, State#state{certfile=File});
+parse_options([{keyfile, File}|Options], State) ->
+    parse_options(Options, State#state{keyfile=File}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -1855,6 +1861,8 @@ start_tls(State=#state{sock=Sock}) ->
             case riak_pb_codec:decode(MsgCode, MsgData) of
                 rpbstarttls ->
                     case ssl:connect(Sock, [{verify, verify_peer},
+                                            {certfile, State#state.certfile},
+                                            {keyfile, State#state.keyfile},
                                             {cacertfile,
                                              "/home/andrew/riak_test/priv/certs/cacert.org/ca/root.crt"}], 1000) of
                         {ok, SSLSock} ->
