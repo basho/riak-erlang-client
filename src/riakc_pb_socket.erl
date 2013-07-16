@@ -1399,7 +1399,7 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
     end;
 
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
-    Results = #index_results{keys=[], continuation=undefined},
+    Results = ?INDEX_RESULTS{keys=[], continuation=undefined},
     {reply, {ok, Results}, State};
 process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
@@ -1413,7 +1413,7 @@ process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=R
 process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
     StreamResponse = process_index_response(Terms, Keys, Results),
     RegularResponse = index_stream_result_to_index_result(StreamResponse),
-    RegularResponseWithContinuation = RegularResponse#index_results{continuation=Cont},
+    RegularResponseWithContinuation = RegularResponse?INDEX_RESULTS{continuation=Cont},
     {reply, {ok, RegularResponseWithContinuation}, State};
 process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsbucketresp{objects=Objects, done=Done, continuation=Cont}, State) ->
     %% TEMP - cs specific message for fold_objects
@@ -1473,23 +1473,23 @@ process_response(Request, Reply, State) ->
 -spec process_index_response(undefined | boolean(), list(), list()) ->
     index_stream_result().
 process_index_response(undefined, Keys, _) ->
-    #index_stream_result{keys=Keys};
+    ?INDEX_STREAM_RESULT{keys=Keys};
 process_index_response(false, Keys, _) ->
-    #index_stream_result{keys=Keys};
+    ?INDEX_STREAM_RESULT{keys=Keys};
 process_index_response(true, [], Results) ->
     %% rpbpair is abused to send Value,Key pairs as Key, Value pairs
     %% in a 2i query the 'key' is the index value and the 'value'
     %% the indexed objects primary key
     Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Results],
-    #index_stream_result{terms=Res};
+    ?INDEX_STREAM_RESULT{terms=Res};
 process_index_response(true, Keys, []) ->
-    #index_stream_result{keys=Keys}.
+    ?INDEX_STREAM_RESULT{keys=Keys}.
 
 -spec index_stream_result_to_index_result(index_stream_result()) ->
     index_results().
-index_stream_result_to_index_result(#index_stream_result{keys=Keys,
+index_stream_result_to_index_result(?INDEX_STREAM_RESULT{keys=Keys,
                                                          terms=Terms}) ->
-    #index_results{keys=Keys,
+    ?INDEX_RESULTS{keys=Keys,
                    terms=Terms}.
 
 %% Called after sending a message - supports returning a

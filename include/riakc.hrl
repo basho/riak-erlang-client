@@ -142,18 +142,20 @@
 -type keys() :: [binary()] | 'undefined'.
 -type index_terms() :: [{index_term(), binary()}] | 'undefined'.
 
--record(index_results, {
+-record(index_results_v1, {
         keys :: keys(),
         terms :: index_terms(),
         continuation :: continuation()
         }).
--type index_results() :: #index_results{}.
+-define(INDEX_RESULTS, #index_results_v1).
+-type index_results() :: #index_results_v1{}.
 
--record(index_stream_result, {
+-record(index_stream_result_v1, {
         keys :: keys(),
         terms :: index_terms()
         }).
--type index_stream_result() :: #index_stream_result{}.
+-define(INDEX_STREAM_RESULT, #index_stream_result_v1).
+-type index_stream_result() :: ?INDEX_STREAM_RESULT{}.
 
 -type index_done() :: {'done', continuation()}.
 
