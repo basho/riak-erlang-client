@@ -26,10 +26,10 @@
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
--type client_option()  :: queue_if_disconnected | 
+-type client_option()  :: queue_if_disconnected |
                           {queue_if_disconnected, boolean()} |
-                          {connect_timeout, pos_integer()} | 
-                          auto_reconnect | 
+                          {connect_timeout, pos_integer()} |
+                          auto_reconnect |
                           {auto_reconnect, boolean()}.
 %% Options for starting or modifying the connection:
 %% `queue_if_disconnected' when present or true will cause requests to
@@ -106,9 +106,9 @@
 %% only work from the shell (compiled fun() terms refer to compiled
 %% code only). `strfun' contains the textual source of an Erlang
 %% function but the functionality must be enabled on the Riak cluster.
-%% `jsanon' either contains javascript code that will be evaluated 
+%% `jsanon' either contains javascript code that will be evaluated
 %% as an anonymous function, or a bucket-value pair, pointing
-%% to a record stored in riak containing the source of an anonymous 
+%% to a record stored in riak containing the source of an anonymous
 %% javascript function. `jsfun' contains the name of a javascript
 %% function, that when evaluated points to a built-in javascript function.
 -type mapred_result() :: [term()].
@@ -136,8 +136,29 @@
                         search_timeout | search_call_timeout |
                         timeout.
 
+-type continuation() :: 'undefined' | binary().
 -type secondary_index_id() :: {binary_index, string()} | {integer_index, string()}.
--type index_result() :: {keys, [key()]}.
+-type index_term() :: integer() | binary().
+-type keys() :: [binary()] | 'undefined'.
+-type index_terms() :: [{index_term(), binary()}] | 'undefined'.
+
+-record(index_results_v1, {
+        keys :: keys(),
+        terms :: index_terms(),
+        continuation :: continuation()
+        }).
+-define(INDEX_RESULTS, #index_results_v1).
+-type index_results() :: #index_results_v1{}.
+
+-record(index_stream_result_v1, {
+        keys :: keys(),
+        terms :: index_terms()
+        }).
+-define(INDEX_STREAM_RESULT, #index_stream_result_v1).
+-type index_stream_result() :: ?INDEX_STREAM_RESULT{}.
+
+-type index_done() :: {'done', continuation()}.
+
 
 -type search_option() ::
         {rows, non_neg_integer()} |  %% Limit rows
