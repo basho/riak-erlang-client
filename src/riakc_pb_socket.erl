@@ -136,6 +136,7 @@
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
                 credentials :: undefined | {string(), string()},
+                cacertfile,
                 certfile,
                 keyfile,
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
@@ -1314,6 +1315,8 @@ parse_options([{credentials, User, Pass}|Options], State) ->
     parse_options(Options, State#state{credentials={User, Pass}});
 parse_options([{certfile, File}|Options], State) ->
     parse_options(Options, State#state{certfile=File});
+parse_options([{cacertfile, File}|Options], State) ->
+    parse_options(Options, State#state{cacertfile=File});
 parse_options([{keyfile, File}|Options], State) ->
     parse_options(Options, State#state{keyfile=File}).
 
@@ -1860,11 +1863,14 @@ start_tls(State=#state{sock=Sock}) ->
             [MsgCode|MsgData] = Data,
             case riak_pb_codec:decode(MsgCode, MsgData) of
                 rpbstarttls ->
-                    case ssl:connect(Sock, [{verify, verify_peer},
-                                            {certfile, State#state.certfile},
-                                            {keyfile, State#state.keyfile},
-                                            {cacertfile,
-                                             "/home/andrew/riak_test/priv/certs/cacert.org/ca/root.crt"}], 1000) of
+                    Options = [{verify, verify_peer},
+                               {cacertfile, State#state.cacertfile}] ++
+                              [{K, V} || {K, V} <- [{certfile,
+                                                     State#state.certfile},
+                                                    {keyfile,
+                                                     State#state.keyfile}],
+                                         V /= undefined],
+                    case ssl:connect(Sock, Options, 1000) of
                         {ok, SSLSock} ->
                             ok = ssl:setopts(SSLSock, [{active, once}]),
                             start_auth(State#state{sock=SSLSock, transport=ssl});
