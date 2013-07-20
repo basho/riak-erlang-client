@@ -1217,7 +1217,7 @@ handle_info({ssl_closed, _Socket}, State) ->
 %% it should drop through and be ignored.
 handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
         when Proto == tcp; Proto == ssl ->
-    [MsgCode|MsgData] = Data,
+    <<MsgCode:8, MsgData/binary>> = Data,
     Resp = case Active#request.msg of
         {tunneled, _MsgID} ->
             %% don't decode tunneled replies, we may not recognize the msgid
@@ -1835,7 +1835,7 @@ restart_req_timer(Request) ->
 connect(State) when State#state.sock =:= undefined ->
     #state{address = Address, port = Port, connects = Connects} = State,
     case gen_tcp:connect(Address, Port,
-                         [binary, {active, once}, {packet, 4}, {header, 1}],
+                         [binary, {active, once}, {packet, 4}],
                          State#state.connect_timeout) of
         {ok, Sock} ->
             State1 = State#state{sock = Sock, connects = Connects+1,
@@ -1860,7 +1860,7 @@ start_tls(State=#state{sock=Sock}) ->
         {tcp_closed, Sock} ->
             {error, closed};
         {tcp, Sock, Data} ->
-            [MsgCode|MsgData] = Data,
+            <<MsgCode:8, MsgData/binary>> = Data,
             case riak_pb_codec:decode(MsgCode, MsgData) of
                 rpbstarttls ->
                     Options = [{verify, verify_peer},
@@ -1894,7 +1894,7 @@ start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
         {ssl_closed, Sock} ->
             {error, closed};
         {ssl, Sock, Data} ->
-            [MsgCode|MsgData] = Data,
+            <<MsgCode:8, MsgData/binary>> = Data,
             case riak_pb_codec:decode(MsgCode, MsgData) of
                 rpbauthresp ->
                     ok = ssl:setopts(Sock, [{active, once}]),
