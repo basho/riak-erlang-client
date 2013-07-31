@@ -782,9 +782,7 @@ get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
 -spec get_index_eq(pid(), bucket(), binary() | secondary_index_id(), key() | integer()) ->
                        {ok, index_results()} | {error, term()}.
 get_index_eq(Pid, Bucket, Index, Key) ->
-    Timeout = default_timeout(get_index_timeout),
-    CallTimeout = default_timeout(get_index_call_timeout),
-    get_index_eq(Pid, Bucket, Index, Key, [{timeout, Timeout}, {call_timeout, CallTimeout}]).
+    get_index_eq(Pid, Bucket, Index, Key, []).
 
 %% @doc Execute a secondary index equality query with specified options
 %% <dl>
@@ -806,7 +804,7 @@ get_index_eq(Pid, Bucket, {integer_index, Name}, Key, Opts) when is_integer(Key)
     BinKey = list_to_binary(integer_to_list(Key)),
     get_index_eq(Pid, Bucket, Index, BinKey, Opts);
 get_index_eq(Pid, Bucket, Index, Key, Opts) ->
-    Timeout = proplists:get_value(timeout, Opts, default_timeout(get_index_timeout)),
+    Timeout = proplists:get_value(timeout, Opts),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     MaxResults = proplists:get_value(max_results, Opts),
     Stream = proplists:get_value(stream, Opts, false),
@@ -816,13 +814,14 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
                        key=encode_2i(Key),
                        max_results=MaxResults,
                        stream=Stream,
-                       continuation=Continuation},
+                       continuation=Continuation,
+                       timeout=Timeout},
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, Timeout, {ReqId, self()}};
+                   {req, Req, infinity, {ReqId, self()}};
                false ->
-                   {req, Req, Timeout}
+                   {req, Req, infinity}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -830,9 +829,7 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
 -spec get_index_range(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), key() | integer()) ->
                        {ok, index_results()} | {error, term()}.
 get_index_range(Pid, Bucket, Index, StartKey, EndKey) ->
-    Timeout = default_timeout(get_index_timeout),
-    CallTimeout = default_timeout(get_index_call_timeout),
-    get_index_range(Pid, Bucket, Index, StartKey, EndKey, [{timeout, Timeout}, {call_timeout, CallTimeout}]).
+    get_index_range(Pid, Bucket, Index, StartKey, EndKey, []).
 
 %% @doc Execute a secondary index range query with specified options.
 %% As well as the options documented for `get_index_eq/5', there is a further options
@@ -852,7 +849,7 @@ get_index_range(Pid, Bucket, {integer_index, Name}, StartKey, EndKey, Opts) when
     BinEndKey = list_to_binary(integer_to_list(EndKey)),
     get_index_range(Pid, Bucket, Index, BinStartKey, BinEndKey, Opts);
 get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
-    Timeout = proplists:get_value(timeout, Opts, default_timeout(get_index_timeout)),
+    Timeout = proplists:get_value(timeout, Opts),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     ReturnTerms = proplists:get_value(return_terms, Opts),
     MaxResults = proplists:get_value(max_results, Opts),
@@ -865,13 +862,14 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        return_terms=ReturnTerms,
                        max_results=MaxResults,
                        stream=Stream,
-                       continuation=Continuation},
+                       continuation=Continuation,
+                       timeout=Timeout},
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, Timeout, {ReqId, self()}};
+                   {req, Req, infinity, {ReqId, self()}};
                false ->
-                   {req, Req, Timeout}
+                   {req, Req, infinity}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -885,7 +883,8 @@ encode_2i(Value) when is_binary(Value) ->
 %% @doc secret function, do not use, or I come to your house and keeel you.
 -spec cs_bucket_fold(pid(), bucket(), cs_opts()) -> {ok, reference()} | {error, term()}.
 cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(Opts) ->
-    Timeout = proplists:get_value(timeout, Opts, default_timeout(get_index_timeout)),
+    Timeout = proplists:get_value(timeout, Opts),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     StartKey = proplists:get_value(start_key, Opts, <<>>),
     EndKey = proplists:get_value(end_key, Opts),
     MaxResults = proplists:get_value(max_results, Opts),
@@ -899,10 +898,11 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(O
                           start_incl=StartIncl,
                           end_incl=EndIncl,
                           max_results=MaxResults,
-                          continuation=Continuation},
+                          continuation=Continuation,
+                          timeout=Timeout},
     ReqId = mk_reqid(),
-    Call = {req, Req, Timeout, {ReqId, self()}},
-    gen_server:call(Pid, Call, Timeout).
+    Call = {req, Req, infinity, {ReqId, self()}},
+    gen_server:call(Pid, Call, CallTimeout).
 
 %% @doc Return the default timeout for an operation if none is provided.
 %%      Falls back to the default timeout.
