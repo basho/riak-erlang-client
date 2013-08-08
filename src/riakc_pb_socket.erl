@@ -247,6 +247,9 @@ get(Pid, Bucket, Key, Options) ->
 %%      object is unchanged.
 -spec get(pid(), bucket(), key(), get_options(), timeout()) ->
                  {ok, riakc_obj()} | {error, term()} | unchanged.
+get(Pid, {Type, Bucket}, Key, Options, Timeout) ->
+    Req = get_options(Options, #rpbgetreq{type = Type, bucket = Bucket, key = Key}),
+    gen_server:call(Pid, {req, Req, Timeout}, infinity);
 get(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
@@ -286,7 +289,8 @@ put(Pid, Obj, Options, Timeout) ->
     Content = riak_pb_kv_codec:encode_content({riakc_obj:get_update_metadata(Obj),
                                                riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
-                      #rpbputreq{bucket = riakc_obj:bucket(Obj),
+                      #rpbputreq{bucket = riakc_obj:only_bucket(Obj),
+                                 type = riakc_obtype(Obj),
                                  key = riakc_obj:key(Obj),
                                  vclock = riakc_obj:vclock(Obj),
                                  content = Content}),
@@ -334,6 +338,10 @@ delete_vclock(Pid, Bucket, Key, VClock, Options) ->
 %% @see delete_obj/4
 -spec delete_vclock(pid(), bucket(), key(), riakc_obj:vclock(), delete_options(), timeout()) ->
                            ok | {error, term()}.
+delete_vclock(Pid, {Type, Bucket}, Key, VClock, Options, Timeout) ->
+    Req = delete_options(Options, #rpbdelreq{type=Type, bucket = Bucket, key = Key,
+            vclock=VClock}),
+    gen_server:call(Pid, {req, Req, Timeout}, infinity).
 delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
             vclock=VClock}),
