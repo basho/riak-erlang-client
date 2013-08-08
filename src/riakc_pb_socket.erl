@@ -290,7 +290,7 @@ put(Pid, Obj, Options, Timeout) ->
                                                riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
                       #rpbputreq{bucket = riakc_obj:only_bucket(Obj),
-                                 type = riakc_obtype(Obj),
+                                 type = riakc_obj:type(Obj),
                                  key = riakc_obj:key(Obj),
                                  vclock = riakc_obj:vclock(Obj),
                                  content = Content}),
@@ -313,9 +313,13 @@ delete(Pid, Bucket, Key, Options) ->
 
 %% @doc Delete the key/value with options and timeout. <em>Note that the rw quorum is deprecated, use r and w.</em>
 -spec delete(pid(), bucket(), key(), delete_options(), timeout()) -> ok | {error, term()}.
+delete(Pid, {Type, Bucket}, Key, Options, Timeout) ->
+    Req = delete_options(Options, #rpbdelreq{type = Type, bucket = Bucket, key = Key}),
+    gen_server:call(Pid, {req, Req, Timeout}, infinity);
 delete(Pid, Bucket, Key, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
+
 
 %% @doc Delete the object at Bucket/Key, giving the vector clock.
 %% @equiv delete_vclock(Pid, Bucket, Key, VClock, [])
@@ -341,7 +345,7 @@ delete_vclock(Pid, Bucket, Key, VClock, Options) ->
 delete_vclock(Pid, {Type, Bucket}, Key, VClock, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{type=Type, bucket = Bucket, key = Key,
             vclock=VClock}),
-    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout}, infinity);
 delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
             vclock=VClock}),
@@ -1324,10 +1328,16 @@ process_response(#request{msg = #rpbgetreq{deletedvclock=true}},
 process_response(#request{msg = #rpbgetreq{}}, #rpbgetresp{unchanged=true}, State) ->
     %% object was unchanged
     {reply, unchanged, State};
-process_response(#request{msg = #rpbgetreq{bucket = Bucket, key = Key}},
+process_response(#request{msg = #rpbgetreq{bucket = Bucket, type=Type, key = Key}},
                  #rpbgetresp{content = RpbContents, vclock = Vclock}, State) ->
     Contents = riak_pb_kv_codec:decode_contents(RpbContents),
-    {reply, {ok, riakc_obj:new_obj(Bucket, Key, Vclock, Contents)}, State};
+    B = case Type of
+        undefined ->
+            Bucket;
+        _ ->
+            {Type, Bucket}
+    end,
+    {reply, {ok, riakc_obj:new_obj(B, Key, Vclock, Contents)}, State};
 
 process_response(#request{msg = #rpbputreq{}},
                  rpbputresp, State) ->
