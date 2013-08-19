@@ -155,7 +155,7 @@
         terms :: index_terms()
         }).
 -define(INDEX_STREAM_RESULT, #index_stream_result_v1).
--type index_stream_result() :: ?INDEX_STREAM_RESULT{}.
+-type index_stream_result() :: #index_stream_result_v1{}.
 
 -type index_done() :: {'done', continuation()}.
 

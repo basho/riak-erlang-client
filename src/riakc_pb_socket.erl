@@ -778,7 +778,7 @@ get_index(Pid, Bucket, Index, StartKey, EndKey, Timeout, CallTimeout) ->
 
 %% @doc Execute a secondary index equality query.
 %% equivalent to all defaults for the options.
-%% @see get_index_eq/5 for options and their effect
+%% @see get_index_eq/5. for options and their effect
 -spec get_index_eq(pid(), bucket(), binary() | secondary_index_id(), key() | integer()) ->
                        {ok, index_results()} | {error, term()}.
 get_index_eq(Pid, Bucket, Index, Key) ->
@@ -786,14 +786,15 @@ get_index_eq(Pid, Bucket, Index, Key) ->
 
 %% @doc Execute a secondary index equality query with specified options
 %% <dl>
-%% <dt>timeout:</dt <dd>milliseconds to wait for a response from riak</dd>
+%% <dt>timeout:</dt> <dd>milliseconds to wait for a response from riak</dd>
 %% <dt>call_timeout:</dt> <dd>milliseoonds to wait for a local gen_server response</dd>
 %% <dt>stream:</dt> <dd> true | false. Stream results to calling process</dd>
 %% <dt>continuation:</dt> <dd> The opaque, binary continuation returned from a previous query.
 %%                             Requests the next results.</dd>
 %% <dt>max_results:</dt> <dd>Positive integer, maximum number of results to return.
-%%                           Expect a `continuation` in the response if this option is used.</dd>
+%%                           Expect a <code>continuation</code> in the response if this option is used.</dd>
 %% </dl>
+%% @end
 -spec get_index_eq(pid(), bucket(), binary() | secondary_index_id(), key() | integer(), index_opts()) ->
                        {ok, index_results()} | {error, term()}.
 get_index_eq(Pid, Bucket, {binary_index, Name}, Key, Opts) when is_binary(Key) ->
@@ -836,7 +837,8 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey) ->
 %% `{return_terms, boolean{}'. When `true' the indexed values will be returned
 %% as well as the primary key. The formt of the returned values is
 %% `{results, [{value, primary_key}]}'
-%% @see get_index_eq/5 for effect of options.
+%% @end
+%% @see get_index_eq/5. for effect of options.
 -spec get_index_range(pid(), bucket(), binary() | secondary_index_id(), key() | integer() | list(),
                 key() | integer() | list(), range_index_opts()) ->
                        {ok, index_results()} | {error, term()}.
