@@ -55,8 +55,11 @@
          list_keys/2, list_keys/3,
          stream_list_keys/2, stream_list_keys/3,
          get_bucket/2, get_bucket/3, get_bucket/4,
+         get_bucket_type/2, get_bucket_type/3, get_bucket_type/4,
          set_bucket/3, set_bucket/4, set_bucket/5,
+         set_bucket_type/3, set_bucket_type/4, set_bucket_type/5,
          reset_bucket/2, reset_bucket/3, reset_bucket/4,
+         reset_bucket_type/2, reset_bucket_type/3, reset_bucket_type/4,
          mapred/3, mapred/4, mapred/5,
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
@@ -311,11 +314,9 @@ delete(Pid, Bucket, Key, Options) ->
 
 %% @doc Delete the key/value with options and timeout. <em>Note that the rw quorum is deprecated, use r and w.</em>
 -spec delete(pid(), bucket(), key(), delete_options(), timeout()) -> ok | {error, term()}.
-delete(Pid, {Type, Bucket}, Key, Options, Timeout) ->
-    Req = delete_options(Options, #rpbdelreq{type = Type, bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req, Timeout}, infinity);
 delete(Pid, Bucket, Key, Options, Timeout) ->
-    Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = delete_options(Options, #rpbdelreq{type = T, bucket = B, key = Key}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
 
@@ -340,12 +341,9 @@ delete_vclock(Pid, Bucket, Key, VClock, Options) ->
 %% @see delete_obj/4
 -spec delete_vclock(pid(), bucket(), key(), riakc_obj:vclock(), delete_options(), timeout()) ->
                            ok | {error, term()}.
-delete_vclock(Pid, {Type, Bucket}, Key, VClock, Options, Timeout) ->
-    Req = delete_options(Options, #rpbdelreq{type=Type, bucket = Bucket, key = Key,
-            vclock=VClock}),
-    gen_server:call(Pid, {req, Req, Timeout}, infinity);
 delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
-    Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = delete_options(Options, #rpbdelreq{type = T, bucket = B, key = Key,
             vclock=VClock}),
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
 
@@ -505,7 +503,18 @@ get_bucket(Pid, Bucket, Timeout) ->
 -spec get_bucket(pid(), bucket(), timeout(), timeout()) -> {ok, bucket_props()} |
                                                            {error, term()}.
 get_bucket(Pid, Bucket, Timeout, CallTimeout) ->
-    Req = #rpbgetbucketreq{bucket = Bucket},
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = #rpbgetbucketreq{type = T, bucket = B},
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+get_bucket_type(Pid, BucketType) ->
+    get_bucket_type(Pid, BucketType, default_timeout(get_bucket_timeout)).
+
+get_bucket_type(Pid, BucketType, Timeout) ->
+    get_bucket_type(Pid, BucketType, Timeout, default_timeout(get_bucket_call_timeout)).
+
+get_bucket_type(Pid, BucketType, Timeout, CallTimeout) ->
+    Req = #rpbgetbuckettypereq{type = BucketType},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Set bucket properties.
@@ -525,7 +534,20 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
-    Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = #rpbsetbucketreq{type = T, bucket = B, props = PbProps},
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+set_bucket_type(Pid, BucketType, BucketProps) ->
+    set_bucket_type(Pid, BucketType, BucketProps, default_timeout(set_bucket_timeout)).
+
+set_bucket_type(Pid, BucketType, BucketProps, Timeout) ->
+    set_bucket_type(Pid, BucketType, BucketProps, Timeout,
+               default_timeout(set_bucket_call_timeout)).
+
+set_bucket_type(Pid, BucketType, BucketProps, Timeout, CallTimeout) ->
+    PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
+    Req = #rpbsetbuckettypereq{type = BucketType, props = PbProps},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 %% @doc Reset bucket properties back to the defaults.
@@ -543,8 +565,20 @@ reset_bucket(Pid, Bucket, Timeout) ->
 %% @doc Reset bucket properties back to the defaults.
 -spec reset_bucket(pid(), bucket, timeout(), timeout()) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket, Timeout, CallTimeout) ->
-    Req = #rpbresetbucketreq{bucket = Bucket},
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = #rpbresetbucketreq{type = T, bucket = B},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+reset_bucket_type(Pid, BucketType) ->
+    reset_bucket_type(Pid, BucketType, default_timeout(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout)).
+
+reset_bucket_type(Pid, BucketType, Timeout) ->
+    reset_bucket_type(Pid, BucketType, Timeout, default_timeout(reset_bucket_call_timeout)).
+
+reset_bucket_type(Pid, BucketType, Timeout, CallTimeout) ->
+    Req = #rpbresetbuckettypereq{type = BucketType},
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
 
 %% @doc Perform a MapReduce job across the cluster.
 %%      See the MapReduce documentation for explanation of behavior.
@@ -832,7 +866,9 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
 
-    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq,
+    {T, B} = maybe_bucket_type(Bucket),
+
+    Req = #rpbindexreq{type=T, bucket=B, index=Index, qtype=eq,
                        key=encode_2i(Key),
                        max_results=MaxResults,
                        stream=Stream,
@@ -878,7 +914,9 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
 
-    Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=range,
+    {T, B} = maybe_bucket_type(Bucket),
+
+    Req = #rpbindexreq{type=T, bucket=B, index=Index, qtype=range,
                        range_min=encode_2i(StartKey),
                        range_max=encode_2i(EndKey),
                        return_terms=ReturnTerms,
@@ -914,7 +952,9 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(O
     EndIncl = proplists:get_value(end_incl, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
 
-    Req = #rpbcsbucketreq{bucket=Bucket,
+    {T, B} = maybe_bucket_type(Bucket),
+
+    Req = #rpbcsbucketreq{type=T, bucket=B,
                           start_key=StartKey,
                           end_key=EndKey,
                           start_incl=StartIncl,
@@ -961,7 +1001,8 @@ counter_incr(Pid, Bucket, Key, Amount) ->
 -spec counter_incr(pid(), bucket(), key(), integer(), [write_quorum()]) ->
     ok | {error, term()}.
 counter_incr(Pid, Bucket, Key, Amount, Options) ->
-    Req = counter_incr_options(Options, #rpbcounterupdatereq{bucket=Bucket, key=Key, amount=Amount}),
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = counter_incr_options(Options, #rpbcounterupdatereq{type=T, bucket=B, key=Key, amount=Amount}),
     gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}).
 
 %% @doc get the current value of the counter at `Bucket', `Key'.
@@ -975,7 +1016,8 @@ counter_val(Pid, Bucket, Key) ->
 -spec counter_val(pid(), bucket(), key(), [read_quorum()]) ->
                          {ok, integer()} | {error, term()}.
 counter_val(Pid, Bucket, Key, Options) ->
-    Req = counter_val_options(Options, #rpbcountergetreq{bucket=Bucket, key=Key}),
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = counter_val_options(Options, #rpbcountergetreq{type=T, bucket=B, key=Key}),
     gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}).
 
 %% ====================================================================
@@ -1401,7 +1443,16 @@ process_response(#request{msg = #rpbgetbucketreq{}},
     Props = riak_pb_codec:decode_bucket_props(PbProps),
     {reply, {ok, Props}, State};
 
+process_response(#request{msg = #rpbgetbuckettypereq{}},
+                 #rpbgetbucketresp{props = PbProps}, State) ->
+    Props = riak_pb_codec:decode_bucket_props(PbProps),
+    {reply, {ok, Props}, State};
+
 process_response(#request{msg = #rpbsetbucketreq{}},
+                 rpbsetbucketresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #rpbsetbuckettypereq{}},
                  rpbsetbucketresp, State) ->
     {reply, ok, State};
 
@@ -1467,7 +1518,11 @@ process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
                || Doc <- PBDocs ],
     Result = #search_results{docs=Values, max_score=MaxScore, num_found=NumFound},
     {reply, {ok, Result}, State};
+
 process_response(#request{msg=#rpbresetbucketreq{}}, rpbresetbucketresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg=#rpbresetbuckettypereq{}}, rpbresetbucketresp, State) ->
     {reply, ok, State};
 
 process_response(#request{msg = #rpbcounterupdatereq{returnvalue=true}},
