@@ -181,3 +181,6 @@
          }).
 
 -type search_result() :: #search_results{}.
+
+-type search_index() :: [{index, binary()} |
+                         {schema, binary()}].
