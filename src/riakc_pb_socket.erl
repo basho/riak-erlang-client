@@ -942,7 +942,8 @@ encode_2i(Value) when is_binary(Value) ->
 
 %% @doc secret function, do not use, or I come to your house and keeel you.
 -spec cs_bucket_fold(pid(), bucket(), cs_opts()) -> {ok, reference()} | {error, term()}.
-cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(Opts) ->
+cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
+                                                     is_tuple(Bucket)), is_list(Opts) ->
     Timeout = proplists:get_value(timeout, Opts),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     StartKey = proplists:get_value(start_key, Opts, <<>>),
