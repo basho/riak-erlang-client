@@ -184,3 +184,7 @@
 
 -type search_index() :: [{index, binary()} |
                          {schema, binary()}].
+
+-type search_schema() :: [{name, binary()} |
+                         {content, binary()}].
+
