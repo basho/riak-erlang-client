@@ -31,6 +31,7 @@
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -include_lib("riak_pb/include/riak_search_pb.hrl").
+-include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
 %% @headerfile "riakc.hrl"
 -include("riakc.hrl").
 -behaviour(gen_server).
@@ -75,12 +76,23 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+%% Yokozuna admin commands
+-export([list_search_indexes/1, list_search_indexes/2,
+         create_search_index/2, create_search_index/4,
+         get_search_index/2, get_search_index/3,
+         delete_search_index/2, delete_search_index/3,
+         get_search_schema/2, get_search_schema/3,
+         create_search_schema/3, create_search_schema/4]).
+
 -deprecated({get_index,'_', eventually}).
 
 -type ctx() :: any().
 -type rpb_req() :: {tunneled, msg_id(), binary()} | atom() | tuple().
 -type rpb_resp() :: atom() | tuple().
 -type msg_id() :: non_neg_integer(). %% Request identifier for tunneled message types
+-type search_admin_opt() :: {timeout, timeout()} |
+                     {call_timeout, timeout()}.
+-type search_admin_opts() :: [search_admin_opt()].
 -type index_opt() :: {timeout, timeout()} |
                      {call_timeout, timeout()} |
                      {stream, boolean()} |
@@ -732,6 +744,101 @@ search(Pid, Index, SearchQuery, Options, Timeout) ->
                     {ok, search_result()} | {error, term()}.
 search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout) ->
     Req = search_options(Options, #rpbsearchqueryreq{q = SearchQuery, index = Index}),
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+-spec get_search_schema(pid(), binary(), search_admin_opts()) ->
+                    {ok, search_schema()} | {error, term()}.
+get_search_schema(Pid, SchemaName, Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    Req = #rpbyokozunaschemagetreq{ name = SchemaName },
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+-spec get_search_schema(pid(), binary()) ->
+                    {ok, search_schema()} | {error, term()}.
+get_search_schema(Pid, SchemaName) ->
+    get_search_schema(Pid, SchemaName, []).
+
+-spec get_search_index(pid(), binary(), search_admin_opts()) ->
+                    {ok, search_index()} | {error, term()}.
+get_search_index(Pid, Index, Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    Req = #rpbyokozunaindexgetreq{ name = Index },
+    Results = gen_server:call(Pid, {req, Req, Timeout}, CallTimeout),
+    case Results of
+        {ok, [Result]} ->
+            {ok, Result};
+        {ok, []} ->
+            {error, notfound};
+        X -> X
+    end.
+
+-spec get_search_index(pid(), binary()) ->
+                    {ok, search_index()} | {error, term()}.
+get_search_index(Pid, Index) ->
+    get_search_index(Pid, Index, []).
+
+-spec list_search_indexes(pid(), search_admin_opts()) ->
+                    {ok, [search_index()]} | {error, term()}.
+list_search_indexes(Pid, Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    gen_server:call(Pid, {req, #rpbyokozunaindexgetreq{}, Timeout}, CallTimeout).
+
+-spec list_search_indexes(pid()) ->
+                    {ok, [search_index()]} | {error, term()}.
+list_search_indexes(Pid) ->
+    list_search_indexes(Pid, []).
+
+%% @doc Create a schema, which is a required component of an index.
+-spec create_search_schema(pid(), binary(), binary()) ->
+                    ok | {error, term()}.
+create_search_schema(Pid, SchemaName, Content) ->
+    create_search_schema(Pid, SchemaName, Content, []).
+
+%% @doc Create a schema, which is a required component of an index.
+-spec create_search_schema(pid(), binary(), binary(), search_admin_opts()) ->
+                    ok | {error, term()}.
+create_search_schema(Pid, SchemaName, Content, Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    Req = #rpbyokozunaschemaputreq{
+        schema = #rpbyokozunaschema{name = SchemaName, content = Content}
+    },
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+%% @doc Create a search index.
+-spec create_search_index(pid(), binary()) ->
+                    ok | {error, term()}.
+create_search_index(Pid, Index) ->
+    create_search_index(Pid, Index, <<>>, []).
+
+%% @doc Create a search index.
+-spec create_search_index(pid(), binary(), binary(), search_admin_opts()) ->
+                    ok | {error, term()}.
+create_search_index(Pid, Index, SchemaName, Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    Req = #rpbyokozunaindexputreq{
+        index = #rpbyokozunaindex{name = Index, schema = SchemaName}
+    },
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+
+%% @doc Create a search index.
+-spec delete_search_index(pid(), binary()) ->
+                    ok | {error, term()}.
+delete_search_index(Pid, Index) ->
+    delete_search_index(Pid, Index, []).
+
+%% @doc Create a search index.
+-spec delete_search_index(pid(), binary(), search_admin_opts()) ->
+                    ok | {error, term()}.
+delete_search_index(Pid, Index, Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    Req = #rpbyokozunaindexdeletereq{name = Index},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 
@@ -1467,6 +1574,29 @@ process_response(#request{msg={tunneled,_MsgId}}, Reply, State) ->
     %% Tunneled msg response
     {reply, {ok, Reply}, State};
 
+process_response(#request{msg = #rpbyokozunaschemaputreq{}},
+                 rpbputresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #rpbyokozunaindexputreq{}},
+                 rpbputresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #rpbyokozunaindexdeletereq{}},
+                 rpbdelresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #rpbyokozunaindexgetreq{}},
+                 #rpbyokozunaindexgetresp{index=Indexes}, State) ->
+    Results = [[{index,Index#rpbyokozunaindex.name}, {schema,Index#rpbyokozunaindex.schema}]
+        || Index <- Indexes ],
+    {reply, {ok, Results}, State};
+
+process_response(#request{msg = #rpbyokozunaschemagetreq{}},
+                 #rpbyokozunaschemagetresp{schema=Schema}, State) ->
+    Result = [{name,Schema#rpbyokozunaschema.name}, {content,Schema#rpbyokozunaschema.content}],
+    {reply, {ok, Result}, State};
+
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
@@ -2151,6 +2281,24 @@ increase_reconnect_interval_test(State) ->
         NextInterval->
             ?assert(NextInterval > CurrInterval),
             increase_reconnect_interval_test(NextState)
+    end.
+
+wait_until(Fun) when is_function(Fun) ->
+    wait_until(Fun, 20, 500).
+
+%% @doc Retry `Fun' until it returns `Retry' times, waiting `Delay'
+%% milliseconds between retries. This is our eventual consistency bread
+%% and butter
+wait_until(_, 0, _) ->
+    fail;
+wait_until(Fun, Retry, Delay) when Retry > 0 ->
+    Pass = Fun(),
+    case Pass of
+        true ->
+            ok;
+        _ ->
+            timer:sleep(Delay),
+            wait_until(Fun, Retry-1, Delay)
     end.
 
 %%
@@ -2883,8 +3031,93 @@ live_node_tests() ->
                  ?assertEqual({ok, 10}, ?MODULE:counter_val(Pid, Bucket, Key)),
                  ok = ?MODULE:counter_incr(Pid, Bucket, Key, -5, [{w, quorum}, {pw, one}, {dw, all}]),
                  ?assertEqual({ok, 5}, ?MODULE:counter_val(Pid, Bucket, Key, [{pr, one}]))
-             end)}
-
+             end)},
+     {"create a search index / get / list / delete",
+     ?_test(begin
+                reset_riak(),
+                {ok, Pid} = start_link(test_ip(), test_port()),
+                ?assertEqual(ok, ?MODULE:create_search_index(Pid, <<"indextest">>)),
+                F = fun() ->
+                    {ok, [{index,<<"indextest">>},{schema,<<"_yz_default">>}]} ==
+                        ?MODULE:get_search_index(Pid, <<"indextest">>)
+                end,
+                wait_until(F),
+                ?assertEqual({ok, [[{index,<<"indextest">>},{schema,<<"_yz_default">>}]]},
+                             ?MODULE:list_search_indexes(Pid)),
+                ?assertEqual(ok, ?MODULE:delete_search_index(Pid, <<"indextest">>))
+         end)},
+     {"create a search schema / get",
+     ?_test(begin
+                reset_riak(),
+                {ok, Pid} = start_link(test_ip(), test_port()),
+                Schema = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
+<schema name=\"test\" version=\"1.5\">
+<fields>
+   <field name=\"_yz_id\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" required=\"true\" />
+   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_vtag\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_node\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_rk\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_rb\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+</fields>
+<uniqueKey>_yz_id</uniqueKey>
+<types>
+    <fieldType name=\"_yz_str\" class=\"solr.StrField\" sortMissingLast=\"true\" />
+</types>
+</schema>">>,
+                SchemaName = <<"myschema">>,
+                Index = <<"schemaindex">>,
+                ?assertEqual(ok, ?MODULE:create_search_schema(Pid, SchemaName, Schema)),
+                ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index, SchemaName, [])),
+                wait_until( fun() ->
+                    {ok, [[{index, Index},{schema, SchemaName}]]} ==
+                        ?MODULE:list_search_indexes(Pid)
+                end ),
+                wait_until( fun() ->
+                    {ok, [{name, SchemaName},{content, Schema}]} ==
+                        ?MODULE:get_search_schema(Pid, SchemaName)
+                end )
+         end)},
+     {"create a search index and tie to a bucket",
+     ?_test(begin
+                reset_riak(),
+                {ok, Pid} = start_link(test_ip(), test_port()),
+                Index = <<"myindex">>,
+                Bucket = <<"mybucket">>,
+                ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
+                wait_until( fun() ->
+                    {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
+                        ?MODULE:get_search_index(Pid, Index)
+                end ),
+                ok = set_bucket(Pid, Bucket, [{yz_index, Index}]),
+                PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"Freddy\"}">>, "application/json"),
+                {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
+                wait_until( fun() ->
+                    {ok, Result} = search(Pid, Index, <<"*:*">>),
+                    1 == Result#search_results.num_found
+                end )
+         end)},
+     {"search utf8",
+     ?_test(begin
+                reset_riak(),
+                {ok, Pid} = start_link(test_ip(), test_port()),
+                Index = <<"myindex">>,
+                Bucket = <<"mybucket">>,
+                ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
+                wait_until( fun() ->
+                    {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
+                        ?MODULE:get_search_index(Pid, Index)
+                end ),
+                ok = set_bucket(Pid, Bucket, [{yz_index, Index}]),
+                PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"בָּרָא\"}">>, "application/json"),
+                {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
+                wait_until( fun() ->
+                    {ok, Result} = search(Pid, Index, <<"name_s:בָּרָא">>),
+                    1 == Result#search_results.num_found
+                end )
+         end)}
      ].
 
 -endif.
