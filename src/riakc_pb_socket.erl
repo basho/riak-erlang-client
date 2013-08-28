@@ -2030,7 +2030,6 @@ queue_disconnected_test() ->
     %% Start with an unlikely port number
     {ok, Pid} = start({127,0,0,1}, 65535, [queue_if_disconnected]),
     ?assertEqual({error, timeout}, ping(Pid, 10)),
-    ?assertEqual({error, timeout}, list_keys(Pid, <<"b">>, 10)),
     stop(Pid).
 
 auto_reconnect_bad_connect_test() ->
