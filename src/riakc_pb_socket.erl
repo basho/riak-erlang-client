@@ -78,10 +78,11 @@
 
 %% Yokozuna admin commands
 -export([list_search_indexes/1, list_search_indexes/2,
+         create_search_index/2, create_search_index/4,
          get_search_index/2, get_search_index/3,
+         delete_search_index/2, delete_search_index/3,
          get_search_schema/2, get_search_schema/3,
-         create_search_schema/3, create_search_schema/4,
-         create_search_index/2, create_search_index/4]).
+         create_search_schema/3, create_search_schema/4]).
 
 -deprecated({get_index,'_', eventually}).
 
@@ -825,6 +826,22 @@ create_search_index(Pid, Index, SchemaName, Opts) ->
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
 
+%% @doc Create a search index.
+-spec delete_search_index(pid(), binary()) ->
+                    ok | {error, term()}.
+delete_search_index(Pid, Index) ->
+    delete_search_index(Pid, Index, []).
+
+%% @doc Create a search index.
+-spec delete_search_index(pid(), binary(), search_admin_opts()) ->
+                    ok | {error, term()}.
+delete_search_index(Pid, Index, Opts) ->
+    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    Req = #rpbyokozunaindexdeletereq{name = Index},
+    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+
 %% Deprecated, argument explosion functions for indexes
 
 %% @doc Execute a secondary index equality query.
@@ -1559,12 +1576,14 @@ process_response(#request{msg={tunneled,_MsgId}}, Reply, State) ->
 
 process_response(#request{msg = #rpbyokozunaschemaputreq{}},
                  rpbputresp, State) ->
-    %% server just returned the rpbputresp code - no message was encoded
     {reply, ok, State};
 
 process_response(#request{msg = #rpbyokozunaindexputreq{}},
                  rpbputresp, State) ->
-    %% server just returned the rpbputresp code - no message was encoded
+    {reply, ok, State};
+
+process_response(#request{msg = #rpbyokozunaindexdeletereq{}},
+                 rpbdelresp, State) ->
     {reply, ok, State};
 
 process_response(#request{msg = #rpbyokozunaindexgetreq{}},
@@ -3014,7 +3033,7 @@ live_node_tests() ->
                  ok = ?MODULE:counter_incr(Pid, Bucket, Key, -5, [{w, quorum}, {pw, one}, {dw, all}]),
                  ?assertEqual({ok, 5}, ?MODULE:counter_val(Pid, Bucket, Key, [{pr, one}]))
              end)},
-     {"create a search index / get / list",
+     {"create a search index / get / list / delete",
      ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
@@ -3025,7 +3044,8 @@ live_node_tests() ->
                 end,
                 wait_until(F),
                 ?assertEqual({ok, [[{index,<<"indextest">>},{schema,<<"_yz_default">>}]]},
-                             ?MODULE:list_search_indexes(Pid))
+                             ?MODULE:list_search_indexes(Pid)),
+                ?assertEqual(ok, ?MODULE:delete_search_index(Pid, <<"indextest">>))
          end)},
      {"create a search schema / get",
      ?_test(begin
