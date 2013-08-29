@@ -47,7 +47,7 @@
 %% @doc Extracts an operation from the container that can be encoded
 %% into an update request. 'undefined' should be returned if the type
 %% is unmodified.
--callback to_op(datatype()) -> maybe(tuple()).
+-callback to_op(datatype()) -> maybe(term()).
 
 %% @doc Extracts the opaque update context from the container for
 %% sending along with an update request. 'undefined' should be
