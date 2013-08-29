@@ -25,12 +25,16 @@
 -module(riakc_counter).
 -behaviour(riakc_datatype).
 
+%% Callbacks
 -export([new/0, new/1, new/2,
          value/1,
-         increment/1, increment/2,
-         decrement/1, decrement/2,
          to_op/1,
          context/1]).
+
+%% Operations
+-export([increment/1, increment/2,
+         decrement/1, decrement/2]).
+
 
 -record(counter, {
           value = 0 :: integer(),
