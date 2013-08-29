@@ -28,7 +28,7 @@
 
 -type maybe(T) :: T | undefined.
 -type datatype() :: term().
--type context() :: binary().
+-type context() :: maybe(binary()).
 
 %% @doc Constructs a new, empty container for the type.
 -callback new() -> datatype().
@@ -52,4 +52,4 @@
 %% @doc Extracts the opaque update context from the container for
 %% sending along with an update request. 'undefined' should be
 %% returned if no context was provided, or if it is unneeded.
--callback context(datatype()) -> maybe(context()).
+-callback context(datatype()) -> context().

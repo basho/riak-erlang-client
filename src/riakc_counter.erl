@@ -93,6 +93,6 @@ to_op(#counter{}) ->
     undefined.
 
 %% @doc Extracts the context from this counter (always undefined).
--spec context(counter()) -> undefined.
+-spec context(counter()) -> riakc_datatype:context().
 context(#counter{}) ->
      undefined.
