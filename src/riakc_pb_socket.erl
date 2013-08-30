@@ -32,6 +32,7 @@
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -include_lib("riak_pb/include/riak_search_pb.hrl").
 -include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
+-include_lib("riak_pb/include/riak_dt_pb.hrl").
 %% @headerfile "riakc.hrl"
 -include("riakc.hrl").
 -behaviour(gen_server).
@@ -86,6 +87,12 @@
          delete_search_index/2, delete_search_index/3,
          get_search_schema/2, get_search_schema/3,
          create_search_schema/3, create_search_schema/4]).
+
+%% Datatypes API
+-export([fetch_type/3, fetch_type/4,
+         update_type/4, update_type/5,
+         modify_type/5]).
+
 
 -deprecated({get_index,'_', eventually}).
 
@@ -1130,6 +1137,66 @@ counter_val(Pid, Bucket, Key, Options) ->
     Req = counter_val_options(Options, #rpbcountergetreq{type=T, bucket=B, key=Key}),
     gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}).
 
+
+%% @doc Fetches the representation of a convergent datatype from Riak.
+-spec fetch_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary()) ->
+                        {ok, riakc_datatype:datatype()} | {error, term()}.
+fetch_type(Pid, BucketAndType, Key) ->
+    fetch_type(Pid, BucketAndType, Key, []).
+
+%% @doc Fetches the representation of a convergent datatype from Riak,
+%% using the given request options.
+-spec fetch_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(), [proplists:property()]) ->
+                        {ok, riakc_datatype:datatype()} | {error, term()}.
+fetch_type(Pid, BucketAndType, Key, Options) ->
+    Req = riak_pb_dt_codec:encode_fetch_request(BucketAndType, Key, Options),
+    gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}).
+
+%% @doc Updates the convergent datatype in Riak with local
+%% modifications stored in the container type.
+-spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(), Data::riakc_datatype:datatype()) ->
+                         ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
+                         {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
+update_type(Pid, BucketAndType, Key, Data) ->
+    update_type(Pid, BucketAndType, Key, Data, []).
+
+%% @doc Updates the convergent datatype in Riak with local
+%% modifications stored in the container type, using the given request
+%% options.
+-spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(),
+                  Data::riakc_datatype:datatype(), [proplists:property()]) ->
+                         ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
+                         {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
+update_type(Pid, BucketAndType, Key, Data, Options) ->
+    case riakc_datatype:module_for_term(Data) of
+        undefined ->
+            {error, invalid_datatype};
+        Mod ->
+            case Mod:to_op(Data) of
+                undefined -> ok;
+                Op ->
+                    Context = Mod:context(Data),
+                    Type = Mod:type(),
+                    Req = riak_pb_dt_codec:encode_update_request(BucketAndType, Key, Type, {Type, Op, Context}, Options),
+                    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)})
+            end
+    end.
+
+%% @doc Fetches, applies the given function to the value, and then
+%% updates the datatype in Riak.
+-spec modify_type(pid(), fun((riakc_datatype:datatype()) -> riakc_datatype:datatype()), 
+                  {BucketType::binary(), Bucket::binary()}, Key::binary(), [proplists:property()]) ->
+                         ok | {ok, riakc_datatype:datatype()} | {error, term()}.
+modify_type(Pid, Fun, BucketAndType, Key, Options) ->
+    case fetch_type(Pid, BucketAndType, Key, Options) of
+        {error, Reason} ->
+            {error, Reason};
+        {ok, Data} ->
+            NewData = Fun(Data),
+            update_type(Pid, BucketAndType, Key, NewData, Options)
+    end.
+
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -1648,6 +1715,28 @@ process_response(#request{msg = #rpbcountergetreq{}},
 process_response(#request{msg = #rpbcountergetreq{}},
                  #rpbcountergetresp{value=Value}, State) ->
     {reply, {ok, Value}, State};
+
+process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
+                 State) ->
+    {Type, Value, Context} = riak_pb_dt_codec:decode_fetch_response(Resp),
+    Mod = riakc_datatype:module(Type),
+    {reply, {ok, Mod:new(Value, Context)}, State};
+
+process_response(#request{msg = #dtupdatereq{return_body=RB,
+                                             op=Op}}, #dtupdateresp{}=Resp,
+                 State) ->
+    OpType = riak_pb_dt_codec:operation_type(Op),
+    Reply = case riak_pb_dt_codec:decode_update_response(Resp, OpType, RB) of
+                ok -> ok;
+                {ok, Key} -> {ok, Key};
+                {OpType, Value, Context} ->
+                    Mod = riakc_datatype:module(OpType),
+                    {ok, Mod:new(Value, Context)};
+                {Key, {OpType, Value, Context}} when is_binary(Key) ->
+                    Mod = riakc_datatype:module(OpType),
+                    {ok, Key, Mod:new(Value, Context)}
+            end,
+    {reply, Reply, State};
 
 process_response(#request{msg={tunneled,_MsgId}}, Reply, State) ->
     %% Tunneled msg response
