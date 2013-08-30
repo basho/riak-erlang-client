@@ -5,3 +5,4 @@ priv/*
 *.beam
 include/riakclient_pb.hrl
 doc/*
+ebin/*
