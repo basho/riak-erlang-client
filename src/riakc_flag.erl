@@ -29,7 +29,8 @@
          value/1,
          to_op/1,
          context/1,
-         is_type/1]).
+         is_type/1,
+         type/0]).
 
 
 %% Operations
@@ -77,6 +78,10 @@ context(#flag{}) -> undefined.
 -spec is_type(term()) -> boolean().
 is_type(T) ->
     is_record(T, flag).
+
+%% @doc Returns the symbolic name of this container.
+-spec type() -> atom().
+type() -> flag.
 
 %% @doc Enables the flag, setting its value to true.
 -spec enable(flag()) -> flag().

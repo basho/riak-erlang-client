@@ -63,6 +63,10 @@
 %% container module.
 -callback is_type(datatype()) -> boolean().
 
+%% @doc Determines the symbolic name of the container's type, e.g.
+%% set, map, counter.
+-callback type() -> atom().
+
 %% @doc Returns the module that is a container for the given abstract
 %% type.
 -spec module(Type::atom()) -> module().
@@ -72,7 +76,8 @@ module(flag)     -> riakc_flag;
 module(register) -> riakc_register;
 module(map)      -> riakc_map.
 
-%% @doc Returns the appropriate container module for the given term.
+%% @doc Returns the appropriate container module for the given term,
+%% if possible.
 -spec module_for_term(datatype()) -> maybe(module()).
 module_for_term(T) ->
     lists:foldl(fun(Mod, undefined) ->

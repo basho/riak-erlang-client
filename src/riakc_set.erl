@@ -30,7 +30,8 @@
          value/1,
          to_op/1,
          context/1,
-         is_type/1]).
+         is_type/1,
+         type/0]).
 
 %% Operations
 -export([add_element/2,
@@ -93,6 +94,10 @@ context(#set{context=C}) -> C.
 -spec is_type(term()) -> boolean().
 is_type(T) ->
     is_record(T, set).
+
+%% @doc Returns the symbolic name of this container.
+-spec type() -> atom().
+type() -> set.
 
 %% @doc Adds an element to the set.
 -spec add_element(binary(), set()) -> set().

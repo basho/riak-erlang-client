@@ -31,7 +31,8 @@
          value/1,
          to_op/1,
          context/1,
-         is_type/1]).
+         is_type/1,
+         type/0]).
 
 %% Operations
 -export([set/2]).
@@ -77,6 +78,10 @@ context(#register{}) -> undefined.
 -spec is_type(term()) -> boolean().
 is_type(T) ->
     is_record(T, register).
+
+%% @doc Returns the symbolic name of this container.
+-spec type() -> atom().
+type() -> register.
 
 %% @doc Sets the value of the register.
 -spec set(register(), binary()) -> register().

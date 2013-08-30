@@ -30,7 +30,8 @@
          value/1,
          to_op/1,
          context/1,
-         is_type/1]).
+         is_type/1,
+         type/0]).
 
 %% Operations
 -export([increment/1, increment/2,
@@ -103,3 +104,7 @@ context(#counter{}) ->
 -spec is_type(term()) -> boolean().
 is_type(T) ->
     is_record(T, counter).
+
+%% @doc Returns the symbolic name of this container.
+-spec type() -> atom().
+type() -> counter.
