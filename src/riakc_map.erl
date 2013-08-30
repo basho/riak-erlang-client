@@ -97,10 +97,14 @@ value(#map{value=V}) ->
 %% update request.
 -spec to_op(map()) -> map_op().
 to_op(#map{value=V, adds=A, removes=R}) ->
-    {update,
-     [ {add, Key} || Key <- A ] ++
-         [ {remove, Key} || Key <- R ] ++
-         orddict:fold(fun fold_extract_op/3, [], V)}.
+    Updates = [ {add, Key} || Key <- A ] ++
+        [ {remove, Key} || Key <- R ] ++
+         orddict:fold(fun fold_extract_op/3, [], V),
+    case Updates of
+        [] -> undefined;
+        _ ->
+            {update, Updates}
+    end.
 
 %% @doc Extracts the update context from the map.
 -spec context(map()) -> riakc_datatype:context().
