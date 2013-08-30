@@ -26,6 +26,8 @@
 %% capturing update operations for shipping back to the server.
 -module(riakc_datatype).
 
+-export([module/1]).
+
 -type maybe(T) :: T | undefined.
 -type datatype() :: term().
 -type context() :: maybe(binary()).
@@ -53,3 +55,12 @@
 %% sending along with an update request. 'undefined' should be
 %% returned if no context was provided, or if it is unneeded.
 -callback context(datatype()) -> context().
+
+%% @doc Returns the module that is a container for the given abstract
+%% type.
+-spec module(Type::atom()) -> module().
+module(set)      -> riakc_set;
+module(counter)  -> riakc_counter;
+module(flag)     -> riakc_flag;
+module(register) -> riakc_register;
+module(map)      -> riakc_map.
