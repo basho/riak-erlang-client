@@ -48,7 +48,8 @@
 -export_type([set/0]).
 -opaque set() :: #set{}.
 
--type set_op() :: {add_all, [binary()]} | {remove_all, [binary()]}.
+-type simple_set_op() :: {add_all, [binary()]} | {remove_all, [binary()]}.
+-type set_op() :: simple_set_op() | {update, [simple_set_op()]}.
 
 %% @doc Creates a new, empty set container type.
 -spec new() -> set().
@@ -73,7 +74,7 @@ value(#set{value=V}) -> V.
 
 %% @doc Extracts an operation from the set that can be encoded into an
 %% update request.
--spec to_op(set()) -> set_op() | {update, [set_op()]} | undefined.
+-spec to_op(set()) -> set_op() | undefined.
 to_op(#set{adds=[], removes=[]}) ->
     undefined;
 to_op(#set{adds=A, removes=[]}) ->

@@ -43,6 +43,7 @@
 
 -export_type([counter/0]).
 -opaque counter() :: #counter{}.
+-type counter_op() :: {increment, integer()}.
 
 %% @doc Creates a new counter type with a value of 0.
 -spec new() -> counter().
@@ -86,7 +87,7 @@ decrement(Counter, Amount) ->
     increment(Counter, -Amount).
 
 %% @doc Extracts the changes to this counter as an operation.
--spec to_op(counter()) -> {increment, integer()} | undefined.
+-spec to_op(counter()) -> counter_op() | undefined.
 to_op(#counter{increment=Incr}) when Incr /= 0->
     {increment, Incr};
 to_op(#counter{}) ->
