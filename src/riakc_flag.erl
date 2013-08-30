@@ -28,7 +28,8 @@
 -export([new/0, new/1, new/2,
          value/1,
          to_op/1,
-         context/1]).
+         context/1,
+         is_type/1]).
 
 
 %% Operations
@@ -71,6 +72,11 @@ to_op(#flag{value=false, modified=true}) -> disable.
 %% @doc Extracts the update context from the flag.
 -spec context(flag()) -> riakc_datatype:context().
 context(#flag{}) -> undefined.
+
+%% @doc Determines whether the passed term is a flag container.
+-spec is_type(term()) -> boolean().
+is_type(T) ->
+    is_record(T, flag).
 
 %% @doc Enables the flag, setting its value to true.
 -spec enable(flag()) -> flag().

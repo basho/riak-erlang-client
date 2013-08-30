@@ -30,7 +30,8 @@
 -export([new/0, new/1, new/2,
          value/1,
          to_op/1,
-         context/1]).
+         context/1,
+         is_type/1]).
 
 %% Operations
 -export([set/2]).
@@ -71,6 +72,11 @@ to_op(#register{value=V, modified=true}) -> {assign, V}.
 %% @doc Extracts the update context from the register.
 -spec context(register()) -> riakc_datatype:context().
 context(#register{}) -> undefined.
+
+%% @doc Determines whether the passed term is a register container.
+-spec is_type(term()) -> boolean().
+is_type(T) ->
+    is_record(T, register).
 
 %% @doc Sets the value of the register.
 -spec set(register(), binary()) -> register().

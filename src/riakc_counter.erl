@@ -29,7 +29,8 @@
 -export([new/0, new/1, new/2,
          value/1,
          to_op/1,
-         context/1]).
+         context/1,
+         is_type/1]).
 
 %% Operations
 -export([increment/1, increment/2,
@@ -97,3 +98,8 @@ to_op(#counter{}) ->
 -spec context(counter()) -> riakc_datatype:context().
 context(#counter{}) ->
      undefined.
+
+%% @doc Determines whether the passed term is a counter container.
+-spec is_type(term()) -> boolean().
+is_type(T) ->
+    is_record(T, counter).

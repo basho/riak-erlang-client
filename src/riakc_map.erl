@@ -31,7 +31,8 @@
 -export([new/0, new/1, new/2,
          value/1,
          to_op/1,
-         context/1]).
+         context/1,
+         is_type/1]).
 
 %% Operations
 -export([add/2,
@@ -103,6 +104,12 @@ to_op(#map{value=V, adds=A, removes=R}) ->
 %% @doc Extracts the update context from the map.
 -spec context(map()) -> riakc_datatype:context().
 context(#map{context=C}) -> C.
+
+%% @doc Determines whether the passed term is a set container.
+-spec is_type(term()) -> boolean().
+is_type(T) ->
+    is_record(T, map).
+
 
 %% ==== Operations ====
 

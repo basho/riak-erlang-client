@@ -26,7 +26,10 @@
 %% capturing update operations for shipping back to the server.
 -module(riakc_datatype).
 
--export([module/1]).
+-define(MODULES, [riakc_set, riakc_counter, riakc_flag, riakc_register, riakc_map]).
+
+-export([module/1,
+         module_for_term/1]).
 
 -type maybe(T) :: T | undefined.
 -type datatype() :: term().
@@ -56,6 +59,10 @@
 %% returned if no context was provided, or if it is unneeded.
 -callback context(datatype()) -> context().
 
+%% @doc Determines whether the given term is the type managed by the
+%% container module.
+-callback is_type(datatype()) -> boolean().
+
 %% @doc Returns the module that is a container for the given abstract
 %% type.
 -spec module(Type::atom()) -> module().
@@ -64,3 +71,15 @@ module(counter)  -> riakc_counter;
 module(flag)     -> riakc_flag;
 module(register) -> riakc_register;
 module(map)      -> riakc_map.
+
+%% @doc Returns the appropriate container module for the given term.
+-spec module_for_term(datatype()) -> maybe(module()).
+module_for_term(T) ->
+    lists:foldl(fun(Mod, undefined) ->
+                        case Mod:is_type(T) of
+                            true -> Mod;
+                            false -> undefined
+                        end;
+                   (_, Mod) ->
+                        Mod
+                end, undefined, ?MODULES).
