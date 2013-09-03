@@ -1722,10 +1722,13 @@ process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
     Mod = riakc_datatype:module(Type),
     {reply, {ok, Mod:new(Value, Context)}, State};
 
-process_response(#request{msg = #dtupdatereq{}}, dtupdateresp, State) ->
+process_response(#request{msg = #dtupdatereq{}},
+                 dtupdateresp,
+                 State) ->
     {reply, ok, State};
-process_response(#request{msg = #dtupdatereq{return_body=RB,
-                                             op=Op}}, #dtupdateresp{}=Resp,
+
+process_response(#request{msg = #dtupdatereq{op=Op, return_body=RB}},
+                 #dtupdateresp{}=Resp,
                  State) ->
     OpType = riak_pb_dt_codec:operation_type(Op),
     Reply = case riak_pb_dt_codec:decode_update_response(Resp, OpType, RB) of

@@ -253,5 +253,5 @@ fold_extract_op(Key, Value, Acc0) ->
         undefined ->
             Acc0;
         Op ->
-            {update, Key, Op}
+            [{update, Key, Op} | Acc0]
     end.
