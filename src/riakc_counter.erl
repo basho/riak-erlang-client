@@ -71,22 +71,22 @@ value(#counter{value=Value}) ->
 %% @doc Increments the counter by 1.
 -spec increment(counter()) -> counter().
 increment(Counter) ->
-    increment(Counter, 1).
+    increment(1, Counter).
 
 %% @doc Increments the counter by the passed amount.
--spec increment(counter(), integer()) -> counter().
-increment(#counter{value=Value, increment=Incr}, Amount) when is_integer(Amount) ->
+-spec increment(integer(), counter()) -> counter().
+increment(Amount, #counter{value=Value, increment=Incr}) when is_integer(Amount) ->
     #counter{value=Value+Amount, increment=Incr+Amount}.
 
 %% @doc Decrements the counter by 1.
 -spec decrement(counter()) -> counter().
 decrement(Counter) ->
-    increment(Counter, -1).
+    increment(-1, Counter).
 
 %% @doc Decrements the counter by the passed amount.
--spec decrement(counter(), integer()) -> counter().
-decrement(Counter, Amount) ->
-    increment(Counter, -Amount).
+-spec decrement(integer(), counter()) -> counter().
+decrement(Amount, Counter) ->
+    increment(-Amount, Counter).
 
 %% @doc Extracts the changes to this counter as an operation.
 -spec to_op(counter()) -> counter_op() | undefined.
