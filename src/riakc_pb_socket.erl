@@ -1177,7 +1177,7 @@ update_type(Pid, BucketAndType, Key, Data, Options) ->
                 Op ->
                     Context = Mod:context(Data),
                     Type = Mod:type(),
-                    Req = riak_pb_dt_codec:encode_update_request(BucketAndType, Key, Type, {Type, Op, Context}, Options),
+                    Req = riak_pb_dt_codec:encode_update_request(BucketAndType, Key, {Type, Op, Context}, Options),
                     gen_server:call(Pid, {req, Req, default_timeout(put_timeout)})
             end
     end.
