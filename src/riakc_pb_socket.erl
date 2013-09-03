@@ -1722,6 +1722,8 @@ process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
     Mod = riakc_datatype:module(Type),
     {reply, {ok, Mod:new(Value, Context)}, State};
 
+process_response(#request{msg = #dtupdatereq{}}, dtupdateresp, State) ->
+    {reply, ok, State};
 process_response(#request{msg = #dtupdatereq{return_body=RB,
                                              op=Op}}, #dtupdateresp{}=Resp,
                  State) ->
