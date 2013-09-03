@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% riakc_counter: Eventually-consistent register type
+%% riakc_register: Eventually-consistent register type
 %%
 %% Copyright (c) 2013 Basho Technologies, Inc.  All Rights Reserved.
 %%
@@ -27,7 +27,7 @@
 -behaviour(riakc_datatype).
 
 %% Callbacks
--export([new/0, new/1, new/2,
+-export([new/0, new/2,
          value/1,
          to_op/1,
          context/1,
@@ -49,11 +49,6 @@
 -spec new() -> register().
 new() ->
     #register{value = <<>>}.
-
-%% @doc Creates a new register with the specified value.
--spec new(binary()) -> register().
-new(Value) when is_binary(Value) ->
-    #register{value=Value}.
 
 %% @doc Creates a new register with the specified value and context.
 -spec new(binary(), riakc_datatype:context()) -> register().

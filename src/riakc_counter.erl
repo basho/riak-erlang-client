@@ -26,7 +26,7 @@
 -behaviour(riakc_datatype).
 
 %% Callbacks
--export([new/0, new/1, new/2,
+-export([new/0, new/2,
          value/1,
          to_op/1,
          context/1,
@@ -50,12 +50,7 @@
 %% @doc Creates a new counter type with a value of 0.
 -spec new() -> counter().
 new() ->
-    new(0).
-
-%% @doc Creates a new counter type with the passed integer value.
--spec new(integer()) -> counter().
-new(Value) when is_integer(Value) ->
-    #counter{value=Value}.
+    #counter{}.
 
 %% @doc Creates a new counter type with the passed integer and
 %% context.

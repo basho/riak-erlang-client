@@ -35,15 +35,13 @@
 -type datatype() :: term().
 -type context() :: maybe(binary()).
 
-%% @doc Constructs a new, empty container for the type.
+%% @doc Constructs a new, empty container for the type. Use this when
+%% creating a new key.
 -callback new() -> datatype().
 
 %% @doc Constructs a new container for the type with the specified
-%% value.
--callback new(Value::term()) -> datatype().
-
-%% @doc Constructs a new container for the type with the specified
-%% value and opaque server-side context.
+%% value and opaque server-side context. This should only be used
+%% internally by the client code.
 -callback new(Value::term(), context()) -> datatype().
 
 %% @doc Returns the current local-view of the container's value.

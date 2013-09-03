@@ -28,7 +28,7 @@
 -behaviour(riakc_datatype).
 
 %% Callbacks
--export([new/0, new/1, new/2,
+-export([new/0, new/2,
          value/1,
          to_op/1,
          context/1,
@@ -74,16 +74,11 @@
 new() ->
     #map{}.
 
-%% @doc Creates a new map with the specified key-value pairs.
--spec new([raw_entry()]) -> map().
-new(Values) when is_list(Values) ->
-    #map{value = orddict:from_list([ lift_entry(Pair) || Pair <- Values ])}.
-
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> map().
 new(Values, Context) when is_list(Values) ->
-    M = new(Values),
-    M#map{context=Context}.
+    #map{value = orddict:from_list([ lift_entry(Pair) || Pair <- Values ]),
+         context=Context}.
 
 %% @doc Extracts the value of the map, including all the contained values.
 -spec value(map()) -> [raw_entry()].
@@ -236,7 +231,7 @@ entry_value(Key, Value) ->
 -spec lift_entry(raw_entry()) -> entry().
 lift_entry({Key, Value}) ->
     M = type_module(Key),
-    {Key, M:new(Value)}.
+    {Key, M:new(Value, undefined)}.
 
 %% @doc Determines the module for the container type of the value
 %% pointed to by the given key.

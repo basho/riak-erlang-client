@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% riakc_counter: Eventually-consistent flag type
+%% riakc_flag: Eventually-consistent flag type
 %%
 %% Copyright (c) 2013 Basho Technologies, Inc.  All Rights Reserved.
 %%
@@ -25,7 +25,7 @@
 -behaviour(riakc_datatype).
 
 %% Callbacks
--export([new/0, new/1, new/2,
+-export([new/0, new/2,
          value/1,
          to_op/1,
          context/1,
@@ -48,11 +48,6 @@
 -spec new() -> flag().
 new() ->
     #flag{}.
-
-%% @doc Creates a new flag with the specified value.
--spec new(boolean()) -> flag().
-new(Value) when is_boolean(Value) ->
-    #flag{value=Value}.
 
 %% @doc Creates a new flag with the specified value and context.
 -spec new(boolean(), riakc_datatype:context()) -> flag().
