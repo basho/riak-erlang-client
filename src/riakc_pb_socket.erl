@@ -1154,33 +1154,24 @@ fetch_type(Pid, BucketAndType, Key, Options) ->
 
 %% @doc Updates the convergent datatype in Riak with local
 %% modifications stored in the container type.
--spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(), Data::riakc_datatype:datatype()) ->
+-spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(), Update::riakc_datatype:update(term())) ->
                          ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
                          {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
-update_type(Pid, BucketAndType, Key, Data) ->
-    update_type(Pid, BucketAndType, Key, Data, []).
+update_type(Pid, BucketAndType, Key, Update) ->
+    update_type(Pid, BucketAndType, Key, Update, []).
 
 %% @doc Updates the convergent datatype in Riak with local
 %% modifications stored in the container type, using the given request
 %% options.
 -spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(),
-                  Data::riakc_datatype:datatype(), [proplists:property()]) ->
+                  Update::riakc_datatype:update(term()), [proplists:property()]) ->
                          ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
                          {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
-update_type(Pid, BucketAndType, Key, Data, Options) ->
-    case riakc_datatype:module_for_term(Data) of
-        undefined ->
-            {error, invalid_datatype};
-        Mod ->
-            case Mod:to_op(Data) of
-                undefined -> ok;
-                Op ->
-                    Context = Mod:context(Data),
-                    Type = Mod:type(),
-                    Req = riak_pb_dt_codec:encode_update_request(BucketAndType, Key, {Type, Op, Context}, Options),
-                    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)})
-            end
-    end.
+update_type(_Pid, _BucketAndType, _Key, undefined, _Options) ->
+    {error, unmodified};
+update_type(Pid, BucketAndType, Key, {Type, Op, Context}, Options) ->
+    Req = riak_pb_dt_codec:encode_update_request(BucketAndType, Key, {Type, Op, Context}, Options),
+    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}).
 
 %% @doc Fetches, applies the given function to the value, and then
 %% updates the datatype in Riak.
@@ -1193,7 +1184,8 @@ modify_type(Pid, Fun, BucketAndType, Key, Options) ->
             {error, Reason};
         {ok, Data} ->
             NewData = Fun(Data),
-            update_type(Pid, BucketAndType, Key, NewData, Options)
+            Mod = riakc_datatype:module_for_term(NewData),
+            update_type(Pid, BucketAndType, Key, Mod:to_op(NewData), Options)
     end.
 
 
