@@ -20,16 +20,40 @@
 %%
 %% -------------------------------------------------------------------
 
-
-%% @doc Encapsulates a set data-type.
+%% @doc <p>Encapsulates a set data-type. Riak's sets differ from Erlang
+%% set types in several ways:</p>
+%% <ul>
+%% <li>Only binaries are allowed as elements. Convert other terms to a
+%% binary before adding them.</li>
+%% <li>Like the other eventually-consistent types, updates
+%% (`add_element/2' and `del_element/2') are not applied to local
+%% state. Instead, additions and removals are captured for later
+%% application by Riak. Use `dirty_value/1' to access a local "view"
+%% of the updates.</li>
+%% <li>Additions and removals are non-exclusive. You can add and
+%% remove the same element in the same session, both operations will
+%% be performed in Riak (removal first). Removals performed without a
+%% context may result in failure.</li>
+%% <li>You may add an element that already exists in the original set
+%% value, and remove an element that does not appear in the original
+%% set value. This is non-intuitive, but acts as a safety feature: a
+%% client code path that requires an element to be present in the set
+%% (or removed) can ensure that intended state by applying an
+%% operation.</li>
+%% <li>The query functions `size/1', `is_element/1' and `fold/3' only
+%% operate on the original value of the set, disregarding local
+%% updates. To query the modified state, use `dirty_value/1' with the
+%% `ordsets' module.</li>
+%% </ul> 
+%% @end
 -module(riakc_set).
 -behaviour(riakc_datatype).
 
 %% Callbacks
 -export([new/0, new/2,
          value/1,
+         dirty_value/1,
          to_op/1,
-         context/1,
          is_type/1,
          type/0]).
 
@@ -43,8 +67,8 @@
          fold/3]).
 
 -record(set, {value = ordsets:new() :: ordsets:ordset(binary()),
-              adds = [] :: [binary()],
-              removes = [] :: [binary()],
+              adds = ordsets:new() :: ordsets:ordset(binary()),
+              removes = ordsets:new() :: ordsets:ordset(binary()),
               context = undefined :: riakc_datatype:context() }).
 
 -export_type([set/0]).
@@ -65,25 +89,27 @@ new(Value, Context) when is_list(Value) ->
     #set{value=ordsets:from_list(Value),
          context=Context}.
 
-%% @doc Returns the value of the set as an ordset.
+%% @doc Returns the original value of the set as an ordset.
 -spec value(set()) -> ordsets:set(binary()).
 value(#set{value=V}) -> V.
 
+%% @doc Returns the value of the set after locally updates are
+%% applied.
+-spec dirty_value(set()) -> ordsets:ordset(binary()).
+dirty_value(#set{value=V, adds=A, removes=R}) ->
+    ordsets:union(ordsets:subtract(V, R), A).
+
 %% @doc Extracts an operation from the set that can be encoded into an
 %% update request.
--spec to_op(set()) -> set_op() | undefined.
+-spec to_op(set()) -> riakc_datatype:update(set_op()).
 to_op(#set{adds=[], removes=[]}) ->
     undefined;
-to_op(#set{adds=A, removes=[]}) ->
-    {add_all, A};
-to_op(#set{adds=[], removes=R}) ->
-    {remove_all, R};
-to_op(#set{adds=A, removes=R}) ->
-    {update, [{add_all, A}, {remove_all, R}]}.
-
-%% @doc Extracts the update context from the set container.
--spec context(set()) -> riakc_datatype:context().
-context(#set{context=C}) -> C.
+to_op(#set{adds=A, removes=[], context=C}) ->
+    {type(), {add_all, A}, C};
+to_op(#set{adds=[], removes=R, context=C}) ->
+    {type(), {remove_all, R}, C};
+to_op(#set{adds=A, removes=R, context=C}) ->
+    {type, {update, [{remove_all, R}, {add_all, A}]}, C}.
 
 %% @doc Determines whether the passed term is a set container.
 -spec is_type(term()) -> boolean().
@@ -96,47 +122,32 @@ type() -> set.
 
 %% @doc Adds an element to the set.
 -spec add_element(binary(), set()) -> set().
-add_element(Bin, #set{value=V0, adds=A0, removes=R0}=Set) when is_binary(Bin) ->
-    case is_element(Bin, Set) of
-        true -> Set;
-        false ->
-            {A, R} = case lists:member(Bin, R0) of
-                         true ->
-                             {A0, lists:delete(Bin, R0)};
-                         false ->
-                             {[Bin|A0], R0}
-                     end,
-            Set#set{value=ordsets:add_element(Bin, V0),
-                    adds=A, removes=R}
-    end.
+add_element(Bin, #set{adds=A0}=Set) when is_binary(Bin) ->
+    Set#set{adds=ordsets:add_element(Bin, A0)}.
 
 %% @doc Removes an element from the set.
 -spec del_element(binary(), set()) -> set().
-del_element(Bin, #set{value=V0, adds=A0, removes=R0}=Set) when is_binary(Bin) ->
-    case is_element(Bin, Set) of
-        false -> Set;
-        true ->
-            {A, R} = case lists:member(Bin, A0) of
-                         true ->
-                             {lists:delete(Bin,A0), R0};
-                         false ->
-                             {A0, [Bin|R0]}
-                     end,
-            Set#set{value=ordsets:add_element(Bin, V0),
-                    adds=A, removes=R}
-    end.
+del_element(Bin, #set{removes=R0}=Set) when is_binary(Bin) ->
+    Set#set{removes=ordsets:add_element(Bin, R0)}.
 
-%% @doc Returns the cardinality (size) of the set.
+%% @doc Returns the cardinality (size) of the set. <em>Note: this only
+%% operates on the original value, use the result of dirty_value/1 if
+%% you want to account for locally-queued operations.</em>
 -spec size(set()) -> pos_integer().
 size(#set{value=V}) ->
     ordsets:size(V).
 
-%% @doc Test whether an element is a member of the set.
+%% @doc Test whether an element is a member of the set. <em>Note: this
+%% only operates on the original value, use the result of
+%% dirty_value/1 if you want to account for locally-queued
+%% operations.</em>
 -spec is_element(binary(), set()) -> boolean().
 is_element(Bin, #set{value=V}) when is_binary(Bin) ->
     ordsets:is_element(Bin, V).
 
-%% @doc Folds over the members of the set.
+%% @doc Folds over the members of the set. <em>Note: this only
+%% operates on the original value, use the result of dirty_value/1 if
+%% you want to account for locally-queued operations.</em>
 -spec fold(fun((binary(), term()) -> term()), term(), set()) -> term().
 fold(Fun, Acc0, #set{value=V}) ->
     ordsets:fold(Fun, Acc0, V).

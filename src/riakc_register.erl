@@ -21,16 +21,20 @@
 %% -------------------------------------------------------------------
 
 
-%% @doc Encapsulates a register data-type, storing an opaque binary
-%% value, with last-write wins semantics.
+%% @doc Encapsulates a register data-type that stores an opaque binary
+%% value with last-write-wins semantics. Like the other
+%% eventually-consistent types, the original fetched value is
+%% unmodified by setting the register. Instead, the new value is
+%% captured for later application in Riak. Use `dirty_value/1' to
+%% access the local "view" of the updated value.
 -module(riakc_register).
 -behaviour(riakc_datatype).
 
 %% Callbacks
 -export([new/0, new/2,
          value/1,
+         dirty_value/1,
          to_op/1,
-         context/1,
          is_type/1,
          type/0]).
 
@@ -38,7 +42,7 @@
 -export([set/2]).
 
 -record(register, {value :: binary(),
-                   modified = false :: boolean()}).
+                   new_value = undefined :: binary()}).
 
 -export_type([register/0]).
 -opaque register() :: #register{}.
@@ -59,15 +63,17 @@ new(Value, _Context) when is_binary(Value) ->
 -spec value(register()) -> boolean().
 value(#register{value=V}) -> V.
 
+%% @doc Extracts the value of the register with locally-queued
+%% operations applied.
+-spec dirty_value(register()) -> binary().
+dirty_value(#register{value=V, new_value=undefined}) -> V;
+dirty_value(#register{new_value=NV}) -> NV.
+
 %% @doc Extracts an operation from the register that can be encoded
 %% into an update request.
--spec to_op(register()) -> register_op() | undefined.
-to_op(#register{modified=false}) -> undefined;
-to_op(#register{value=V, modified=true}) -> {assign, V}.
-
-%% @doc Extracts the update context from the register.
--spec context(register()) -> riakc_datatype:context().
-context(#register{}) -> undefined.
+-spec to_op(register()) -> riakc_datatype:update(register_op()).
+to_op(#register{new_value=undefined}) -> undefined;
+to_op(#register{new_value=NV}) -> {type(), {assign, NV}, undefined}.
 
 %% @doc Determines whether the passed term is a register container.
 -spec is_type(term()) -> boolean().
@@ -81,4 +87,4 @@ type() -> register.
 %% @doc Sets the value of the register.
 -spec set(register(), binary()) -> register().
 set(#register{}=R, Value) when is_binary(Value) ->
-    R#register{value=Value, modified=true}.
+    R#register{new_value=Value}.

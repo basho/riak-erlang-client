@@ -21,15 +21,20 @@
 %% -------------------------------------------------------------------
 
 
-%% @doc Encapsulates a counter data-type.
+%% @doc Encapsulates a counter data-type. Counters are integers that
+%% can be incremented or decremented. Like the other
+%% eventually-consistent types, the original fetched value is
+%% unmodified by increments. Instead, increments are captured for
+%% later application in Riak. Use `dirty_value/1' to access a local
+%% "view" of the updated value.
 -module(riakc_counter).
 -behaviour(riakc_datatype).
 
 %% Callbacks
 -export([new/0, new/2,
          value/1,
+         dirty_value/1,
          to_op/1,
-         context/1,
          is_type/1,
          type/0]).
 
@@ -58,10 +63,15 @@ new() ->
 new(Value, _Context) when is_integer(Value) ->
     #counter{value=Value}.
 
-%% @doc Gets the current value of the counter.
+%% @doc Gets the original value of the counter.
 -spec value(counter()) -> integer().
 value(#counter{value=Value}) ->
     Value.
+
+%% @doc Gets the value of the counter after local updates are applied.
+-spec dirty_value(counter()) -> integer().
+dirty_value(#counter{value=Value, increment=Incr}) ->
+    Value + Incr.
 
 %% @doc Increments the counter by 1.
 -spec increment(counter()) -> counter().
@@ -70,8 +80,8 @@ increment(Counter) ->
 
 %% @doc Increments the counter by the passed amount.
 -spec increment(integer(), counter()) -> counter().
-increment(Amount, #counter{value=Value, increment=Incr}) when is_integer(Amount) ->
-    #counter{value=Value+Amount, increment=Incr+Amount}.
+increment(Amount, #counter{increment=Incr}) when is_integer(Amount) ->
+    #counter{increment=Incr+Amount}.
 
 %% @doc Decrements the counter by 1.
 -spec decrement(counter()) -> counter().
@@ -84,16 +94,11 @@ decrement(Amount, Counter) ->
     increment(-Amount, Counter).
 
 %% @doc Extracts the changes to this counter as an operation.
--spec to_op(counter()) -> counter_op() | undefined.
+-spec to_op(counter()) -> riakc_datatype:update(counter_op()).
 to_op(#counter{increment=Incr}) when Incr /= 0->
-    {increment, Incr};
+    {type(), {increment, Incr}, undefined};
 to_op(#counter{}) ->
     undefined.
-
-%% @doc Extracts the context from this counter (always undefined).
--spec context(counter()) -> riakc_datatype:context().
-context(#counter{}) ->
-     undefined.
 
 %% @doc Determines whether the passed term is a counter container.
 -spec is_type(term()) -> boolean().

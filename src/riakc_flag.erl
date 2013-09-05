@@ -20,15 +20,23 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Encapsulates a set data-type.
+%% @doc Encapsulates a flag data-type. Flags are boolean values that
+%% can be enabled or disabled. Like the other eventually-consistent
+%% types, the original fetched value is unmodified by enabling or
+%% disabling. Instead, the effective operation (`enable' or `disable')
+%% is captured for later application in Riak. Use `dirty_value/1' to
+%% access a local "view" of the updated value. Note that it is
+%% possible to `enable' a flag that is already `true' and `disable' a
+%% flag that is already `false'. Flags are only available as values in
+%% maps.
 -module(riakc_flag).
 -behaviour(riakc_datatype).
 
 %% Callbacks
 -export([new/0, new/2,
          value/1,
+         dirty_value/1,
          to_op/1,
-         context/1,
          is_type/1,
          type/0]).
 
@@ -37,7 +45,7 @@
 -export([enable/1, disable/1]).
 
 -record(flag, {value = false :: boolean(),
-               modified = false :: boolean()}).
+               op = undefined :: undefined | flag_op()}).
 
 -export_type([flag/0]).
 -opaque flag() :: #flag{}.
@@ -54,20 +62,23 @@ new() ->
 new(Value, _Context) when is_boolean(Value) ->
     #flag{value=Value}.
 
-%% @doc Extracts the value of the flag. true is enabled, false is disabled.
+%% @doc Extracts the original value of the flag. true is enabled,
+%% false is disabled.
 -spec value(flag()) -> boolean().
 value(#flag{value=V}) -> V.
 
+%% @doc Extracts the value of the flag with local modifications
+%% applied.
+-spec dirty_value(flag()) -> boolean().
+dirty_value(#flag{value=V, op=undefined}) -> V;
+dirty_value(#flag{op=enable}) -> true;
+dirty_value(#flag{op=disable}) -> false.
+
 %% @doc Extracts an operation from the flag that can be encoded into
 %% an update request.
--spec to_op(flag()) -> flag_op() | undefined.
-to_op(#flag{modified=false}) -> undefined;
-to_op(#flag{value=true, modified=true}) -> enable;
-to_op(#flag{value=false, modified=true}) -> disable.
-
-%% @doc Extracts the update context from the flag.
--spec context(flag()) -> riakc_datatype:context().
-context(#flag{}) -> undefined.
+-spec to_op(flag()) -> riakc_datatype:update(flag_op()).
+to_op(#flag{op=undefined}) -> undefined;
+to_op(#flag{op=O}) -> {type(), O, undefined}.
 
 %% @doc Determines whether the passed term is a flag container.
 -spec is_type(term()) -> boolean().
@@ -80,12 +91,8 @@ type() -> flag.
 
 %% @doc Enables the flag, setting its value to true.
 -spec enable(flag()) -> flag().
-enable(#flag{value=true}=F) -> F;
-enable(#flag{value=false, modified=M}=F) -> 
-    F#flag{value=true, modified=(not M)}.
+enable(#flag{}=F) -> F#flag{op=enable}.
 
 %% @doc Disables the flag, setting its value to false.
 -spec disable(flag()) -> flag().
-disable(#flag{value=false}=F) -> F;
-disable(#flag{value=true, modified=M}=F) -> 
-    F#flag{value=false, modified=(not M)}.
+disable(#flag{}=F) -> F#flag{op=disable}.

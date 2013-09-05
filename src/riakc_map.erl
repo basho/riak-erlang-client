@@ -20,18 +20,43 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Encapsulates a map data-type. Maps are special key-value data
-%% structures where the key is a pair of a binary name and data type,
-%% and the value is a container of the specified type, e.g.
-%% `{<<"friends">>, set} -> riakc_set:set()'.
+%% @doc <p>Encapsulates a map data-type. Maps differ from Erlang's dict
+%% types in several ways:</p>
+%% <ul>
+%% <li>Maps are special key-value structures where the key is a pair
+%% of a binary name and data type, and the value is a container of the
+%% specified type, e.g. `{<<"friends">>, set} -> riakc_set:set()'.
+%% Regular Erlang terms may not be values in the map, but could be
+%% serialized into `register' fields if last-write-wins semantics are
+%% sufficient.</li>
+%% <li>Like the other eventually-consistent types, updates are not
+%% applied to local state. Instead, additions, removals, and
+%% modifications are captured for later application by Riak. Use
+%% `dirty_value/1' to access a local "view" of the updates.</li>
+%% <li>You may not "store" values in a map, but you may create new
+%% entries using `add/2', which inserts an empty value of the
+%% specified type. Existing or non-existing entries can be modified
+%% using `update/3', which is analogous to `dict:update/3'. If the
+%% entry is not present, it will be populated with a new value before
+%% the update function is applied. The update function will receive
+%% the appropriate container type as its sole argument.</li>
+%% <li>Like sets, removals will be processed before additions and
+%% updates in Riak. Removals performed without a context may result in
+%% failure.</li>
+%% <li>Adding or updating an entry followed by removing that same
+%% entry will result in no operation being recorded. Likewise,
+%% removing an entry followed by adding or updating that entry will
+%% cancel the removal operation.</li>
+%% </ul>
+%% @end
 -module(riakc_map).
 -behaviour(riakc_datatype).
 
 %% Callbacks
 -export([new/0, new/2,
          value/1,
+         dirty_value/1,
          to_op/1,
-         context/1,
          is_type/1,
          type/0]).
 
@@ -48,9 +73,10 @@
          fetch_keys/1,
          fold/3]).
 
--record(map, {value = [] :: orddict:orddict(entry()),
-              adds = [] :: [key()],
-              removes = [] :: [key()],
+-record(map, {value = [] :: [raw_entry()], %% orddict
+              updates = [] :: [entry()], %% orddict
+              adds = [] :: ordsets:ordset(key()),
+              removes = [] :: ordsets:ordset(key()),
               context = undefined :: riakc_datatype:context() }).
 
 -type datatype() :: counter | flag | register | set.
@@ -77,33 +103,34 @@ new() ->
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> map().
 new(Values, Context) when is_list(Values) ->
-    #map{value = orddict:from_list([ lift_entry(Pair) || Pair <- Values ]),
-         context=Context}.
+    #map{value=orddict:from_list(Values), context=Context}.
 
-%% @doc Extracts the value of the map, including all the contained values.
+%% @doc Gets the original value of the map.
 -spec value(map()) -> [raw_entry()].
-value(#map{value=V}) ->
-    [ begin
-          M = type_module(Key),
-          {Key, M:value(Value)}
-      end || {Key, Value} <- orddict:to_list(V) ].
+value(#map{value=V}) -> V.
+
+%% @doc Gets the value of the map after local updates are applied.
+-spec dirty_value(map()) -> [raw_entry()].
+dirty_value(#map{value=V, updates=U, removes=R}) ->
+    Merged = orddict:merge(fun(K, _Value, Update) ->
+                                   Mod = type_module(K),
+                                   Mod:dirty_value(Update)
+                           end, V, U),
+    [ Pair || {Key, _}=Pair <- Merged,
+              not ordsets:is_member(Key, R) ].
 
 %% @doc Extracts an operation from the map that can be encoded into an
 %% update request.
--spec to_op(map()) -> map_op().
-to_op(#map{value=V, adds=A, removes=R}) ->
+-spec to_op(map()) -> riakc_datatype:update(map_op()).
+to_op(#map{updates=U, adds=A, removes=R, context=C}) ->
     Updates = [ {add, Key} || Key <- A ] ++
         [ {remove, Key} || Key <- R ] ++
-         orddict:fold(fun fold_extract_op/3, [], V),
+         orddict:fold(fun fold_extract_op/3, [], U),
     case Updates of
         [] -> undefined;
         _ ->
-            {update, Updates}
+            {type(), {update, Updates}, C}
     end.
-
-%% @doc Extracts the update context from the map.
--spec context(map()) -> riakc_datatype:context().
-context(#map{context=C}) -> C.
 
 %% @doc Determines whether the passed term is a set container.
 -spec is_type(term()) -> boolean().
@@ -119,54 +146,51 @@ type() -> map.
 
 %% @doc Adds a key to the map, inserting the empty value for its type.
 %% Adding a key that already exists in the map has no effect. If the
-%% key has been previously removed from the map, an exception will be
-%% raised.
+%% key has been previously removed from the map, the removal will be
+%% discarded, but no explicit add will be recorded.
 -spec add(key(), map()) -> map().
-add(Key, #map{value=Entries, adds=A, removes=R}=M) ->
-    case {is_key(Key, M), lists:member(Key, R)} of
-        %% The key is already in the map, do nothing.
-        {true, _} -> M;
-        %% The key has already been removed from the map, re-adding
-        %% makes no sense.
+add(Key, #map{value=V, updates=U, adds=A, removes=R}=M) ->
+    case {orddict:is_key(Key, U), ordsets:is_element(Key, R)} of
+        %% It is already in the updates, do nothing.
+        {true, _} ->
+            M;
+        %% It was previously removed, clear that removal.
         {false, true} ->
-            erlang:error(badarg, [Key, M]);
-        %% The key does not exist yet, initialize it with an empty
-        %% value.
+            M#map{removes=ordsets:del_element(Key, R)};
+        %% It is brand new, record the add and store a value in the
+        %% updates. If it was in the original value, initialize it
+        %% with that.
         {false, false} ->
-            Mod = type_module(Key),
-            NewValue = Mod:new(),
-            M#map{value=orddict:store(Key, NewValue, Entries),
-                  adds=[Key|A]}
+            Value = find_or_new(Key, V),
+            M#map{adds=ordsets:add_element(Key, A),
+                  updates=orddict:store(Key, Value, U)}
     end.
 
 %% @doc Removes a key and its value from the map. Removing a key that
-%% does not exist has no effect. Removing a key whose value has been
-%% locally modified via `update/3` nullifies any of those
-%% modifications.
+%% does not exist simply records a remove operation. Removing a key
+%% whose value has been added via `add/2' or locally modified via
+%% `update/3' nullifies any of those modifications, without recording
+%% a remove operation.
 -spec erase(key(), map()) -> map().
-erase(Key, #map{value=Entries, adds=A, removes=R}=M) ->
-    case is_key(Key, M) of
-        false -> M;
+erase(Key, #map{updates=U, adds=A, removes=R}=M) ->
+    case orddict:is_key(Key, U) of
         true ->
-            M#map{value=orddict:erase(Key, Entries),
-                  adds=lists:delete(Key, A),
-                  removes=[Key|R]}
+            M#map{updates=orddict:erase(Key, U),
+                  adds=ordsets:del_element(Key, A)};
+        false ->
+            M#map{removes=ordsets:add_element(Key, R)}
     end.
 
 %% @doc Updates the value stored at the key by calling the passed
 %% function to get the new value. If the key did not previously exist,
 %% it will be initialized to the empty value for its type. If the key
-%% has been previously removed from the map, an exception will be
-%% raised.
+%% was previously removed with `erase/2', the remove operation will be
+%% nullified.
 -spec update(key(), update_fun(), map()) -> map().
-update(Key, Fun, #map{value=Entries, adds=A, removes=R}=M) ->
-    case lists:member(Key, R) of
-        true -> erlang:error(badarg, [Key, Fun, M]);
-        false ->
-            Mod = type_module(Key),
-            M#map{value=orddict:update(Key, Fun, Mod:new(), Entries),
-                  adds=lists:delete(Key, A)}
-    end.
+update(Key, Fun, #map{value=V, updates=U0, removes=R0}=M) ->
+    R = ordsets:del_element(Key, R0),
+    U = orddict:update(Key, Fun, find_or_new(Key, V), U0),
+    M#map{removes=R, updates=U}.
 
 %% ==== Queries ====
 
@@ -178,25 +202,15 @@ size(#map{value=Entries}) ->
 %% @doc Returns the "unwrapped" value associated with the key in the
 %% map. If the key is not present, an exception is generated.
 -spec fetch(key(), map()) -> term().
-fetch(Key, #map{value=Entries}=M) ->
-    try orddict:fetch(Key, Entries) of
-        Value ->
-            entry_value(Key, Value)
-    catch
-        error:function_clause ->
-            erlang:error(badarg, [Key, M])
-    end.
+fetch(Key, #map{value=Entries}) ->
+    orddict:fetch(Key, Entries).
 
 %% @doc Searches for a key in the map. Returns `{ok, UnwrappedValue}'
 %% when the key is present, or `error' if the key is not present in
 %% the map.
 -spec find(key(), map()) -> {ok, term()} | error.
 find(Key, #map{value=Entries}) ->
-    case orddict:find(Key, Entries) of
-        {ok, Value} ->
-            {ok, entry_value(Key, Value)};
-        error -> error
-    end.
+    orddict:find(Key, Entries).
 
 %% @doc Test if the key is contained in the map.
 -spec is_key(key(), map()) -> boolean().
@@ -212,26 +226,18 @@ fetch_keys(#map{value=Entries}) ->
 %% not container types.
 -spec fold(fun((key(), term(), term()) -> term()), term(), map()) -> term().
 fold(Fun, Acc0, #map{value=Entries}) ->
-    orddict:fold(fun(Key, Value, Acc) ->
-                         Fun(Key, entry_value(Key,Value), Acc)
-                 end, Acc0, Entries).
+    orddict:fold(Fun, Acc0, Entries).
 
 %% ==== Internal functions ====
 
-%% @doc Extracts the raw value from a wrapped value for the given key.
-%% @private
--spec entry_value(key(), riakc_datatype:datatype()) -> term().
-entry_value(Key, Value) ->
+find_or_new(Key, Values) ->
     Mod = type_module(Key),
-    Mod:value(Value).
-
-%% @doc Takes a raw entry (key and raw value) and wraps the value in
-%% the appropriate container type.
-%% @private
--spec lift_entry(raw_entry()) -> entry().
-lift_entry({Key, Value}) ->
-    M = type_module(Key),
-    {Key, M:new(Value, undefined)}.
+    case orddict:find(Key, Values) of
+        {ok, Found} ->
+            Mod:new(Found, undefined);
+        error ->
+            Mod:new()
+    end.
 
 %% @doc Determines the module for the container type of the value
 %% pointed to by the given key.

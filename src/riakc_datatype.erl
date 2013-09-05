@@ -33,7 +33,9 @@
 
 -type maybe(T) :: T | undefined.
 -type datatype() :: term().
+-type typename() :: atom().
 -type context() :: maybe(binary()).
+-type update(T) :: maybe({typename(), T, context()}).
 
 %% @doc Constructs a new, empty container for the type. Use this when
 %% creating a new key.
@@ -44,18 +46,19 @@
 %% internally by the client code.
 -callback new(Value::term(), context()) -> datatype().
 
-%% @doc Returns the current local-view of the container's value.
+%% @doc Returns the original, unmodified value of the type. This does
+%% not include the application of any locally-queued operations.
 -callback value(datatype()) -> term().
+
+%% @doc Returns a version of the value with locally-queued operations
+%% applied.
+-callback dirty_value(datatype()) -> term().
 
 %% @doc Extracts an operation from the container that can be encoded
 %% into an update request. 'undefined' should be returned if the type
-%% is unmodified.
--callback to_op(datatype()) -> maybe(term()).
-
-%% @doc Extracts the opaque update context from the container for
-%% sending along with an update request. 'undefined' should be
-%% returned if no context was provided, or if it is unneeded.
--callback context(datatype()) -> context().
+%% is unmodified. This should be passed to
+%% riakc_pb_socket:update_type() to submit modifications.
+-callback to_op(datatype()) -> update(term()).
 
 %% @doc Determines whether the given term is the type managed by the
 %% container module.
@@ -63,7 +66,7 @@
 
 %% @doc Determines the symbolic name of the container's type, e.g.
 %% set, map, counter.
--callback type() -> atom().
+-callback type() -> typename().
 
 %% @doc Returns the module that is a container for the given abstract
 %% type.
