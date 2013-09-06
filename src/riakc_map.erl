@@ -184,13 +184,18 @@ erase(Key, #map{updates=U, adds=A, removes=R}=M) ->
 
 %% @doc Updates the value stored at the key by calling the passed
 %% function to get the new value. If the key did not previously exist,
-%% it will be initialized to the empty value for its type. If the key
-%% was previously removed with `erase/2', the remove operation will be
-%% nullified.
+%% it will be initialized to the empty value for its type before being
+%% passed to the function. If the key was previously removed with
+%% `erase/2', the remove operation will be nullified.
 -spec update(key(), update_fun(), map()) -> map().
 update(Key, Fun, #map{value=V, updates=U0, removes=R0}=M) ->
     R = ordsets:del_element(Key, R0),
-    U = orddict:update(Key, Fun, find_or_new(Key, V), U0),
+    U = case orddict:is_key(Key, U0) of
+            true ->
+                orddict:update(Key, Fun, U0);
+            false ->
+                orddict:store(Key, Fun(find_or_new(Key, V)), U0)
+        end,
     M#map{removes=R, updates=U}.
 
 %% ==== Queries ====
@@ -254,6 +259,6 @@ fold_extract_op(Key, Value, Acc0) ->
     case Mod:to_op(Value) of
         undefined ->
             Acc0;
-        Op ->
+        {_Type, Op, _Context} ->
             [{update, Key, Op} | Acc0]
     end.
