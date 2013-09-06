@@ -28,7 +28,7 @@
 
 -module(riakc_obj).
 -export([new/2, new/3, new/4,
-         type/1,
+         bucket_type/1,
          bucket/1,
          only_bucket/1,
          key/1,
@@ -165,8 +165,8 @@ only_bucket(O) ->
             Bucket
     end.
 
--spec type(Object::riakc_obj()) -> bucket().
-type(O) ->
+-spec bucket_type(Object::riakc_obj()) -> bucket().
+bucket_type(O) ->
     case O#riakc_obj.bucket of
         {Type, _Bucket} ->
             Type;

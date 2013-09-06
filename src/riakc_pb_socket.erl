@@ -291,7 +291,7 @@ put(Pid, Obj, Options, Timeout) ->
                                                riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
                       #rpbputreq{bucket = riakc_obj:only_bucket(Obj),
-                                 type = riakc_obj:type(Obj),
+                                 type = riakc_obj:bucket_type(Obj),
                                  key = riakc_obj:key(Obj),
                                  vclock = riakc_obj:vclock(Obj),
                                  content = Content}),
