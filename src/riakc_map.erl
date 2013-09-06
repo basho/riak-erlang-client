@@ -79,7 +79,7 @@
               removes = [] :: ordsets:ordset(key()),
               context = undefined :: riakc_datatype:context() }).
 
--type datatype() :: counter | flag | register | set.
+-type datatype() :: counter | flag | register | set | map.
 -type key() :: {binary(), datatype()}.
 -type entry() :: {key(), riakc_datatype:datatype()}.
 -type raw_entry() :: {key(), term()}.
@@ -87,7 +87,8 @@
 -type embedded_type_op() :: riakc_counter:counter_op() |
                             riakc_set:set_op() |
                             riakc_flag:flag_op() |
-                            riakc_register:register_op().
+                            riakc_register:register_op() |
+                            map_op().
 -type field_update() :: {update, key(), embedded_type_op()}.
 -type simple_map_op() :: {add, key()} | {remove, key()} | field_update().
 -type map_op() :: {update, [simple_map_op()]}.
