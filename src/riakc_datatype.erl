@@ -31,6 +31,8 @@
 -export([module/1,
          module_for_term/1]).
 
+-export_type([datatype/0, update/1, context/0]).
+
 -type maybe(T) :: T | undefined.
 -type datatype() :: term().
 -type typename() :: atom().

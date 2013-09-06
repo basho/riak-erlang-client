@@ -83,7 +83,7 @@
 -type key() :: {binary(), datatype()}.
 -type entry() :: {key(), riakc_datatype:datatype()}.
 -type raw_entry() :: {key(), term()}.
--type update_fun() :: fun((riakc_datatype:dataype()) -> riakc_datatype:datatype()).
+-type update_fun() :: fun((riakc_datatype:datatype()) -> riakc_datatype:datatype()).
 -type embedded_type_op() :: riakc_counter:counter_op() |
                             riakc_set:set_op() |
                             riakc_flag:flag_op() |
@@ -118,7 +118,7 @@ dirty_value(#map{value=V, updates=U, removes=R}) ->
                                    Mod:dirty_value(Update)
                            end, V, U),
     [ Pair || {Key, _}=Pair <- Merged,
-              not ordsets:is_member(Key, R) ].
+              not ordsets:is_element(Key, R) ].
 
 %% @doc Extracts an operation from the map that can be encoded into an
 %% update request.

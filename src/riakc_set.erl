@@ -71,37 +71,37 @@
               removes = ordsets:new() :: ordsets:ordset(binary()),
               context = undefined :: riakc_datatype:context() }).
 
--export_type([set/0]).
--opaque set() :: #set{}.
+-export_type([riakc_set/0, set_op/0]).
+-opaque riakc_set() :: #set{}.
 
 -type simple_set_op() :: {add_all, [binary()]} | {remove_all, [binary()]}.
 -type set_op() :: simple_set_op() | {update, [simple_set_op()]}.
 
 %% @doc Creates a new, empty set container type.
--spec new() -> set().
+-spec new() -> riakc_set().
 new() ->
     #set{}.
 
 %% @doc Creates a new set container with the given members and opaque
 %% context.
--spec new([binary()], riakc_datatype:context()) -> set().
+-spec new([binary()], riakc_datatype:context()) -> riakc_set().
 new(Value, Context) when is_list(Value) ->
     #set{value=ordsets:from_list(Value),
          context=Context}.
 
 %% @doc Returns the original value of the set as an ordset.
--spec value(set()) -> ordsets:set(binary()).
+-spec value(riakc_set()) -> ordsets:ordset(binary()).
 value(#set{value=V}) -> V.
 
 %% @doc Returns the value of the set after locally updates are
 %% applied.
--spec dirty_value(set()) -> ordsets:ordset(binary()).
+-spec dirty_value(riakc_set()) -> ordsets:ordset(binary()).
 dirty_value(#set{value=V, adds=A, removes=R}) ->
     ordsets:union(ordsets:subtract(V, R), A).
 
 %% @doc Extracts an operation from the set that can be encoded into an
 %% update request.
--spec to_op(set()) -> riakc_datatype:update(set_op()).
+-spec to_op(riakc_set()) -> riakc_datatype:update(set_op()).
 to_op(#set{adds=[], removes=[]}) ->
     undefined;
 to_op(#set{adds=A, removes=[], context=C}) ->
@@ -121,19 +121,19 @@ is_type(T) ->
 type() -> set.
 
 %% @doc Adds an element to the set.
--spec add_element(binary(), set()) -> set().
+-spec add_element(binary(), riakc_set()) -> riakc_set().
 add_element(Bin, #set{adds=A0}=Set) when is_binary(Bin) ->
     Set#set{adds=ordsets:add_element(Bin, A0)}.
 
 %% @doc Removes an element from the set.
--spec del_element(binary(), set()) -> set().
+-spec del_element(binary(), riakc_set()) -> riakc_set().
 del_element(Bin, #set{removes=R0}=Set) when is_binary(Bin) ->
     Set#set{removes=ordsets:add_element(Bin, R0)}.
 
 %% @doc Returns the cardinality (size) of the set. <em>Note: this only
 %% operates on the original value, use the result of dirty_value/1 if
 %% you want to account for locally-queued operations.</em>
--spec size(set()) -> pos_integer().
+-spec size(riakc_set()) -> pos_integer().
 size(#set{value=V}) ->
     ordsets:size(V).
 
@@ -141,13 +141,13 @@ size(#set{value=V}) ->
 %% only operates on the original value, use the result of
 %% dirty_value/1 if you want to account for locally-queued
 %% operations.</em>
--spec is_element(binary(), set()) -> boolean().
+-spec is_element(binary(), riakc_set()) -> boolean().
 is_element(Bin, #set{value=V}) when is_binary(Bin) ->
     ordsets:is_element(Bin, V).
 
 %% @doc Folds over the members of the set. <em>Note: this only
 %% operates on the original value, use the result of dirty_value/1 if
 %% you want to account for locally-queued operations.</em>
--spec fold(fun((binary(), term()) -> term()), term(), set()) -> term().
+-spec fold(fun((binary(), term()) -> term()), term(), riakc_set()) -> term().
 fold(Fun, Acc0, #set{value=V}) ->
     ordsets:fold(Fun, Acc0, V).

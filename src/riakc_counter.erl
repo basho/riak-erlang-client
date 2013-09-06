@@ -48,7 +48,7 @@
           increment = 0 :: integer()
          }).
 
--export_type([counter/0]).
+-export_type([counter/0, counter_op/0]).
 -opaque counter() :: #counter{}.
 -type counter_op() :: {increment, integer()}.
 

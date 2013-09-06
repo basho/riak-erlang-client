@@ -42,9 +42,9 @@
 -export([set/2]).
 
 -record(register, {value :: binary(),
-                   new_value = undefined :: binary()}).
+                   new_value = undefined :: undefined | binary()}).
 
--export_type([register/0]).
+-export_type([register/0, register_op/0]).
 -opaque register() :: #register{}.
 
 -type register_op() :: {assign, binary()}.
@@ -60,7 +60,7 @@ new(Value, _Context) when is_binary(Value) ->
     #register{value=Value}.
 
 %% @doc Extracts the value of the register.
--spec value(register()) -> boolean().
+-spec value(register()) -> binary() | undefined.
 value(#register{value=V}) -> V.
 
 %% @doc Extracts the value of the register with locally-queued

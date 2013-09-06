@@ -47,7 +47,7 @@
 -record(flag, {value = false :: boolean(),
                op = undefined :: undefined | flag_op()}).
 
--export_type([flag/0]).
+-export_type([flag/0, flag_op/0]).
 -opaque flag() :: #flag{}.
 
 -type flag_op() :: enable | disable.
