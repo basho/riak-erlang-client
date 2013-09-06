@@ -1710,9 +1710,14 @@ process_response(#request{msg = #rpbcountergetreq{}},
 
 process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
                  State) ->
-    {Type, Value, Context} = riak_pb_dt_codec:decode_fetch_response(Resp),
-    Mod = riakc_datatype:module(Type),
-    {reply, {ok, Mod:new(Value, Context)}, State};
+    Reply = case riak_pb_dt_codec:decode_fetch_response(Resp) of
+                {Type, Value, Context}  ->
+                    Mod = riakc_datatype:module(Type),
+                    {ok, Mod:new(Value, Context)};
+                {notfound, _Type}=NF ->
+                    {error, NF}
+            end,
+    {reply, Reply, State};
 
 process_response(#request{msg = #dtupdatereq{}},
                  dtupdateresp,
