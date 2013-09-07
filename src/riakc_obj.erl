@@ -28,7 +28,9 @@
 
 -module(riakc_obj).
 -export([new/2, new/3, new/4,
+         bucket_type/1,
          bucket/1,
+         only_bucket/1,
          key/1,
          vclock/1,
          value_count/1,
@@ -75,7 +77,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--type bucket() :: binary(). %% A bucket name
+-type bucket() :: binary() | {binary(), binary()}. %% A bucket name
 -type key() :: binary() | 'undefined'. %% A key name
 -type id() :: {bucket(), key()}.
 -type vclock() :: binary(). %% An opaque vector clock
@@ -143,6 +145,8 @@ build_client_object(<<>>, K, _) when is_binary(K) ->
     {error, zero_length_bucket};
 build_client_object(B, <<>>, _) when is_binary(B) ->
     {error, zero_length_key};
+build_client_object({T, B0}=B, K, V) when is_binary(T), is_binary(B0), is_binary(K) orelse undefined =:= K ->
+    #riakc_obj{bucket = B, key = K, contents = [], updatevalue = V};
 build_client_object(B, K, V) when is_binary(B), is_binary(K) orelse undefined =:= K ->
     #riakc_obj{bucket = B, key = K, contents = [], updatevalue = V}.
 
@@ -150,6 +154,25 @@ build_client_object(B, K, V) when is_binary(B), is_binary(K) orelse undefined =:
 -spec bucket(Object::riakc_obj()) -> bucket().
 bucket(O) ->
     O#riakc_obj.bucket.
+
+%% @doc Return the containing bucket for this riakc_obj.
+-spec only_bucket(Object::riakc_obj()) -> binary().
+only_bucket(O) ->
+    case O#riakc_obj.bucket of
+        {_Type, Bucket} ->
+            Bucket;
+        Bucket ->
+            Bucket
+    end.
+
+-spec bucket_type(Object::riakc_obj()) -> bucket().
+bucket_type(O) ->
+    case O#riakc_obj.bucket of
+        {Type, _Bucket} ->
+            Type;
+        _Bucket ->
+            undefined
+    end.
 
 %% @doc  Return the key for this riakc_obj.
 -spec key(Object::riakc_obj()) -> key().
