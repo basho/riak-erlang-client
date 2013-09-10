@@ -1174,18 +1174,25 @@ update_type(Pid, BucketAndType, Key, {Type, Op, Context}, Options) ->
     gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}).
 
 %% @doc Fetches, applies the given function to the value, and then
-%% updates the datatype in Riak.
--spec modify_type(pid(), fun((riakc_datatype:datatype()) -> riakc_datatype:datatype()), 
+%% updates the datatype in Riak. If an existing value is not found,
+%% but you want the updates to apply anyway, use the 'create' option.
+-spec modify_type(pid(), fun((riakc_datatype:datatype()) -> riakc_datatype:datatype()),
                   {BucketType::binary(), Bucket::binary()}, Key::binary(), [proplists:property()]) ->
                          ok | {ok, riakc_datatype:datatype()} | {error, term()}.
 modify_type(Pid, Fun, BucketAndType, Key, Options) ->
+    Create = proplists:get_value(create, Options, false),
     case fetch_type(Pid, BucketAndType, Key, Options) of
-        {error, Reason} ->
-            {error, Reason};
         {ok, Data} ->
             NewData = Fun(Data),
             Mod = riakc_datatype:module_for_term(NewData),
-            update_type(Pid, BucketAndType, Key, Mod:to_op(NewData), Options)
+            update_type(Pid, BucketAndType, Key, Mod:to_op(NewData), Options);
+        {error, {notfound, Type}} when Create ->
+            %% Not found, but ok to create it
+            Mod = riakc_datatype:module(Type),
+            NewData = Fun(Mod:new()),
+            update_type(Pid, BucketAndType, Key, Mod:to_op(NewData), Options);
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 
