@@ -169,7 +169,7 @@ start(Address, Port, Options) when is_list(Options) ->
 %% @doc Disconnect the socket and stop the process.
 -spec stop(pid()) -> ok.
 stop(Pid) ->
-    gen_server:call(Pid, stop).
+    gen_server:call(Pid, stop, infinity).
 
 %% @doc Change the options for this socket.  Allows you to connect with one
 %%      set of options then run with another (e.g. connect with no options to
@@ -1120,7 +1120,7 @@ counter_incr(Pid, Bucket, Key, Amount) ->
 counter_incr(Pid, Bucket, Key, Amount, Options) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = counter_incr_options(Options, #rpbcounterupdatereq{type=T, bucket=B, key=Key, amount=Amount}),
-    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}).
+    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}, infinity).
 
 %% @doc get the current value of the counter at `Bucket', `Key'.
 -spec counter_val(pid(), bucket(), key()) ->
@@ -1135,7 +1135,7 @@ counter_val(Pid, Bucket, Key) ->
 counter_val(Pid, Bucket, Key, Options) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = counter_val_options(Options, #rpbcountergetreq{type=T, bucket=B, key=Key}),
-    gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}).
+    gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}, infinity).
 
 
 %% @doc Fetches the representation of a convergent datatype from Riak.
@@ -1150,7 +1150,7 @@ fetch_type(Pid, BucketAndType, Key) ->
                         {ok, riakc_datatype:datatype()} | {error, term()}.
 fetch_type(Pid, BucketAndType, Key, Options) ->
     Req = riak_pb_dt_codec:encode_fetch_request(BucketAndType, Key, Options),
-    gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}).
+    gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}, infinity).
 
 %% @doc Updates the convergent datatype in Riak with local
 %% modifications stored in the container type.
@@ -1171,7 +1171,7 @@ update_type(_Pid, _BucketAndType, _Key, undefined, _Options) ->
     {error, unmodified};
 update_type(Pid, BucketAndType, Key, {Type, Op, Context}, Options) ->
     Req = riak_pb_dt_codec:encode_update_request(BucketAndType, Key, {Type, Op, Context}, Options),
-    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}).
+    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}, infinity).
 
 %% @doc Fetches, applies the given function to the value, and then
 %% updates the datatype in Riak. If an existing value is not found,
