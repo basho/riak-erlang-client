@@ -1094,7 +1094,7 @@ default_timeout(OpTimeout) ->
 
 %% @doc Send a pre-encoded msg over the protocol buffer connection
 %% Returns {ok, Response} or {error, Reason}
--spec tunnel(pid(), msg_id(), binary(), timeout()) -> {ok, binary()} | {error, term()}.
+-spec tunnel(pid(), msg_id(), iolist(), timeout()) -> {ok, binary()} | {error, term()}.
 tunnel(Pid, MsgId, Pkt, Timeout) ->
     Req = {tunneled, MsgId, Pkt},
     gen_server:call(Pid, {req, Req, Timeout}, infinity).
@@ -1524,7 +1524,7 @@ process_response(#request{msg = #rpbdelreq{}},
 process_response(#request{msg = #rpblistbucketsreq{}}=Request,
                  #rpblistbucketsresp{buckets = Buckets, done = undefined},
                  State) ->
-    send_caller({buckets, Buckets}, Request),
+    _ = send_caller({buckets, Buckets}, Request),
     {pending, State};
 
 process_response(#request{msg = #rpblistbucketsreq{}},
@@ -1897,7 +1897,7 @@ maybe_reconnect(_) -> ok.
 enqueue_or_reply_error(Request, #state{queue_if_disconnected=true}=State) ->
     queue_request(Request, State);
 enqueue_or_reply_error(Request, State) ->
-    send_caller({error, disconnected}, Request),
+    _ = send_caller({error, disconnected}, Request),
     State.
 
 %% Queue up a request if one is pending
