@@ -49,6 +49,11 @@
 -module(riakc_set).
 -behaviour(riakc_datatype).
 
+-ifdef(EQC).
+-include_lib("eqc/include/eqc.hrl").
+-compile(export_all).
+-endif.
+
 %% Callbacks
 -export([new/0, new/2,
          value/1,
@@ -151,3 +156,12 @@ is_element(Bin, #set{value=V}) when is_binary(Bin) ->
 -spec fold(fun((binary(), term()) -> term()), term(), riakc_set()) -> term().
 fold(Fun, Acc0, #set{value=V}) ->
     ordsets:fold(Fun, Acc0, V).
+
+-ifdef(EQC).
+gen_type() ->
+    ?LET({Elems, Ctx}, {list(binary()), binary()}, new(Elems, Ctx)).
+
+gen_op() ->
+    {elements([add_element, del_element]),
+     [binary()]}.
+-endif.

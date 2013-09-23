@@ -52,6 +52,11 @@
 -module(riakc_map).
 -behaviour(riakc_datatype).
 
+-ifdef(EQC).
+-include_lib("eqc/include/eqc.hrl").
+-compile(export_all).
+-endif.
+
 %% Callbacks
 -export([new/0, new/2,
          value/1,
@@ -262,3 +267,62 @@ fold_extract_op(Key, Value, Acc0) ->
         {_Type, Op, _Context} ->
             [{update, Key, Op} | Acc0]
     end.
+
+-ifdef(EQC).
+gen_type() ->
+    ?SIZED(S, gen_type(S)).
+
+gen_type(S) ->
+    ?LET({Entries, Ctx},
+         {list(gen_entry(S)), binary()},
+         new(Entries, Ctx)).
+
+gen_entry(S) ->
+    frequency([
+           {Fr, ?LAZY({{binary(), Mod:type()}, gen_value(Mod, S-1)})}
+           || {Fr, Mod} <- [
+                            {5, riakc_flag},
+                            {5, riakc_register},
+                            {5, riakc_counter},
+                            {5, riakc_set},
+                            {1, riakc_map}
+                           ],
+              Fr >= 5 orelse S >= 5]).
+
+gen_value(riakc_map, S) ->
+    ?LET(T, gen_type(S), value(T));
+gen_value(Mod, _S) ->
+    ?LET(T, Mod:gen_type(), Mod:value(T)).
+
+gen_key() ->
+    {binary(), elements([flag, register, counter, set, map])}.
+
+gen_op() ->
+    oneof([
+           {add, [gen_key()]},
+           {erase, [gen_key()]},
+           ?LAZY({update, ?LET({_,T}=Key, gen_key(), [Key,
+                                                      gen_update_fun(T)])})
+          ]).
+
+gen_update_fun(Type) ->
+    frequency([{5, gen_update_fun1(Type)},
+               {1, gen_update_fun2(Type)}]).
+
+gen_update_fun1(Type) ->
+    Mod = riakc_datatype:module(Type),
+    ?LET({Op, Args}, Mod:gen_op(),
+         fun(R) ->
+                 erlang:apply(Mod, Op, Args ++ [R])
+         end).
+
+
+gen_update_fun2(Type) ->
+    Mod = riakc_datatype:module(Type),
+    ?LET(OpList, non_empty(list(Mod:gen_op())),
+         fun(R) ->
+                 lists:foldl(fun({Op, Args}, Acc) ->
+                                     erlang:apply(Mod, Op, Args ++ [Acc])
+                             end, R, OpList)
+         end).
+-endif.

@@ -32,6 +32,11 @@
 -module(riakc_flag).
 -behaviour(riakc_datatype).
 
+-ifdef(EQC).
+-include_lib("eqc/include/eqc.hrl").
+-compile(export_all).
+-endif.
+
 %% Callbacks
 -export([new/0, new/2,
          value/1,
@@ -96,3 +101,11 @@ enable(#flag{}=F) -> F#flag{op=enable}.
 %% @doc Disables the flag, setting its value to false.
 -spec disable(flag()) -> flag().
 disable(#flag{}=F) -> F#flag{op=disable}.
+
+-ifdef(EQC).
+gen_type() ->
+    ?LET(Flag, bool(), new(Flag, undefined)).
+
+gen_op() ->
+    {elements([enable, disable]), []}.
+-endif.

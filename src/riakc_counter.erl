@@ -30,6 +30,11 @@
 -module(riakc_counter).
 -behaviour(riakc_datatype).
 
+-ifdef(EQC).
+-include_lib("eqc/include/eqc.hrl").
+-compile(export_all).
+-endif.
+
 %% Callbacks
 -export([new/0, new/2,
          value/1,
@@ -80,8 +85,8 @@ increment(Counter) ->
 
 %% @doc Increments the counter by the passed amount.
 -spec increment(integer(), counter()) -> counter().
-increment(Amount, #counter{increment=Incr}) when is_integer(Amount) ->
-    #counter{increment=Incr+Amount}.
+increment(Amount, #counter{increment=Incr}=Counter) when is_integer(Amount) ->
+    Counter#counter{increment=Incr+Amount}.
 
 %% @doc Decrements the counter by 1.
 -spec decrement(counter()) -> counter().
@@ -108,3 +113,13 @@ is_type(T) ->
 %% @doc Returns the symbolic name of this container.
 -spec type() -> atom().
 type() -> counter.
+
+-ifdef(EQC).
+gen_type() ->
+    ?LET(Count, int(), new(Count, undefined)).
+
+gen_op() ->
+    {elements([increment, decrement]),
+     weighted_default({1, []},
+                      {5, [?SUCHTHAT(X, int(), X /= 0)]})}.
+-endif.

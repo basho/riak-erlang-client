@@ -30,6 +30,11 @@
 -module(riakc_register).
 -behaviour(riakc_datatype).
 
+-ifdef(EQC).
+-include_lib("eqc/include/eqc.hrl").
+-compile(export_all).
+-endif.
+
 %% Callbacks
 -export([new/0, new/2,
          value/1,
@@ -88,3 +93,11 @@ type() -> register.
 -spec set(register(), binary()) -> register().
 set(Value, #register{}=R) when is_binary(Value) ->
     R#register{new_value=Value}.
+
+-ifdef(EQC).
+gen_type() ->
+    ?LET(Val, binary(), new(Val, undefined)).
+
+gen_op() ->
+    {set, [binary()]}.
+-endif.
