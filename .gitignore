@@ -6,3 +6,5 @@ priv/*
 include/riakclient_pb.hrl
 doc/*
 ebin/*
+/.eqc-info
+/current_counterexample.eqc
