@@ -2129,17 +2129,31 @@ riak_version() ->
     {match, [Major, Minor, Patch|_]} = re:run(StrVersion, "\\d+", [global, {capture, first, list}]),
     [ list_to_integer(V) || [V] <- [Major, Minor, Patch]].
 
+%% Compare the first three part version array with the second.
+%% returns `greater', `less', or `equal'.
+compare_versions([M1,N1,P1], [M2,N2,P2]) ->
+    V1 = (M1*1000000)+(N1*1000)+(P1),
+    V2 = (M2*1000000)+(N2*1000)+(P2),
+    case {V1 > V2, V1 == V2} of
+        {true,_} ->
+            greater;
+        {false,false} ->
+            less;
+        {false,true} ->
+            equal
+    end.
+
 %% Resets the riak node
 reset_riak() ->
     %% sleep because otherwise we're going to kill the vnodes too fast
     %% for the supervisor's maximum restart frequency, which will bring
     %% down the entire node
     ?assertEqual(ok, maybe_start_network()),
-    case riak_version() of
-        [1,Two|_] when Two >= 2->
-            reset_riak_12();
+    case compare_versions(riak_version(), [1,2,0]) of
+        less ->
+            reset_riak_legacy();
         _ ->
-            reset_riak_legacy()
+            reset_riak_12()
     end.
 
 %% Resets a Riak 1.2+ node, which can run the memory backend in 'test'
@@ -2193,14 +2207,14 @@ reset_ring() ->
 
 %% Finds the pid of the PB listener process
 riak_pb_listener_pid() ->
-    {Children, Proc} = case riak_version() of
-                           [1,Two|_] when Two >= 2->
-                               {supervisor:which_children({riak_api_sup, test_riak_node()}),
-                                riak_api_pb_listener};
-                           _ ->
+    {Children, Proc} = case compare_versions(riak_version(), [1,2,0]) of
+                            less ->
                                {supervisor:which_children({riak_kv_sup, test_riak_node()}),
-                                riak_kv_pb_listener}
-                       end,
+                                riak_kv_pb_listener};
+                            _ ->
+                               {supervisor:which_children({riak_api_sup, test_riak_node()}),
+                                riak_api_pb_listener}
+                        end,
     hd([Pid || {Mod,Pid,_,_} <- Children, Mod == Proc]).
 
 pause_riak_pb_listener() ->
@@ -2212,11 +2226,11 @@ resume_riak_pb_listener() ->
     rpc:call(test_riak_node(), sys, resume, [Pid]).
 
 kill_riak_pb_sockets() ->
-    Children = case riak_version() of
-                   [1,Two|_] when Two >= 2 ->
-                       supervisor:which_children({riak_api_pb_sup, test_riak_node()});
+    Children = case compare_versions(riak_version(), [1,2,0]) of
+                   less ->
+                       supervisor:which_children({riak_kv_pb_socket_sup, test_riak_node()});
                    _ ->
-                       supervisor:which_children({riak_kv_pb_socket_sup, test_riak_node()})
+                       supervisor:which_children({riak_api_pb_sup, test_riak_node()})
                end,
     case Children of
         [] ->
