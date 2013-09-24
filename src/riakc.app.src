@@ -1,10 +1,7 @@
+%% -*- erlang -*-
 {application, riakc,
  [{description, "Riak Client"},
-  {vsn, "1.4.1"},
-  {modules, [
-             riakc_pb_socket,
-             riakc_obj
-            ]},
+  {vsn, git},
   {applications, [
                   kernel,
                   stdlib,
