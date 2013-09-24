@@ -122,6 +122,7 @@ run_props(Count) ->
     run_props(?MODULES, Count, true).
 
 run_props(_Mods, _Count, false) -> false;
+run_props([], _Count, Res) -> Res;
 run_props([Mod|Rest], Count, true) ->
     run_props(Rest, Count, run_mod_props(Mod, Count)).
 

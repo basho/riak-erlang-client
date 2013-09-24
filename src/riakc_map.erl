@@ -138,7 +138,7 @@ to_op(#map{updates=U, adds=A, removes=R, context=C}) ->
             {type(), {update, Updates}, C}
     end.
 
-%% @doc Determines whether the passed term is a set container.
+%% @doc Determines whether the passed term is a map container.
 -spec is_type(term()) -> boolean().
 is_type(T) ->
     is_record(T, map).
@@ -315,7 +315,6 @@ gen_update_fun1(Type) ->
          fun(R) ->
                  erlang:apply(Mod, Op, Args ++ [R])
          end).
-
 
 gen_update_fun2(Type) ->
     Mod = riakc_datatype:module(Type),
