@@ -2317,7 +2317,7 @@ riak_pb_listener_pid() ->
                                {supervisor:which_children({riak_api_sup, test_riak_node()}),
                                 riak_api_pb_listener}
                         end,
-    hd([Pid || {Mod,Pid,_,_} <- Children, Mod == Proc]).
+    hd([Pid || {_,Pid,_,[Mod]} <- Children, Mod == Proc]).
 
 pause_riak_pb_listener() ->
     Pid = riak_pb_listener_pid(),
