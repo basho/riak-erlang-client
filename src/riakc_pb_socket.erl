@@ -462,6 +462,8 @@ list_keys(Pid, Bucket) ->
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 -spec list_keys(pid(), bucket(), list()|timeout()) -> {ok, [key()]} |
                                                       {error, term()}.
+list_keys(Pid, Bucket, infinity) ->
+    list_keys(Pid, Bucket, [{timeout, undefined}]);
 list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     list_keys(Pid, Bucket, [{timeout, Timeout}]);
 list_keys(Pid, Bucket, Options) ->
@@ -492,6 +494,8 @@ stream_list_keys(Pid, Bucket) ->
 -spec stream_list_keys(pid(), bucket(), integer()|list()) ->
                               {ok, req_id()} |
                               {error, term()}.
+stream_list_keys(Pid, Bucket, infinity) ->
+    stream_list_keys(Pid, Bucket, [{timeout, undefined}]);
 stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Bucket, [{timeout, Timeout}]);
 stream_list_keys(Pid, Bucket, Options) ->
