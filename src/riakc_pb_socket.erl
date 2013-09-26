@@ -3224,6 +3224,7 @@ live_node_tests() ->
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(test_ip(), test_port()),
+                 unlink(Pid),
                  Bucket = <<"counter_test_bucket">>,
                  Key = <<"test_counter">>,
                  %% counters require allow_mult to be true
