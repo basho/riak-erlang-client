@@ -3033,7 +3033,7 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  Res = ?MODULE:mapred(Pid, [{<<"b">>,<<"k">>}], % no {B,K} tuple
                                       undefined),
-                 ?assertEqual({error,<<"{'query',{\"Query takes a list of step tuples\",undefined}}">>},
+                 ?assertEqual({error,<<"{query,{\"Query takes a list of step tuples\",undefined}}">>},
                               Res)
              end)},
      {"get should convert erlang terms",
