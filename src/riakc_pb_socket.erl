@@ -462,6 +462,8 @@ list_keys(Pid, Bucket) ->
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 -spec list_keys(pid(), bucket(), list()|timeout()) -> {ok, [key()]} |
                                                       {error, term()}.
+list_keys(Pid, Bucket, infinity) ->
+    list_keys(Pid, Bucket, [{timeout, undefined}]);
 list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     list_keys(Pid, Bucket, [{timeout, Timeout}]);
 list_keys(Pid, Bucket, Options) ->
@@ -492,6 +494,8 @@ stream_list_keys(Pid, Bucket) ->
 -spec stream_list_keys(pid(), bucket(), integer()|list()) ->
                               {ok, req_id()} |
                               {error, term()}.
+stream_list_keys(Pid, Bucket, infinity) ->
+    stream_list_keys(Pid, Bucket, [{timeout, undefined}]);
 stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Bucket, [{timeout, Timeout}]);
 stream_list_keys(Pid, Bucket, Options) ->
@@ -2313,7 +2317,7 @@ riak_pb_listener_pid() ->
                                {supervisor:which_children({riak_api_sup, test_riak_node()}),
                                 riak_api_pb_listener}
                         end,
-    hd([Pid || {Mod,Pid,_,_} <- Children, Mod == Proc]).
+    hd([Pid || {_,Pid,_,[Mod]} <- Children, Mod == Proc]).
 
 pause_riak_pb_listener() ->
     Pid = riak_pb_listener_pid(),
@@ -2686,9 +2690,8 @@ live_node_tests() ->
                  reset_riak(),
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
-                 ?assertEqual([{allow_mult,false},
-                               {n_val,3}],
-                              lists:sort(Props))
+                 ?assertEqual(3, proplists:get_value(n_val, Props)),
+                 ?assertEqual(false, proplists:get_value(allow_mult, Props))
              end)},
 
      {"set bucket properties test",
@@ -2697,9 +2700,8 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  ok = set_bucket(Pid, <<"b">>, [{n_val, 2}, {allow_mult, true}]),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
-                 ?assertEqual([{allow_mult,true},
-                               {n_val,2}],
-                              lists:sort(Props))
+                 ?assertEqual(2, proplists:get_value(n_val, Props)),
+                 ?assertEqual(true, proplists:get_value(allow_mult, Props))
              end)},
 
      {"allow_mult should allow dupes",
@@ -3033,7 +3035,7 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  Res = ?MODULE:mapred(Pid, [{<<"b">>,<<"k">>}], % no {B,K} tuple
                                       undefined),
-                 ?assertEqual({error,<<"{'query',{\"Query takes a list of step tuples\",undefined}}">>},
+                 ?assertEqual({error,<<"{query,{\"Query takes a list of step tuples\",undefined}}">>},
                               Res)
              end)},
      {"get should convert erlang terms",
@@ -3189,7 +3191,8 @@ live_node_tests() ->
                     MD3 = riakc_obj:add_secondary_index(MD2, [{{binary_index, "idx"},[<<"bbb">>,<<"aaa">>,<<"ccc">>]}]),
                     O3 = riakc_obj:update_metadata(O2, MD3),
                     ?assertEqual(ok, ?MODULE:put(Pid, O3)),
-                    ?assertEqual({ok,[<<"key1">>]}, ?MODULE:get_index(Pid, <<"b">>, {binary_index, "idx"}, <<"bbb">>)),
+                    ?assertEqual({ok,?INDEX_RESULTS{keys=[<<"key1">>]}},
+                                 ?MODULE:get_index(Pid, <<"b">>, {binary_index, "idx"}, <<"bbb">>)),
                     {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key1">>),
                     MD4 = riakc_obj:get_update_metadata(O4),
                     ?assertEqual([<<"aaa">>,<<"bbb">>,<<"ccc">>], lists:sort(riakc_obj:get_secondary_index(MD4, {binary_index, "idx"}))),
@@ -3212,7 +3215,8 @@ live_node_tests() ->
                     MD3 = riakc_obj:add_secondary_index(MD2, [{{integer_index, "idx"},[56,10000,100]}]),
                     O3 = riakc_obj:update_metadata(O2, MD3),
                     ?assertEqual(ok, ?MODULE:put(Pid, O3)),
-                    ?assertEqual({ok,[<<"key2">>]}, ?MODULE:get_index(Pid, <<"b">>, {integer_index, "idx"}, 50, 60)),
+                    ?assertEqual({ok,?INDEX_RESULTS{keys=[<<"key2">>]}},
+                                 ?MODULE:get_index(Pid, <<"b">>, {integer_index, "idx"}, 50, 60)),
                     {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key2">>),
                     MD4 = riakc_obj:get_update_metadata(O4),
                     ?assertEqual([56,67,100,10000], lists:sort(riakc_obj:get_secondary_index(MD4, {integer_index, "idx"}))),
@@ -3224,6 +3228,7 @@ live_node_tests() ->
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(test_ip(), test_port()),
+                 unlink(Pid),
                  Bucket = <<"counter_test_bucket">>,
                  Key = <<"test_counter">>,
                  %% counters require allow_mult to be true
