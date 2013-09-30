@@ -2059,29 +2059,25 @@ increase_reconnect_interval(State) ->
 
 %% Send a request to the server and prepare the state for the response
 %% @private
-%% Already encoded (for tunneled messages), but must provide Message Id
-%% for responding to the second form of send_request.
-send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.active =:= undefined ->
-    Request = Msg#request{msg = {tunneled,MsgId}},
-    Transport = State#state.transport,
-    case Transport:send(State#state.sock, [MsgId|Pkt]) of
-        ok ->
-            State#state{active = Request};
-        {error, closed} ->
-            Transport:close(State#state.sock),
-            maybe_enqueue_and_reconnect(Msg, State#state{sock=undefined})
-    end;
-%% Unencoded Request (the normal PB client path)
-send_request(Request, State) when State#state.active =:= undefined ->
-    Pkt = riak_pb_codec:encode(Request#request.msg),
+send_request(Request0, State) when State#state.active =:= undefined ->
+    {Request, Pkt} = encode_request_message(Request0),
     Transport = State#state.transport,
     case Transport:send(State#state.sock, Pkt) of
         ok ->
             maybe_reply(after_send(Request, State#state{active = Request}));
-        {error, closed} ->
+        {error, Reason} ->
+            error_logger:warning_msg("Socket error while sending riakc request: ~p.", [Reason]),
             Transport:close(State#state.sock),
             maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
     end.
+
+%% Already encoded (for tunneled messages), but must provide Message Id
+%% for responding to the second form of send_request.
+encode_request_message(#request{msg={tunneled,MsgId,Pkt}}=Req) ->
+    {Req#request{msg={tunneled,MsgId}},[MsgId|Pkt]};
+%% Unencoded Request (the normal PB client path)
+encode_request_message(#request{msg=Msg}=Req) ->
+    {Req, riak_pb_codec:encode(Msg)}.
 
 %% If the socket was closed, see if we can enqueue the request and
 %% trigger a reconnect. Otherwise, return an error to the requestor.
