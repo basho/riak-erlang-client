@@ -136,11 +136,16 @@
                                         % if false, exits on connection failure/request timeout
                 queue_if_disconnected = false :: boolean(), % if true, add requests to queue if disconnected
                 sock :: port(),       % gen_tcp socket
+                transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
                 queue :: queue() | undefined,      % queue of pending requests
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
+                credentials :: undefined | {string(), string()},
+                cacertfile,
+                certfile,
+                keyfile,
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
@@ -1269,11 +1274,20 @@ handle_info({tcp_error, _Socket, Reason}, State) ->
 handle_info({tcp_closed, _Socket}, State) ->
     disconnect(State);
 
+handle_info({ssl_error, _Socket, Reason}, State) ->
+    error_logger:error_msg("PBC client SSL error for ~p:~p - ~p\n",
+                           [State#state.address, State#state.port, Reason]),
+    disconnect(State);
+
+handle_info({ssl_closed, _Socket}, State) ->
+    disconnect(State);
+
 %% Make sure the two Sock's match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
 %% it should drop through and be ignored.
-handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
-    [MsgCode|MsgData] = Data,
+handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
+        when Proto == tcp; Proto == ssl ->
+    <<MsgCode:8, MsgData/binary>> = Data,
     Resp = case Active#request.msg of
         {tunneled, _MsgID} ->
             %% don't decode tunneled replies, we may not recognize the msgid
@@ -1298,7 +1312,12 @@ handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
                     NewState = NewState0#state{active = NewActive}
             end
     end,
-    ok = inet:setopts(Sock, [{active, once}]),
+    case State#state.transport of
+        gen_tcp ->
+            ok = inet:setopts(Sock, [{active, once}]);
+        ssl ->
+            ok = ssl:setopts(Sock, [{active, once}])
+    end,
     {noreply, NewState};
 handle_info({req_timeout, Ref}, State) ->
     case State#state.active of %%
@@ -1361,7 +1380,15 @@ parse_options([{auto_reconnect,Bool}|Options], State) when
       Bool =:= true; Bool =:= false ->
     parse_options(Options, State#state{auto_reconnect = Bool});
 parse_options([auto_reconnect|Options], State) ->
-    parse_options([{auto_reconnect, true}|Options], State).
+    parse_options([{auto_reconnect, true}|Options], State);
+parse_options([{credentials, User, Pass}|Options], State) ->
+    parse_options(Options, State#state{credentials={User, Pass}});
+parse_options([{certfile, File}|Options], State) ->
+    parse_options(Options, State#state{certfile=File});
+parse_options([{cacertfile, File}|Options], State) ->
+    parse_options(Options, State#state{cacertfile=File});
+parse_options([{keyfile, File}|Options], State) ->
+    parse_options(Options, State#state{keyfile=File}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -1910,13 +1937,73 @@ restart_req_timer(Request) ->
 connect(State) when State#state.sock =:= undefined ->
     #state{address = Address, port = Port, connects = Connects} = State,
     case gen_tcp:connect(Address, Port,
-                         [binary, {active, once}, {packet, 4}, {header, 1}],
+                         [binary, {active, once}, {packet, 4}],
                          State#state.connect_timeout) of
         {ok, Sock} ->
-            {ok, State#state{sock = Sock, connects = Connects+1,
-                             reconnect_interval = ?FIRST_RECONNECT_INTERVAL}};
+            State1 = State#state{sock = Sock, connects = Connects+1,
+                                 reconnect_interval = ?FIRST_RECONNECT_INTERVAL},
+            case State#state.credentials of
+                undefined ->
+                    {ok, State1};
+                _ ->
+                    start_tls(State1)
+            end;
         Error ->
             Error
+    end.
+
+start_tls(State=#state{sock=Sock}) ->
+    %% Send STARTTLS
+    StartTLSCode = riak_pb_codec:msg_code(rpbstarttls),
+    gen_tcp:send(Sock, <<StartTLSCode:8>>),
+    receive
+        {tcp_error, Sock, Reason} ->
+            {error, Reason};
+        {tcp_closed, Sock} ->
+            {error, closed};
+        {tcp, Sock, Data} ->
+            <<MsgCode:8, MsgData/binary>> = Data,
+            case riak_pb_codec:decode(MsgCode, MsgData) of
+                rpbstarttls ->
+                    Options = [{verify, verify_peer},
+                               {cacertfile, State#state.cacertfile}] ++
+                              [{K, V} || {K, V} <- [{certfile,
+                                                     State#state.certfile},
+                                                    {keyfile,
+                                                     State#state.keyfile}],
+                                         V /= undefined],
+                    case ssl:connect(Sock, Options, 1000) of
+                        {ok, SSLSock} ->
+                            ok = ssl:setopts(SSLSock, [{active, once}]),
+                            start_auth(State#state{sock=SSLSock, transport=ssl});
+                        {error, Reason2} ->
+                            {error, Reason2}
+                    end;
+                #rpberrorresp{} ->
+                    %% server doesn't know about STARTTLS or security is
+                    %% disabled, continue as normal
+                    ok = inet:setopts(Sock, [{active, once}]),
+                    {ok, State}
+            end
+    end.
+
+start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
+    ssl:send(Sock, riak_pb_codec:encode(#rpbauthreq{user=User,
+                                                    password=Pass})),
+    receive
+        {ssl_error, Sock, Reason} ->
+            {error, Reason};
+        {ssl_closed, Sock} ->
+            {error, closed};
+        {ssl, Sock, Data} ->
+            <<MsgCode:8, MsgData/binary>> = Data,
+            case riak_pb_codec:decode(MsgCode, MsgData) of
+                rpbauthresp ->
+                    ok = ssl:setopts(Sock, [{active, once}]),
+                    {ok, State};
+                #rpberrorresp{} = Err ->
+                    fmt_err_msg(Err)
+            end
     end.
 
 %% @private
@@ -1935,7 +2022,8 @@ disconnect(State) ->
         undefined ->
             ok;
         Sock ->
-            gen_tcp:close(Sock)
+            Transport = State#state.transport,
+            Transport:close(Sock)
     end,
 
     %% Decide whether to reconnect or exit
@@ -1965,21 +2053,23 @@ increase_reconnect_interval(State) ->
 %% for responding to the second form of send_request.
 send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.active =:= undefined ->
     Request = Msg#request{msg = {tunneled,MsgId}},
-    case gen_tcp:send(State#state.sock, [MsgId|Pkt]) of
+    Transport = State#state.transport,
+    case Transport:send(State#state.sock, [MsgId|Pkt]) of
         ok ->
             State#state{active = Request};
         {error, closed} ->
-            gen_tcp:close(State#state.sock),
+            Transport:close(State#state.sock),
             maybe_enqueue_and_reconnect(Msg, State#state{sock=undefined})
     end;
 %% Unencoded Request (the normal PB client path)
 send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riak_pb_codec:encode(Request#request.msg),
-    case gen_tcp:send(State#state.sock, Pkt) of
+    Transport = State#state.transport,
+    case Transport:send(State#state.sock, Pkt) of
         ok ->
             maybe_reply(after_send(Request, State#state{active = Request}));
         {error, closed} ->
-            gen_tcp:close(State#state.sock),
+            Transport:close(State#state.sock),
             maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
     end.
 
