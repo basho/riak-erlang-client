@@ -109,7 +109,8 @@
                      {continuation, binary()} |
                      {max_results, non_neg_integer() | all}.
 -type index_opts() :: [index_opt()].
--type range_index_opt() :: {return_terms, boolean()}.
+-type range_index_opt() :: {return_terms, boolean()} |
+                           {term_regex, binary()}.
 -type range_index_opts() :: [index_opt() | range_index_opt()].
 -type cs_opt() :: {timeout, timeout()} |
                   {continuation, binary()} |
@@ -1035,6 +1036,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Timeout = proplists:get_value(timeout, Opts),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     ReturnTerms = proplists:get_value(return_terms, Opts),
+    TermRegex = proplists:get_value(term_regex, Opts),
     MaxResults = proplists:get_value(max_results, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
@@ -1045,6 +1047,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        range_min=encode_2i(StartKey),
                        range_max=encode_2i(EndKey),
                        return_terms=ReturnTerms,
+                       term_regex=TermRegex,
                        max_results=MaxResults,
                        stream=Stream,
                        continuation=Continuation,
