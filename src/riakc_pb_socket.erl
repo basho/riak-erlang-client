@@ -1980,10 +1980,13 @@ start_tls(State=#state{sock=Sock}) ->
                             {error, Reason2}
                     end;
                 #rpberrorresp{} ->
-                    %% server doesn't know about STARTTLS or security is
-                    %% disabled, continue as normal
-                    ok = inet:setopts(Sock, [{active, once}]),
-                    {ok, State}
+                    %% Server doesn't know about STARTTLS or security is
+                    %% disabled. We can't fall back to the regular old
+                    %% protocol here because then SSL could be stripped by a
+                    %% man-in-the-middle proxy that presents insecure
+                    %% communication to the client, but does secure
+                    %% communication to the server.
+                    {error, no_security}
             end
     end.
 
