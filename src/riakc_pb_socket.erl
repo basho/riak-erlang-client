@@ -1295,10 +1295,10 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
         _ ->
             riak_pb_codec:decode(MsgCode, MsgData)
     end,
-    case Resp of
+    NewState = case Resp of
         #rpberrorresp{} ->
             NewState1 = maybe_reply(on_error(Active, Resp, State)),
-            NewState = dequeue_request(NewState1#state{active = undefined});
+            dequeue_request(NewState1#state{active = undefined});
         _ ->
             case process_response(Active, Resp, State) of
                 {reply, Response, NewState0} ->
@@ -1306,10 +1306,10 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
                     %% if one is queued up
                     cancel_req_timer(Active#request.tref),
                     _ = send_caller(Response, NewState0#state.active),
-                    NewState = dequeue_request(NewState0#state{active = undefined});
+                    dequeue_request(NewState0#state{active = undefined});
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
                     NewActive = restart_req_timer(Active),
-                    NewState = NewState0#state{active = NewActive}
+                    NewState0#state{active = NewActive}
             end
     end,
     case State#state.transport of
@@ -1564,17 +1564,17 @@ process_response(#request{msg = #rpbsetclientidreq{}},
     {reply, ok, State};
 process_response(#request{msg = rpbgetserverinforeq},
                  #rpbgetserverinforesp{node = Node, server_version = ServerVersion}, State) ->
-    case Node of
+    NodeInfo = case Node of
         undefined ->
-            NodeInfo = [];
+            [];
         Node ->
-            NodeInfo = [{node, Node}]
+            [{node, Node}]
     end,
-    case ServerVersion of
+    VersionInfo = case ServerVersion of
         undefined ->
-            VersionInfo = [];
+            [];
         ServerVersion ->
-            VersionInfo = [{server_version, ServerVersion}]
+            [{server_version, ServerVersion}]
     end,
     {reply, {ok, NodeInfo++VersionInfo}, State};
 process_response(#request{msg = #rpbgetreq{}}, rpbgetresp, State) ->
