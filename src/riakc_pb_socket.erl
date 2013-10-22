@@ -425,7 +425,7 @@ list_buckets(Pid, Type, Options) when is_binary(Type), is_list(Options) ->
 stream_list_buckets(Pid) ->
     stream_list_buckets(Pid, <<"default">>, []).
 
-stream_list_buckets(Pid, Type) when is_integer(Type) ->
+stream_list_buckets(Pid, Type) when is_binary(Type) ->
     stream_list_buckets(Pid, Type, []);
 stream_list_buckets(Pid, Timeout) when is_integer(Timeout) ->
     stream_list_buckets(Pid, <<"default">>,[{timeout, Timeout}]);
