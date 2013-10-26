@@ -1603,7 +1603,7 @@ process_response(#request{ msg = #rpbputreq{}},
     %% server generated a key and the client didn't request return_body, but
     %% the created key is returned
     {reply, {ok, Key}, State};
-process_response(#request{msg = #rpbputreq{bucket = Bucket, key = Key}},
+process_response(#request{msg = #rpbputreq{type = Type, bucket = Bucket, key = Key}},
                  #rpbputresp{content = RpbContents, vclock = Vclock,
                              key = NewKey}, State) ->
     Contents = riak_pb_kv_codec:decode_contents(RpbContents),
@@ -1611,7 +1611,8 @@ process_response(#request{msg = #rpbputreq{bucket = Bucket, key = Key}},
                     undefined -> Key;
                     _ -> NewKey
                 end,
-    {reply, {ok, riakc_obj:new_obj(Bucket, ReturnKey, Vclock, Contents)}, State};
+    B = maybe_make_bucket_type(Type, Bucket),
+    {reply, {ok, riakc_obj:new_obj(B, ReturnKey, Vclock, Contents)}, State};
 
 process_response(#request{msg = #rpbdelreq{}},
                  rpbdelresp, State) ->
