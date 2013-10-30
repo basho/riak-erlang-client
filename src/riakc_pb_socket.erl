@@ -85,6 +85,7 @@
                      {call_timeout, timeout()} |
                      {stream, boolean()} |
                      {continuation, binary()} |
+                     {pagination_sort, boolean()} |
                      {max_results, non_neg_integer() | all}.
 -type index_opts() :: [index_opt()].
 -type range_index_opt() :: {return_terms, boolean()}.
@@ -807,12 +808,14 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Timeout = proplists:get_value(timeout, Opts),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     MaxResults = proplists:get_value(max_results, Opts),
+    PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
 
     Req = #rpbindexreq{bucket=Bucket, index=Index, qtype=eq,
                        key=encode_2i(Key),
                        max_results=MaxResults,
+                       pagination_sort=PgSort,
                        stream=Stream,
                        continuation=Continuation,
                        timeout=Timeout},
@@ -853,6 +856,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
     ReturnTerms = proplists:get_value(return_terms, Opts),
     MaxResults = proplists:get_value(max_results, Opts),
+    PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
 
@@ -861,6 +865,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        range_max=encode_2i(EndKey),
                        return_terms=ReturnTerms,
                        max_results=MaxResults,
+                       pagination_sort = PgSort,
                        stream=Stream,
                        continuation=Continuation,
                        timeout=Timeout},
