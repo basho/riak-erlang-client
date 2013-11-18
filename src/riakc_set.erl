@@ -114,7 +114,7 @@ to_op(#set{adds=A, removes=[], context=C}) ->
 to_op(#set{adds=[], removes=R, context=C}) ->
     {type(), {remove_all, R}, C};
 to_op(#set{adds=A, removes=R, context=C}) ->
-    {type, {update, [{remove_all, R}, {add_all, A}]}, C}.
+    {type(), {update, [{remove_all, R}, {add_all, A}]}, C}.
 
 %% @doc Determines whether the passed term is a set container.
 -spec is_type(term()) -> boolean().
