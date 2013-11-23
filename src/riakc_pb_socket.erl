@@ -2,7 +2,7 @@
 %%
 %% riakc_pb_socket: protocol buffer client
 %%
-%% Copyright (c) 2007-2012 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2007-2013 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -1127,8 +1127,8 @@ counter_incr(Pid, Bucket, Key, Amount) ->
 -spec counter_incr(pid(), bucket(), key(), integer(), [write_quorum()]) ->
     ok | {error, term()}.
 counter_incr(Pid, Bucket, Key, Amount, Options) ->
-    {T, B} = maybe_bucket_type(Bucket),
-    Req = counter_incr_options(Options, #rpbcounterupdatereq{type=T, bucket=B, key=Key, amount=Amount}),
+    {_, B} = maybe_bucket_type(Bucket),
+    Req = counter_incr_options(Options, #rpbcounterupdatereq{bucket=B, key=Key, amount=Amount}),
     gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}, infinity).
 
 %% @doc get the current value of the counter at `Bucket', `Key'.
@@ -1142,8 +1142,8 @@ counter_val(Pid, Bucket, Key) ->
 -spec counter_val(pid(), bucket(), key(), [read_quorum()]) ->
                          {ok, integer()} | {error, term()}.
 counter_val(Pid, Bucket, Key, Options) ->
-    {T, B} = maybe_bucket_type(Bucket),
-    Req = counter_val_options(Options, #rpbcountergetreq{type=T, bucket=B, key=Key}),
+    {_, B} = maybe_bucket_type(Bucket),
+    Req = counter_val_options(Options, #rpbcountergetreq{bucket=B, key=Key}),
     gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}, infinity).
 
 
