@@ -3354,13 +3354,14 @@ live_node_tests() ->
 <schema name=\"test\" version=\"1.5\">
 <fields>
    <field name=\"_yz_id\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" required=\"true\" />
-   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
+   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
+   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
    <field name=\"_yz_vtag\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_node\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_rk\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_rb\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_err\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
 </fields>
 <uniqueKey>_yz_id</uniqueKey>
 <types>
@@ -3391,7 +3392,7 @@ live_node_tests() ->
                     {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
                         ?MODULE:get_search_index(Pid, Index)
                 end ),
-                ok = set_bucket(Pid, Bucket, [{yz_index, Index}]),
+                ok = set_bucket(Pid, Bucket, [{search_index, Index}]),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"Freddy\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
                 wait_until( fun() ->
@@ -3410,7 +3411,7 @@ live_node_tests() ->
                     {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
                         ?MODULE:get_search_index(Pid, Index)
                 end ),
-                ok = set_bucket(Pid, Bucket, [{yz_index, Index}]),
+                ok = set_bucket(Pid, Bucket, [{search_index, Index}]),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"בָּרָא\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
                 wait_until( fun() ->
