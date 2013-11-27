@@ -3365,6 +3365,7 @@ live_node_tests() ->
    <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
    <field name=\"_yz_vtag\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_node\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_rt\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_rk\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_rb\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_err\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
