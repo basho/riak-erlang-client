@@ -2791,17 +2791,17 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
                  ?assertEqual(3, proplists:get_value(n_val, Props)),
-                 ?assertEqual(false, proplists:get_value(allow_mult, Props))
+                 ?assertEqual(true, proplists:get_value(allow_mult, Props))
              end)},
 
      {"set bucket properties test",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(test_ip(), test_port()),
-                 ok = set_bucket(Pid, <<"b">>, [{n_val, 2}, {allow_mult, true}]),
+                 ok = set_bucket(Pid, <<"b">>, [{n_val, 2}, {allow_mult, false}]),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
                  ?assertEqual(2, proplists:get_value(n_val, Props)),
-                 ?assertEqual(true, proplists:get_value(allow_mult, Props))
+                 ?assertEqual(false, proplists:get_value(allow_mult, Props))
              end)},
 
      {"allow_mult should allow dupes",
