@@ -85,6 +85,7 @@
          create_search_index/2, create_search_index/4,
          get_search_index/2, get_search_index/3,
          delete_search_index/2, delete_search_index/3,
+         set_search_index/3,
          get_search_schema/2, get_search_schema/3,
          create_search_schema/3, create_search_schema/4]).
 
@@ -912,6 +913,11 @@ delete_search_index(Pid, Index, Opts) ->
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
     Req = #rpbyokozunaindexdeletereq{name = Index},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+
+-spec set_search_index(pid(), bucket(), binary()) ->
+                    ok | {error, term()}.
+set_search_index(Pid, Bucket, Index) ->
+    set_bucket(Pid, Bucket, [{search_index, Index}]).
 
 
 %% Deprecated, argument explosion functions for indexes
@@ -2785,17 +2791,17 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
                  ?assertEqual(3, proplists:get_value(n_val, Props)),
-                 ?assertEqual(false, proplists:get_value(allow_mult, Props))
+                 ?assertEqual(true, proplists:get_value(allow_mult, Props))
              end)},
 
      {"set bucket properties test",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(test_ip(), test_port()),
-                 ok = set_bucket(Pid, <<"b">>, [{n_val, 2}, {allow_mult, true}]),
+                 ok = set_bucket(Pid, <<"b">>, [{n_val, 2}, {allow_mult, false}]),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
                  ?assertEqual(2, proplists:get_value(n_val, Props)),
-                 ?assertEqual(true, proplists:get_value(allow_mult, Props))
+                 ?assertEqual(false, proplists:get_value(allow_mult, Props))
              end)},
 
      {"allow_mult should allow dupes",
@@ -3354,13 +3360,15 @@ live_node_tests() ->
 <schema name=\"test\" version=\"1.5\">
 <fields>
    <field name=\"_yz_id\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" required=\"true\" />
-   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
+   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
+   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
    <field name=\"_yz_vtag\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_node\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_rt\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_rk\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
    <field name=\"_yz_rb\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
+   <field name=\"_yz_err\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
 </fields>
 <uniqueKey>_yz_id</uniqueKey>
 <types>
@@ -3391,7 +3399,7 @@ live_node_tests() ->
                     {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
                         ?MODULE:get_search_index(Pid, Index)
                 end ),
-                ok = set_bucket(Pid, Bucket, [{yz_index, Index}]),
+                ok = ?MODULE:set_search_index(Pid, Bucket, Index),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"Freddy\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
                 wait_until( fun() ->
@@ -3410,7 +3418,7 @@ live_node_tests() ->
                     {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
                         ?MODULE:get_search_index(Pid, Index)
                 end ),
-                ok = set_bucket(Pid, Bucket, [{yz_index, Index}]),
+                ok = ?MODULE:set_search_index(Pid, Bucket, Index),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"בָּרָא\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
                 wait_until( fun() ->
