@@ -2051,7 +2051,7 @@ disconnect(State) ->
 increase_reconnect_interval(State) ->
     case State#state.reconnect_interval of
         Interval when Interval < ?MAX_RECONNECT_INTERVAL ->
-            NewInterval = lists:min([Interval+Interval,?MAX_RECONNECT_INTERVAL]),
+            NewInterval = min(Interval+Interval, ?MAX_RECONNECT_INTERVAL),
             State#state{reconnect_interval = NewInterval};
         _ ->
             State
