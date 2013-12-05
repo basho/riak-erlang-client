@@ -14,7 +14,7 @@ clean:
 distclean: clean 
 	./rebar delete-deps
 
-test: 
+test: all
 	./rebar skip_deps=true eunit
 
 APPS = kernel stdlib sasl erts ssl tools os_mon runtime_tools crypto inets \
