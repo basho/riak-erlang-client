@@ -1,6 +1,6 @@
 @author Basho Technologies, Inc.
 @copyright 2010-2013 Basho Technologies, Inc.
-@version 1.4.1
+@version 2.0.0pre
 @title Riak Client for Erlang
 @doc <p>The <code>riakc</code> application encapsulates the Erlang
 client for Riak. This client uses the Protocol Buffers transport
@@ -17,12 +17,20 @@ the one below to the <code>rebar.config</code> in your project.</p>
              {tag, "1.4.1"}}}
        ]}.</pre>
 
-<p>The application consists of 2 modules:</p>
+<p>The application consists of these primary modules:</p>
 
 <ul>
 <li><strong>riakc_pb_socket</strong> - connection management and execution of client commands. Usually you will start a connection process using <code>riakc_pb_socket:start_link/2,3</code>.</li>
 <li><strong>riakc_obj</strong> - accessor and mutator functions for the <code>riakc_obj</code> record that is sent to and returned from Key-Value operations.</li>
+<li>Riak convergent datatypes are supported by the <strong>riakc_datatype</strong> behaviour and these modules:
+  <ul>
+    <li><strong>riakc_counter</strong></li>
+    <li><strong>riakc_set</strong></li>
+    <li><strong>riakc_map</strong> (with embedded
+    types <strong>riakc_flag</strong>
+    and <strong>riakc_register</strong>)</li>
+  </ul>
+</li>
 </ul>
-
 <p><code>riakc</code> is licensed under the Apache v2 license.</p>
 @end
