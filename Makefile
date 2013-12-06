@@ -32,6 +32,6 @@ build_plt: compile
 dialyzer: compile
 	@dialyzer --plt $(COMBO_PLT) -Wno_return -c ebin
 
-doc :
+doc : all
 	@./rebar doc skip_deps=true
 

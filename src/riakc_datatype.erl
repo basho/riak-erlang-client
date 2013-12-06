@@ -47,38 +47,38 @@
 -type context() :: maybe(binary()).
 -type update(T) :: maybe({typename(), T, context()}).
 
-%% @doc Constructs a new, empty container for the type. Use this when
+%% Constructs a new, empty container for the type. Use this when
 %% creating a new key.
 -callback new() -> datatype().
 
-%% @doc Constructs a new container for the type with the specified
+%% Constructs a new container for the type with the specified
 %% value and opaque server-side context. This should only be used
 %% internally by the client code.
 -callback new(Value::term(), context()) -> datatype().
 
-%% @doc Returns the original, unmodified value of the type. This does
+%% Returns the original, unmodified value of the type. This does
 %% not include the application of any locally-queued operations.
 -callback value(datatype()) -> term().
 
-%% @doc Returns a version of the value with locally-queued operations
+%% Returns a version of the value with locally-queued operations
 %% applied.
 -callback dirty_value(datatype()) -> term().
 
-%% @doc Extracts an operation from the container that can be encoded
+%% Extracts an operation from the container that can be encoded
 %% into an update request. 'undefined' should be returned if the type
 %% is unmodified. This should be passed to
 %% riakc_pb_socket:update_type() to submit modifications.
 -callback to_op(datatype()) -> update(term()).
 
-%% @doc Determines whether the given term is the type managed by the
+%% Determines whether the given term is the type managed by the
 %% container module.
 -callback is_type(datatype()) -> boolean().
 
-%% @doc Determines the symbolic name of the container's type, e.g.
+%% Determines the symbolic name of the container's type, e.g.
 %% set, map, counter.
 -callback type() -> typename().
 
-%% @doc Returns the module that is a container for the given abstract
+%% Returns the module that is a container for the given abstract
 %% type.
 -spec module(Type::atom()) -> module().
 module(set)      -> riakc_set;

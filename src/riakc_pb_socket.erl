@@ -33,7 +33,6 @@
 -include_lib("riak_pb/include/riak_search_pb.hrl").
 -include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
 -include_lib("riak_pb/include/riak_dt_pb.hrl").
-%% @headerfile "riakc.hrl"
 -include("riakc.hrl").
 -behaviour(gen_server).
 
@@ -2588,12 +2587,11 @@ increase_reconnect_interval_test(State) ->
             increase_reconnect_interval_test(NextState)
     end.
 
-wait_until(Fun) when is_function(Fun) ->
-    wait_until(Fun, 20, 500).
-
-%% @doc Retry `Fun' until it returns `Retry' times, waiting `Delay'
+%% Retry `Fun' until it returns `Retry' times, waiting `Delay'
 %% milliseconds between retries. This is our eventual consistency bread
 %% and butter
+wait_until(Fun) when is_function(Fun) ->
+    wait_until(Fun, 20, 500).
 wait_until(_, 0, _) ->
     fail;
 wait_until(Fun, Retry, Delay) when Retry > 0 ->
