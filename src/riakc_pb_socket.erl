@@ -135,7 +135,7 @@
                 auto_reconnect = false :: boolean(), % if true, automatically reconnects to server
                                         % if false, exits on connection failure/request timeout
                 queue_if_disconnected = false :: boolean(), % if true, add requests to queue if disconnected
-                sock :: port(),       % gen_tcp socket
+                sock :: port() | ssl:sslsocket(),       % gen_tcp socket
                 transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
                 queue :: queue() | undefined,      % queue of pending requests
@@ -1957,7 +1957,7 @@ connect(State) when State#state.sock =:= undefined ->
         Error ->
             Error
     end.
-
+-spec start_tls(#state{}) -> term().
 start_tls(State=#state{sock=Sock}) ->
     %% Send STARTTLS
     StartTLSCode = riak_pb_codec:msg_code(rpbstarttls),
