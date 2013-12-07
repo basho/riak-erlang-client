@@ -1957,7 +1957,8 @@ connect(State) when State#state.sock =:= undefined ->
         Error ->
             Error
     end.
--spec start_tls(#state{}) -> term().
+
+-spec start_tls(#state{}) -> {ok, #state{}} | {error, term()}.
 start_tls(State=#state{sock=Sock}) ->
     %% Send STARTTLS
     StartTLSCode = riak_pb_codec:msg_code(rpbstarttls),
