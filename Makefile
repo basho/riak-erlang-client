@@ -17,15 +17,15 @@ distclean: clean
 test: 
 	./rebar skip_deps=true eunit
 
-APPS = kernel stdlib sasl erts ssl tools os_mon runtime_tools crypto inets \
-	xmerl webtool snmp public_key mnesia eunit syntax_tools compiler
+APPS = kernel stdlib sasl erts eunit ssl tools crypto \
+       inets public_key syntax_tools compiler
 COMBO_PLT = $(HOME)/.riak_combo_dialyzer_plt
 
-check_plt: compile
+check_plt: all
 	dialyzer --check_plt --plt $(COMBO_PLT) --apps $(APPS) \
 		deps/*/ebin
 
-build_plt: compile
+build_plt: all
 	dialyzer --build_plt --output_plt $(COMBO_PLT) --apps $(APPS) \
 		deps/*/ebin
 

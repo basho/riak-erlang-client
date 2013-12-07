@@ -90,7 +90,7 @@ is_type(T) ->
 type() -> register.
 
 %% @doc Sets the value of the register.
--spec set(register(), binary()) -> register().
+-spec set(binary(), register()) -> register().
 set(Value, #register{}=R) when is_binary(Value) ->
     R#register{new_value=Value}.
 

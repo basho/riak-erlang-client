@@ -44,7 +44,7 @@
 -type req_id() :: non_neg_integer(). %% Request identifier for streaming requests.
 -type server_prop() :: {node, binary()} | {server_version, binary()}. %% Server properties, as returned by the `get_server_info/1' call.
 -type server_info() :: [server_prop()]. %% A response from the `get_server_info/1' call.
--type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()}. %% Bucket property definitions.
+-type bucket_prop() :: {n_val, pos_integer()} | {allow_mult, boolean()} | {search_index, binary()}. %% Bucket property definitions.
 -type bucket_props() :: [bucket_prop()]. %% Bucket properties
 -type quorum() :: non_neg_integer() | one | all | quorum | default.  %% A quorum setting for get/put/delete requests.
 -type read_quorum() :: {r, ReadQuorum::quorum()} |
