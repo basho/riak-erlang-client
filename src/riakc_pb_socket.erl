@@ -436,7 +436,7 @@ stream_list_buckets(Pid, Options) ->
 stream_list_buckets(Pid, Type, Options) ->
     ServerTimeout =
         case proplists:get_value(timeout, Options, none) of
-            none -> ?DEFAULT_TIMEOUT;
+            none -> ?DEFAULT_PB_TIMEOUT;
             ST -> ST
         end,
     ReqId = mk_reqid(),
@@ -448,7 +448,7 @@ stream_list_buckets(Pid, Type, Options) ->
 legacy_list_buckets(Pid, Options) ->
     ServerTimeout =
         case proplists:get_value(timeout, Options, none) of
-            none -> ?DEFAULT_TIMEOUT;
+            none -> ?DEFAULT_PB_TIMEOUT;
             ST -> ST
         end,
     gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
@@ -507,7 +507,7 @@ stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
 stream_list_keys(Pid, Bucket, Options) ->
     ServerTimeout =
         case proplists:get_value(timeout, Options, none) of
-            none -> ?DEFAULT_TIMEOUT;
+            none -> ?DEFAULT_PB_TIMEOUT;
             ST -> ST
         end,
     {T, B} = maybe_bucket_type(Bucket),
@@ -1110,7 +1110,7 @@ default_timeout(OpTimeout) ->
                 {ok, Timeout} ->
                     Timeout;
                 undefined ->
-                    ?DEFAULT_TIMEOUT
+                    ?DEFAULT_PB_TIMEOUT
             end
     end.
 
