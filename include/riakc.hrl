@@ -1,3 +1,4 @@
+
 %% -------------------------------------------------------------------
 %%
 %% riakc: protocol buffer client
@@ -30,7 +31,9 @@
                           {queue_if_disconnected, boolean()} |
                           {connect_timeout, pos_integer()} |
                           auto_reconnect |
-                          {auto_reconnect, boolean()}.
+                          {auto_reconnect, boolean()} |
+                          keepalive |
+                          {keepalive, boolean()}.
 %% Options for starting or modifying the connection:
 %% `queue_if_disconnected' when present or true will cause requests to
 %% be queued while the connection is down. `auto_reconnect' when
