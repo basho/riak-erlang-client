@@ -136,6 +136,7 @@
                                         % if false, exits on connection failure/request timeout
                 queue_if_disconnected = false :: boolean(), % if true, add requests to queue if disconnected
                 sock :: port() | ssl:sslsocket(),       % gen_tcp socket
+                keepalive = false :: boolean(), % if true, enabled TCP keepalive for the socket
                 transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
                 queue :: queue() | undefined,      % queue of pending requests
@@ -1386,6 +1387,10 @@ parse_options([{auto_reconnect,Bool}|Options], State) when
     parse_options(Options, State#state{auto_reconnect = Bool});
 parse_options([auto_reconnect|Options], State) ->
     parse_options([{auto_reconnect, true}|Options], State);
+parse_options([{keepalive,Bool}|Options], State) when is_boolean(Bool) ->
+    parse_options(Options, State#state{keepalive = Bool});
+parse_options([keepalive|Options], State) ->
+    parse_options([{keepalive, false}|Options], State);
 parse_options([{credentials, User, Pass}|Options], State) ->
     parse_options(Options, State#state{credentials={User, Pass}});
 parse_options([{certfile, File}|Options], State) ->
@@ -1943,7 +1948,8 @@ restart_req_timer(Request) ->
 connect(State) when State#state.sock =:= undefined ->
     #state{address = Address, port = Port, connects = Connects} = State,
     case gen_tcp:connect(Address, Port,
-                         [binary, {active, once}, {packet, 4}],
+                         [binary, {active, once}, {packet, 4},
+                          {keepalive, State#state.keepalive}],
                          State#state.connect_timeout) of
         {ok, Sock} ->
             State1 = State#state{sock = Sock, connects = Connects+1,
