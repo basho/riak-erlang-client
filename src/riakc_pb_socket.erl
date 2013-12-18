@@ -1423,6 +1423,8 @@ process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp
     RegularResponse = index_stream_result_to_index_result(StreamResponse),
     RegularResponseWithContinuation = RegularResponse?INDEX_RESULTS{continuation=Cont},
     {reply, {ok, RegularResponseWithContinuation}, State};
+process_response(#request{msg = #rpbcsbucketreq{}}, rpbcsbucketresp, State) ->
+    {pending, State};
 process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsbucketresp{objects=Objects, done=Done, continuation=Cont}, State) ->
     %% TEMP - cs specific message for fold_objects
     ToSend =  case Objects of
