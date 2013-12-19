@@ -60,7 +60,6 @@
          set_bucket/3, set_bucket/4, set_bucket/5,
          set_bucket_type/3, set_bucket_type/4, set_bucket_type/5,
          reset_bucket/2, reset_bucket/3, reset_bucket/4,
-         reset_bucket_type/2, reset_bucket_type/3, reset_bucket_type/4,
          mapred/3, mapred/4, mapred/5,
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
@@ -597,17 +596,6 @@ reset_bucket(Pid, Bucket, Timeout, CallTimeout) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = #rpbresetbucketreq{type = T, bucket = B},
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
-
-reset_bucket_type(Pid, BucketType) ->
-    reset_bucket_type(Pid, BucketType, default_timeout(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout)).
-
-reset_bucket_type(Pid, BucketType, Timeout) ->
-    reset_bucket_type(Pid, BucketType, Timeout, default_timeout(reset_bucket_call_timeout)).
-
-reset_bucket_type(Pid, BucketType, Timeout, CallTimeout) ->
-    Req = #rpbresetbuckettypereq{type = BucketType},
-    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
-
 
 %% @doc Perform a MapReduce job across the cluster.
 %%      See the MapReduce documentation for explanation of behavior.
