@@ -147,6 +147,7 @@
                 cacertfile,
                 certfile,
                 keyfile,
+                ssl_opts = [],
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
@@ -1398,7 +1399,9 @@ parse_options([{certfile, File}|Options], State) ->
 parse_options([{cacertfile, File}|Options], State) ->
     parse_options(Options, State#state{cacertfile=File});
 parse_options([{keyfile, File}|Options], State) ->
-    parse_options(Options, State#state{keyfile=File}).
+    parse_options(Options, State#state{keyfile=File});
+parse_options([{ssl_opts, Opts}|Options], State) ->
+    parse_options(Options, State#state{ssl_opts=Opts}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -1984,7 +1987,8 @@ start_tls(State=#state{sock=Sock}) ->
                                                      State#state.certfile},
                                                     {keyfile,
                                                      State#state.keyfile}],
-                                         V /= undefined],
+                                         V /= undefined] ++
+                              State#state.ssl_opts,
                     case ssl:connect(Sock, Options, 1000) of
                         {ok, SSLSock} ->
                             ok = ssl:setopts(SSLSock, [{active, once}]),
