@@ -1728,9 +1728,6 @@ process_response(#request{msg = #rpbsearchqueryreq{index=Index}},
 process_response(#request{msg=#rpbresetbucketreq{}}, rpbresetbucketresp, State) ->
     {reply, ok, State};
 
-process_response(#request{msg=#rpbresetbuckettypereq{}}, rpbresetbucketresp, State) ->
-    {reply, ok, State};
-
 process_response(#request{msg = #rpbcounterupdatereq{returnvalue=true}},
                  #rpbcounterupdateresp{value=Value}, State) ->
     {reply, {ok, Value}, State};
