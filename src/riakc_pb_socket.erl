@@ -142,10 +142,14 @@
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
-                credentials :: undefined | {string(), string()},
-                cacertfile,
-                certfile,
-                keyfile,
+                credentials :: undefined | {string(), string()}, % username/password
+                cacertfile,    % Path to CA certificate file
+                certfile,      % Path to client certificate file, when using
+                               % certificate authentication
+                keyfile,       % Path to certificate keyfile, when using
+                               % certificate authentication
+                ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
+                               % documentation.
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
@@ -1386,7 +1390,9 @@ parse_options([{certfile, File}|Options], State) ->
 parse_options([{cacertfile, File}|Options], State) ->
     parse_options(Options, State#state{cacertfile=File});
 parse_options([{keyfile, File}|Options], State) ->
-    parse_options(Options, State#state{keyfile=File}).
+    parse_options(Options, State#state{keyfile=File});
+parse_options([{ssl_opts, Opts}|Options], State) ->
+    parse_options(Options, State#state{ssl_opts=Opts}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -1969,7 +1975,8 @@ start_tls(State=#state{sock=Sock}) ->
                                                      State#state.certfile},
                                                     {keyfile,
                                                      State#state.keyfile}],
-                                         V /= undefined],
+                                         V /= undefined] ++
+                              State#state.ssl_opts,
                     case ssl:connect(Sock, Options, 1000) of
                         {ok, SSLSock} ->
                             ok = ssl:setopts(SSLSock, [{active, once}]),
