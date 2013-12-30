@@ -1807,6 +1807,10 @@ process_response(#request{msg = #rpbyokozunaindexdeletereq{}},
     {reply, ok, State};
 
 process_response(#request{msg = #rpbyokozunaindexgetreq{}},
+                 rpbyokozunaindexgetresp, State) ->
+    {reply, {ok, []}, State};
+
+process_response(#request{msg = #rpbyokozunaindexgetreq{}},
                  #rpbyokozunaindexgetresp{index=Indexes}, State) ->
     Results = [[{index,Index#rpbyokozunaindex.name}, {schema,Index#rpbyokozunaindex.schema}]
         || Index <- Indexes ],
@@ -3345,6 +3349,7 @@ live_node_tests() ->
      ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
+                ?assertEqual({ok, []}, ?MODULE:list_search_indexes(Pid)),
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, <<"indextest">>)),
                 F = fun() ->
                     {ok, [{index,<<"indextest">>},{schema,<<"_yz_default">>}]} ==
