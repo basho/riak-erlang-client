@@ -887,8 +887,11 @@ create_search_index(Pid, Index) ->
 create_search_index(Pid, Index, SchemaName, Opts) ->
     Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
     CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(search_call_timeout)),
+    NVal = proplists:get_value(n_val, Opts),
     Req = #rpbyokozunaindexputreq{
-        index = #rpbyokozunaindex{name = Index, schema = SchemaName}
+        index = #rpbyokozunaindex{name = Index,
+                                  schema = SchemaName,
+                                  n_val = NVal}
     },
     gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
 
@@ -1812,7 +1815,9 @@ process_response(#request{msg = #rpbyokozunaindexgetreq{}},
 
 process_response(#request{msg = #rpbyokozunaindexgetreq{}},
                  #rpbyokozunaindexgetresp{index=Indexes}, State) ->
-    Results = [[{index,Index#rpbyokozunaindex.name}, {schema,Index#rpbyokozunaindex.schema}]
+    Results = [[{index,Index#rpbyokozunaindex.name},
+                {schema,Index#rpbyokozunaindex.schema},
+                {n_val,Index#rpbyokozunaindex.n_val}]
         || Index <- Indexes ],
     {reply, {ok, Results}, State};
 
@@ -3350,13 +3355,21 @@ live_node_tests() ->
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
                 ?assertEqual({ok, []}, ?MODULE:list_search_indexes(Pid)),
-                ?assertEqual(ok, ?MODULE:create_search_index(Pid, <<"indextest">>)),
+                ?assertEqual(ok,
+                    ?MODULE:create_search_index(Pid,
+                                                <<"indextest">>,
+                                                <<"_yz_default">>,
+                                                [{n_val,2}])),
                 F = fun() ->
-                    {ok, [{index,<<"indextest">>},{schema,<<"_yz_default">>}]} ==
+                    {ok, [{index,<<"indextest">>},
+                          {schema,<<"_yz_default">>},
+                          {n_val,2}]} ==
                         ?MODULE:get_search_index(Pid, <<"indextest">>)
                 end,
                 wait_until(F),
-                ?assertEqual({ok, [[{index,<<"indextest">>},{schema,<<"_yz_default">>}]]},
+                ?assertEqual({ok, [[{index,<<"indextest">>},
+                                    {schema,<<"_yz_default">>},
+                                    {n_val,2}]]},
                              ?MODULE:list_search_indexes(Pid)),
                 ?assertEqual(ok, ?MODULE:delete_search_index(Pid, <<"indextest">>))
          end)},
@@ -3404,7 +3417,9 @@ live_node_tests() ->
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
                 wait_until( fun() ->
-                    {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
+                    {ok, [{index,Index},
+                          {schema,<<"_yz_default">>},
+                          {n_val,3}]} ==
                         ?MODULE:get_search_index(Pid, Index)
                 end ),
                 ok = ?MODULE:set_search_index(Pid, Bucket, Index),
@@ -3423,7 +3438,9 @@ live_node_tests() ->
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
                 wait_until( fun() ->
-                    {ok, [{index, Index},{schema, <<"_yz_default">>}]} ==
+                    {ok, [{index,Index},
+                          {schema, <<"_yz_default">>},
+                          {n_val,3}]} ==
                         ?MODULE:get_search_index(Pid, Index)
                 end ),
                 ok = ?MODULE:set_search_index(Pid, Bucket, Index),
