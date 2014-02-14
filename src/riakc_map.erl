@@ -255,7 +255,7 @@ find_or_new(Key, Values) ->
 %% @private
 -spec type_module(key()) -> module().
 type_module({_, T}) ->
-    riakc_datatype:module(T).
+    riakc_datatype:module_for_type(T).
 
 %% @doc Folder for extracting operations from embedded types.
 -spec fold_extract_op(key(), riakc_datatype:datatype(), [field_update()]) -> [field_update()].
@@ -310,14 +310,14 @@ gen_update_fun(Type) ->
                {1, gen_update_fun2(Type)}]).
 
 gen_update_fun1(Type) ->
-    Mod = riakc_datatype:module(Type),
+    Mod = riakc_datatype:module_for_type(Type),
     ?LET({Op, Args}, Mod:gen_op(),
          fun(R) ->
                  erlang:apply(Mod, Op, Args ++ [R])
          end).
 
 gen_update_fun2(Type) ->
-    Mod = riakc_datatype:module(Type),
+    Mod = riakc_datatype:module_for_type(Type),
     ?LET(OpList, non_empty(list(Mod:gen_op())),
          fun(R) ->
                  lists:foldl(fun({Op, Args}, Acc) ->
