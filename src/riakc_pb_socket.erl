@@ -448,7 +448,7 @@ stream_list_buckets(Pid, Type, Options) ->
     gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout,
                                                   type=Type,
                                                   stream=true},
-                          infinity, {ReqId, self()}}, infinity).
+                          ServerTimeout, {ReqId, self()}}, infinity).
 
 legacy_list_buckets(Pid, Options) ->
     ServerTimeout =
@@ -457,7 +457,7 @@ legacy_list_buckets(Pid, Options) ->
             ST -> ST
         end,
     gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
-                          infinity}, infinity).
+                          ServerTimeout}, infinity).
 
 
 %% @doc List all keys in a bucket
@@ -518,7 +518,7 @@ stream_list_keys(Pid, Bucket, Options) ->
     {T, B} = maybe_bucket_type(Bucket),
     ReqMsg = #rpblistkeysreq{type = T, bucket = B, timeout = ServerTimeout},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, infinity, {ReqId, self()}},
+    gen_server:call(Pid, {req, ReqMsg, ServerTimeout, {ReqId, self()}},
                     infinity).
 
 %% @doc Get bucket properties.
@@ -1006,9 +1006,9 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, infinity, {ReqId, self()}};
+                   {req, Req, Timeout, {ReqId, self()}};
                false ->
-                   {req, Req, infinity}
+                   {req, Req, Timeout}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -1061,9 +1061,9 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, infinity, {ReqId, self()}};
+                   {req, Req, Timeout, {ReqId, self()}};
                false ->
-                   {req, Req, infinity}
+                   {req, Req, Timeout}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -1098,7 +1098,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
                           continuation=Continuation,
                           timeout=Timeout},
     ReqId = mk_reqid(),
-    Call = {req, Req, infinity, {ReqId, self()}},
+    Call = {req, Req, Timeout, {ReqId, self()}},
     gen_server:call(Pid, Call, CallTimeout).
 
 %% @doc Return the default timeout for an operation if none is provided.
