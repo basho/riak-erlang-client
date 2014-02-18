@@ -56,9 +56,9 @@
          list_keys/2, list_keys/3,
          stream_list_keys/2, stream_list_keys/3,
          get_bucket/2, get_bucket/3, get_bucket/4,
-         get_bucket_type/2, get_bucket_type/3, get_bucket_type/4,
+         get_bucket_type/2, get_bucket_type/3,
          set_bucket/3, set_bucket/4, set_bucket/5,
-         set_bucket_type/3, set_bucket_type/4, set_bucket_type/5,
+         set_bucket_type/3, set_bucket_type/4,
          reset_bucket/2, reset_bucket/3, reset_bucket/4,
          mapred/3, mapred/4, mapred/5,
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
@@ -542,6 +542,7 @@ get_bucket(Pid, Bucket, Timeout) ->
     get_bucket(Pid, Bucket, Timeout, default_timeout(get_bucket_call_timeout)).
 
 %% @doc Get bucket properties specifying a server side and local call timeout.
+%% @deprecated because `CallTimeout' is ignored
 -spec get_bucket(pid(), bucket(), timeout(), timeout()) -> {ok, bucket_props()} |
                                                            {error, term()}.
 get_bucket(Pid, Bucket, Timeout, _CallTimeout) ->
@@ -553,9 +554,6 @@ get_bucket_type(Pid, BucketType) ->
     get_bucket_type(Pid, BucketType, default_timeout(get_bucket_timeout)).
 
 get_bucket_type(Pid, BucketType, Timeout) ->
-    get_bucket_type(Pid, BucketType, Timeout, default_timeout(get_bucket_call_timeout)).
-
-get_bucket_type(Pid, BucketType, Timeout, _CallTimeout) ->
     Req = #rpbgetbuckettypereq{type = BucketType},
     call_infinity(Pid, {req, Req, Timeout}).
 
@@ -573,6 +571,7 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
                default_timeout(set_bucket_call_timeout)).
 
 %% @doc Set bucket properties specifying a server side and local call timeout.
+%% @deprecated because `CallTimeout' is ignored
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout, _CallTimeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
@@ -584,10 +583,6 @@ set_bucket_type(Pid, BucketType, BucketProps) ->
     set_bucket_type(Pid, BucketType, BucketProps, default_timeout(set_bucket_timeout)).
 
 set_bucket_type(Pid, BucketType, BucketProps, Timeout) ->
-    set_bucket_type(Pid, BucketType, BucketProps, Timeout,
-               default_timeout(set_bucket_call_timeout)).
-
-set_bucket_type(Pid, BucketType, BucketProps, Timeout, _CallTimeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbuckettypereq{type = BucketType, props = PbProps},
     call_infinity(Pid, {req, Req, Timeout}).
@@ -605,6 +600,7 @@ reset_bucket(Pid, Bucket, Timeout) ->
     reset_bucket(Pid, Bucket, Timeout, default_timeout(reset_bucket_call_timeout)).
 
 %% @doc Reset bucket properties back to the defaults.
+%% @deprecated because `CallTimeout' is ignored
 -spec reset_bucket(pid(), bucket, timeout(), timeout()) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket, Timeout, _CallTimeout) ->
     {T, B} = maybe_bucket_type(Bucket),
@@ -688,6 +684,7 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
 %%      The ClientPid will receive messages in this format:
 %% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
 %%      {ReqId::req_id(), done}'''
+%% @deprecated because `CallTimeout' is ignored
 -spec mapred_stream(ConnectionPid::pid(),Inputs::mapred_inputs(),
                     Query::[mapred_queryterm()], ClientPid::pid(),
                     Timeout::timeout(), CallTimeout::timeout()) ->
@@ -710,11 +707,11 @@ mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeou
 mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(EndKey) ->
     BinEndKey = list_to_binary(integer_to_list(EndKey)),
     mapred_stream(Pid, {index,Bucket,Name,StartKey,BinEndKey}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, Inputs, Query, ClientPid, Timeout, CallTimeout) ->
+mapred_stream(Pid, Inputs, Query, ClientPid, Timeout, _CallTimeout) ->
     MapRed = [{'inputs', Inputs},
               {'query', Query},
               {'timeout', Timeout}],
-    send_mapred_req(Pid, MapRed, ClientPid, CallTimeout).
+    send_mapred_req(Pid, MapRed, ClientPid).
 
 %% @doc Perform a MapReduce job against a bucket across the cluster.
 %%      See the MapReduce documentation for explanation of behavior.
@@ -781,13 +778,14 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
 %%      The ClientPid will receive messages in this format:
 %% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
 %%      {ReqId::req_id(), done}'''
+%% @deprecated because `CallTimeout' is ignored
 -spec mapred_bucket_stream(ConnectionPid::pid(), bucket(), [mapred_queryterm()], ClientPid::pid(), timeout(), timeout()) ->
                                   {ok, req_id()} | {error, term()}.
-mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, CallTimeout) ->
+mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, _CallTimeout) ->
     MapRed = [{'inputs', Bucket},
               {'query', Query},
               {'timeout', Timeout}],
-    send_mapred_req(Pid, MapRed, ClientPid, CallTimeout).
+    send_mapred_req(Pid, MapRed, ClientPid).
 
 
 %% @doc Execute a search query. This command will return an error
@@ -815,6 +813,7 @@ search(Pid, Index, SearchQuery, Options, Timeout) ->
 
 %% @doc Execute a search query. This command will return an error
 %%      unless executed against a Riak Search cluster.
+%% @deprecated because `CallTimeout' is ignored
 -spec search(pid(), binary(), binary(), search_options(), timeout(), timeout()) ->
                     {ok, search_result()} | {error, term()}.
 search(Pid, Index, SearchQuery, Options, Timeout, _CallTimeout) ->
@@ -971,7 +970,6 @@ get_index_eq(Pid, Bucket, Index, Key) ->
 %% @doc Execute a secondary index equality query with specified options
 %% <dl>
 %% <dt>timeout:</dt> <dd>milliseconds to wait for a response from riak</dd>
-%% <dt>call_timeout:</dt> <dd>milliseoonds to wait for a local gen_server response</dd>
 %% <dt>stream:</dt> <dd> true | false. Stream results to calling process</dd>
 %% <dt>continuation:</dt> <dd> The opaque, binary continuation returned from a previous query.
 %%                             Requests the next results.</dd>
@@ -1894,7 +1892,7 @@ fmt_err_msg(ErrMsg) ->
 
 %% Common code for sending a single bucket or multiple inputs map/request
 %% @private
-send_mapred_req(Pid, MapRed, ClientPid, _CallTimeout) ->
+send_mapred_req(Pid, MapRed, ClientPid) ->
     ReqMsg = #rpbmapredreq{request = encode_mapred_req(MapRed),
                            content_type = <<"application/x-erlang-binary">>},
     ReqId = mk_reqid(),
