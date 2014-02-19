@@ -263,7 +263,7 @@ fold_extract_op(Key, Value, Acc0) ->
     Mod = type_module(Key),
     case Mod:to_op(Value) of
         undefined ->
-            Acc0;
+            [{add, Key}|Acc0];
         {_Type, Op, _Context} ->
             [{update, Key, Op} | Acc0]
     end.
