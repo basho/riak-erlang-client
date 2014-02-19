@@ -36,7 +36,7 @@
 
 -define(MODULES, [riakc_set, riakc_counter, riakc_flag, riakc_register, riakc_map]).
 
--export([module/1,
+-export([module_for_type/1,
          module_for_term/1]).
 
 -export_type([datatype/0, update/1, context/0]).
@@ -80,12 +80,12 @@
 
 %% Returns the module that is a container for the given abstract
 %% type.
--spec module(Type::atom()) -> module().
-module(set)      -> riakc_set;
-module(counter)  -> riakc_counter;
-module(flag)     -> riakc_flag;
-module(register) -> riakc_register;
-module(map)      -> riakc_map.
+-spec module_for_type(Type::atom()) -> module().
+module_for_type(set)      -> riakc_set;
+module_for_type(counter)  -> riakc_counter;
+module_for_type(flag)     -> riakc_flag;
+module_for_type(register) -> riakc_register;
+module_for_type(map)      -> riakc_map.
 
 %% @doc Returns the appropriate container module for the given term,
 %% if possible.
@@ -175,5 +175,5 @@ prop_module_for_term(Mod) ->
 prop_module_type() ->
     %% module/1 returns the correct wrapper module for the type.
     ?FORALL(Mod, elements(?MODULES),
-            module(Mod:type()) == Mod).
+            module_for_type(Mod:type()) == Mod).
 -endif.

@@ -1203,7 +1203,7 @@ modify_type(Pid, Fun, BucketAndType, Key, Options) ->
             update_type(Pid, BucketAndType, Key, Mod:to_op(NewData), Options);
         {error, {notfound, Type}} when Create ->
             %% Not found, but ok to create it
-            Mod = riakc_datatype:module(Type),
+            Mod = riakc_datatype:module_for_type(Type),
             NewData = Fun(Mod:new()),
             update_type(Pid, BucketAndType, Key, Mod:to_op(NewData), Options);
         {error, Reason} ->
@@ -1762,7 +1762,7 @@ process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
                  State) ->
     Reply = case riak_pb_dt_codec:decode_fetch_response(Resp) of
                 {Type, Value, Context}  ->
-                    Mod = riakc_datatype:module(Type),
+                    Mod = riakc_datatype:module_for_type(Type),
                     {ok, Mod:new(Value, Context)};
                 {notfound, _Type}=NF ->
                     {error, NF}
@@ -1782,10 +1782,10 @@ process_response(#request{msg = #dtupdatereq{op=Op, return_body=RB}},
                 ok -> ok;
                 {ok, Key} -> {ok, Key};
                 {OpType, Value, Context} ->
-                    Mod = riakc_datatype:module(OpType),
+                    Mod = riakc_datatype:module_for_type(OpType),
                     {ok, Mod:new(Value, Context)};
                 {Key, {OpType, Value, Context}} when is_binary(Key) ->
-                    Mod = riakc_datatype:module(OpType),
+                    Mod = riakc_datatype:module_for_type(OpType),
                     {ok, Key, Mod:new(Value, Context)}
             end,
     {reply, Reply, State};
