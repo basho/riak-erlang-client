@@ -402,6 +402,78 @@ The following example illustrates how to perform exact match as well as range qu
     22> riakc_pb_socket:get_index(Pid, <<"test">>, {integer_index, "age"}, 20, 30).
     {ok,[<<"2i_1">>]}
 
+Riak Data Types
+===============
+
+[Riak Data Types](http://docs.basho.com/riak/2.0.0pre20/dev/using/data-types/) can only be used in buckets of a [bucket type](http://docs.basho.com/riak/2.0.0pre20/dev/advanced/bucket-types/) in which the `datatype` bucket property is set to either `counter`, `set`, or `map`.
+
+All Data Types in the Erlang client can be created and modified at will prior to being stored. Basic CRUD operations are performed by functions specific to Data Types, e.g. `fetch_type/*` instead of `get/*` for normal objects, `update_type/*` instead of `put/*`, etc.
+
+The current value of a Data Type on the client side is known as a "dirty value" and can be found using the `dirty_value/1` function specific to each Data Type, e.g. `riakc_counter:dirty_value/1` or `riakc_set:dirty_value/1`. Fetching the current value from Riak involves the `riakc_pb_socket:fetch_type/*` function applied to the Data Type's bucket type/bucket/key location.
+
+#### Counters
+
+Like all Data Types in the Erlang client, counters can be created and incremented/decremented before they are stored in a bucket type/bucket/key location.
+
+    Counter = riakc_counter:new().
+
+Counters can be incremented or decremented by any integer amount:
+
+    Counter1 = riakc_counter:increment(10, Counter),
+    riakc_counter:dirty_value(Counter1).
+    %% 10
+
+The following would store `Counter1` under the key `page_visits` in the bucket `users` (which bears the type `counter_bucket`):
+
+    riakc_pb_socket:update_type(Pid,
+                                {<<"counter_bucket">>, <<"users">>},
+                                <<"page_visits">>,
+                                riakc_counter:to_op(Counter1)).
+
+The `to_op` function transforms any Riak Data Type into the necessary set of operations required to successfully update the value in Riak.
+
+#### Sets
+
+Like counters, sets can be created and have members added/subtracted prior to storing them:
+
+    Set = riakc_set:new(),
+    Set1 = riakc_set:add_element(<<"foo">>, Set),
+    Set2 = riakc_set:add_element(<<"bar">>, Set1),
+    Set3 = riakc_set:del_element(<<"foo">>, Set2),
+    Set4 = riakc_set:add_element(<<"baz">>, Set3),
+    riakc_set:dirty_value(Set4).
+    %% [<<"foo">>, <<"baz">>]
+
+Once client-side updates are completed, updating sets in Riak works just like updating counters:
+
+    riakc_pb_socket:update_type(Pid,
+                                {<<"set_bucket">>, <<"all_my_sets">>},
+                                <<"odds_and_ends">>,
+                                riakc_set:to_op(Set4)).
+
+Now, a set with the element `foo` and `baz` will be stored in `/types/set_bucket/buckets/all_my_sets/keys/odds_and_ends`.
+
+You can check if a set contains a particular element using the `is_element/2` function:
+
+    riakc_set:is_element(<<"baq">>, Set4).
+    %% false
+
+#### Maps
+
+Maps are somewhat trickier because maps can contain any number of fields, each of which itself holds one of the five available Data Types: counters, sets, registers, flags, or even other maps.
+
+Like the other Data Types, you can start with a new map on the client side prior to storing the map in Riak:
+
+    Map = riakc_map:new().
+
+Updating maps involves both specifying the map field that you wish to update (by both name and Data Type) and then specifying which transformation you wish to apply to that field. Let's say that you want to add a register `reg` with the value `foo` to the map `Map` created above, using an anonymous function:
+
+    Map1 = riakc_map:update({<<"reg">>, register},
+                            fun(R) -> riakc_register:set(<<"foo">>, R) end,
+                            Map).
+
+For more detailed instructions on maps, see the [Using Data Types](http://docs.basho.com/riak/2.0.0pre20/dev/using/data-types/#Maps) documentation.
+
 Links
 =====
 
