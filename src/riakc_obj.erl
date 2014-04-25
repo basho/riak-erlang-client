@@ -81,7 +81,6 @@
 -type key() :: binary() | 'undefined'. %% A key name
 -type id() :: {bucket(), key()}.
 -type vclock() :: binary(). %% An opaque vector clock
--type metadata() :: dict(). %% Value metadata
 -type content_type() :: string(). %% The media type of a value
 -type value() :: binary(). %% An opaque value
 -type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
@@ -97,6 +96,11 @@
 -type metadata_key() :: binary().
 -type metadata_value() :: binary().
 -type metadata_entry() :: {metadata_key(), metadata_value()}.
+-ifdef(pre17).
+-type metadata() :: dict(). %% Value metadata
+-else.
+-type metadata() :: dict:dict(metadata_key(), metadata_value()).
+-endif.
 -type tag() :: binary().
 -type link() :: {tag(), [id()]}.
 
@@ -105,7 +109,7 @@
           key :: key(),
           vclock :: vclock(),
           contents :: contents(),
-          updatemetadata :: dict(),
+          updatemetadata :: metadata(),
           updatevalue :: value()
          }).
 
@@ -307,7 +311,7 @@ get_update_value(#riakc_obj{updatevalue=UV}=Object) ->
     end.
 
 %% @doc  Return the content type from metadata
--spec md_ctype(dict()) -> undefined | content_type().
+-spec md_ctype(metadata()) -> undefined | content_type().
 md_ctype(MetaData) ->
     case dict:find(?MD_CTYPE, MetaData) of
         error ->
