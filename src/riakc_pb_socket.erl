@@ -3349,7 +3349,7 @@ live_node_tests() ->
                  ?assertEqual({ok, 5}, ?MODULE:counter_val(Pid, Bucket, Key, [{pr, one}]))
              end)},
      {"create a search index / get / list / delete",
-     ?_test(begin
+     {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
                 ?assertEqual({ok, []}, ?MODULE:list_search_indexes(Pid)),
@@ -3370,9 +3370,9 @@ live_node_tests() ->
                                     {n_val,2}]]},
                              ?MODULE:list_search_indexes(Pid)),
                 ?assertEqual(ok, ?MODULE:delete_search_index(Pid, <<"indextest">>))
-         end)},
+         end)}},
      {"create a search schema / get",
-     ?_test(begin
+      {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
                 Schema = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
@@ -3406,9 +3406,9 @@ live_node_tests() ->
                     {ok, [{name, SchemaName},{content, Schema}]} ==
                         ?MODULE:get_search_schema(Pid, SchemaName)
                 end )
-         end)},
+         end)}},
      {"create a search index and tie to a bucket",
-     ?_test(begin
+     {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
                 Index = <<"myindex">>,
@@ -3427,9 +3427,9 @@ live_node_tests() ->
                     {ok, Result} = search(Pid, Index, <<"*:*">>),
                     1 == Result#search_results.num_found
                 end )
-         end)},
+         end)}},
      {"search utf8",
-     ?_test(begin
+     {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
                 Index = <<"myindex">>,
@@ -3448,7 +3448,7 @@ live_node_tests() ->
                     {ok, Result} = search(Pid, Index, <<"name_s:בָּרָא">>),
                     1 == Result#search_results.num_found
                 end )
-         end)}
+         end)}}
      ].
 
 -endif.
