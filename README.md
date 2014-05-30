@@ -243,7 +243,7 @@ If resolution simply requires one of the existing siblings to be selected, this 
 
 It is also possible to get a list of tuples representing all the siblings through the `riakc_obj:get_contents` function. This returns a list of tuples in the form `{metadata(), value()}` which can be used when more complex sibling resolution is required.
 
-Once the correct combination of metadata and value has been determined, the record can be updated with these using the `riakc_obj:update_value` and `riakc_obj:update_metadata` functions. If the resulting content type needs to be updated, the `riakc_obj:update_content_type` can be used.   
+Once the correct combination of metadata and value has been determined, the record can be updated with these using the `riakc_obj:update_value` and `riakc_obj:update_metadata` functions. If the resulting content type needs to be updated, the `riakc_obj:update_content_type` can be used.
 
 Listing Keys
 =============
@@ -309,7 +309,7 @@ The following example illustrates setting and getting metadata.
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
         [[<<"X-Ri"...>>,{...}]]}}}
-    17> MD3 = riakc_obj:set_user_metadata_entry(MD2,{<<"Key2">>,<<"Value2">>}).  
+    17> MD3 = riakc_obj:set_user_metadata_entry(MD2,{<<"Key2">>,<<"Value2">>}).
     {dict,1,16,16,8,80,48,
       {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]},
       {{[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],
@@ -323,7 +323,7 @@ The following example illustrates setting and getting metadata.
         [[<<"X-Ri"...>>,{...}]]}}}
     20> riakc_obj:get_user_metadata_entries(MD4).
     [{<<"Key2">>,<<"Value2">>}]
-    %% Store updated metadata back to the object 
+    %% Store updated metadata back to the object
     21> Object2 = riakc_obj:update_metadata(Object,MD4).
     {riakc_obj,<<"test">>,<<"usermeta">>,undefined,[],
            {dict,1,16,16,8,80,48,
@@ -390,17 +390,98 @@ The following example illustrates getting and setting secondary indexes.
            {dict,1,16,16,8,80,48,
                  {[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],...},
                  {{[],[],[],[],[],[],[],[],[],[],[],[[...]],[],...}}},
-           <<"John Robert Doe, 25">>}    
+           <<"John Robert Doe, 25">>}
     20> riakc_pb_socket:put(Pid, Obj2).
-    
+
 In order to query based on secondary indexes, the `riakc_pb_socket:get_index/4`, `riakc_pb_socket:get_index/5`, `riakc_pb_socket:get_index/6` and `riakc_pb_socket:get_index/7` functions can be used. These functions also allows secondary indexes to be specifiued using the tuple described above.
 
 The following example illustrates how to perform exact match as well as range queries based on the record and associated indexes created above.
-    
+
     21> riakc_pb_socket:get_index(Pid, <<"test">>, {binary_index, "name"}, <<"John">>).
     {ok,[<<"2i_1">>]}
     22> riakc_pb_socket:get_index(Pid, <<"test">>, {integer_index, "age"}, 20, 30).
     {ok,[<<"2i_1">>]}
+
+Riak Data Types
+===============
+
+[Riak Data Types](http://docs.basho.com/riak/2.0.0pre20/dev/using/data-types/) can only be used in buckets of a [bucket type](http://docs.basho.com/riak/2.0.0pre20/dev/advanced/bucket-types/) in which the `datatype` bucket property is set to either `counter`, `set`, or `map`.
+
+All Data Types in the Erlang client can be created and modified at will prior to being stored. Basic CRUD operations are performed by functions in `riakc_pb_socket` specific to Data Types, e.g. `fetch_type/3,4` instead of `get/3,4,5` for normal objects, `update_type/4,5` instead of `put/2,3,4`, etc.
+
+The current value of a Data Type on the client side is known as a "dirty value" and can be found using the `dirty_value/1` function specific to each Data Type, e.g. `riakc_counter:dirty_value/1` or `riakc_set:dirty_value/1`. Fetching the current value from Riak involves the `riakc_pb_socket:fetch_type/3,4` function applied to the Data Type's bucket type/bucket/key location.
+
+#### Counters
+
+Like all Data Types in the Erlang client, counters can be created and incremented/decremented before they are stored in a bucket type/bucket/key location.
+
+    Counter = riakc_counter:new().
+
+Counters can be incremented or decremented by any integer amount:
+
+    Counter1 = riakc_counter:increment(10, Counter),
+    riakc_counter:dirty_value(Counter1).
+    %% 10
+
+The following would store `Counter1` under the key `page_visits` in the bucket `users` (which bears the type `counter_bucket`):
+
+    riakc_pb_socket:update_type(Pid,
+                                {<<"counter_bucket">>, <<"users">>},
+                                <<"page_visits">>,
+                                riakc_counter:to_op(Counter1)).
+
+The `to_op` function transforms any Riak Data Type into the necessary set of operations required to successfully update the value in Riak.
+
+Retrieving the counter:
+
+    {ok, Counter2} = riakc_pb_socket:fetch_type(Pid,
+                                     {<<"counter_bucket">>, <<"users">>},
+                                     <<"page_visits">>).
+
+#### Sets
+
+Like counters, sets can be created and have members added/subtracted prior to storing them:
+
+    Set = riakc_set:new(),
+    Set1 = riakc_set:add_element(<<"foo">>, Set),
+    Set2 = riakc_set:add_element(<<"bar">>, Set1),
+    Set3 = riakc_set:del_element(<<"foo">>, Set2),
+    Set4 = riakc_set:add_element(<<"baz">>, Set3),
+    riakc_set:dirty_value(Set4).
+    %% [<<"bar">>, <<"baz">>]
+
+Once client-side updates are completed, updating sets in Riak works just like updating counters:
+
+    riakc_pb_socket:update_type(Pid,
+                                {<<"set_bucket">>, <<"all_my_sets">>},
+                                <<"odds_and_ends">>,
+                                riakc_set:to_op(Set4)).
+
+Now, a set with the elements `bar` and `baz` will be stored in `/types/set_bucket/buckets/all_my_sets/keys/odds_and_ends`.
+
+The functions `size/1`, `is_element/2`, and `fold/3` will work only on
+values stored in and retrieved from Riak. Any local modifications,
+including initial values when an object is created, will not be
+considered.
+
+    riakc_set:is_element(<<"bar">>, Set4).
+    %% false
+
+#### Maps
+
+Maps are somewhat trickier because maps can contain any number of fields, each of which itself holds one of the five available Data Types: counters, sets, registers, flags, or even other maps.
+
+Like the other Data Types, you can start with a new map on the client side prior to storing the map in Riak:
+
+    Map = riakc_map:new().
+
+Updating maps involves both specifying the map field that you wish to update (by both name and Data Type) and then specifying which transformation you wish to apply to that field. Let's say that you want to add a register `reg` with the value `foo` to the map `Map` created above, using an anonymous function:
+
+    Map1 = riakc_map:update({<<"reg">>, register},
+                            fun(R) -> riakc_register:set(<<"foo">>, R) end,
+                            Map).
+
+For more detailed instructions on maps, see the [Using Data Types](http://docs.basho.com/riak/2.0.0pre20/dev/using/data-types/#Maps) documentation.
 
 Links
 =====
@@ -463,7 +544,7 @@ MapReduce jobs can be executed using the `riakc_pb_socket:mapred` function. This
 
 The function `riakc_pb_socket:mapred` uses `riakc_pb_socket:mapred_stream` under the hood, and if results need to be processed as they are streamed to the client, this function can be used instead. The implementation of `riakc_pb_socket:mapred` provides a good example of how to implement this.
 
-It is possible to define a wide range of inputs for a mapreduce job. Some examples are given below: 
+It is possible to define a wide range of inputs for a mapreduce job. Some examples are given below:
 
 **Bucket/Key list:** `[{<<"bucket1">>,<<"key1">>},{<<"bucket1">>,<<"key2">>}]`
 
@@ -528,8 +609,8 @@ Create a qfun that returns the size of the record and feed this into the existin
                 [{map, {qfun, RecSize}, none, false},
                  {reduce, {modfun, 'riak_kv_mapreduce', 'reduce_sum'}, none, true}]).
     {ok,[{1,[15]}]}
- 
- As expected, total size of data is 15 bytes.   
+
+ As expected, total size of data is 15 bytes.
 
 Troubleshooting
 ==================
