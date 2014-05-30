@@ -1975,7 +1975,7 @@ connect(State) when State#state.sock =:= undefined ->
 start_tls(State=#state{sock=Sock}) ->
     %% Send STARTTLS
     StartTLSCode = riak_pb_codec:msg_code(rpbstarttls),
-    gen_tcp:send(Sock, <<StartTLSCode:8>>),
+    ok = gen_tcp:send(Sock, <<StartTLSCode:8>>),
     receive
         {tcp_error, Sock, Reason} ->
             {error, Reason};
@@ -2012,8 +2012,8 @@ start_tls(State=#state{sock=Sock}) ->
     end.
 
 start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
-    ssl:send(Sock, riak_pb_codec:encode(#rpbauthreq{user=User,
-                                                    password=Pass})),
+    ok = ssl:send(Sock, riak_pb_codec:encode(#rpbauthreq{user=User,
+                                                         password=Pass})),
     receive
         {ssl_error, Sock, Reason} ->
             {error, Reason};
