@@ -2801,7 +2801,7 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Props} = get_bucket(Pid, <<"b">>),
                  ?assertEqual(3, proplists:get_value(n_val, Props)),
-                 ?assertEqual(true, proplists:get_value(allow_mult, Props))
+                 ?assertEqual(false, proplists:get_value(allow_mult, Props))
              end)},
 
      {"set bucket properties test",
