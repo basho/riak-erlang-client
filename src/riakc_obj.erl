@@ -82,7 +82,7 @@
 -type id() :: {bucket(), key()}.
 -type vclock() :: binary(). %% An opaque vector clock
 -type metadata() :: dict(). %% Value metadata
--type content_type() :: string(). %% The media type of a value
+-type content_type() :: string() | binary(). %% The media type of a value
 -type value() :: binary(). %% An opaque value
 -type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
 -type binary_index_id() :: {binary_index, string()}.
