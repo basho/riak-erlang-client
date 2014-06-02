@@ -95,25 +95,25 @@
 -type simple_map_op() :: {remove, key()} | field_update().
 -type map_op() :: {update, [simple_map_op()]}.
 
--export_type([map/0]).
--type map() :: #map{}.
+-export_type([crdt_map/0]).
+-type crdt_map() :: #map{}.
 
 %% @doc Creates a new, empty map container type.
--spec new() -> map().
+-spec new() -> crdt_map().
 new() ->
     #map{}.
 
 %% @doc Creates a new map with the specified key-value pairs and context.
--spec new([raw_entry()], riakc_datatype:context()) -> map().
+-spec new([raw_entry()], riakc_datatype:context()) -> crdt_map().
 new(Values, Context) when is_list(Values) ->
     #map{value=orddict:from_list(Values), context=Context}.
 
 %% @doc Gets the original value of the map.
--spec value(map()) -> [raw_entry()].
+-spec value(crdt_map()) -> [raw_entry()].
 value(#map{value=V}) -> V.
 
 %% @doc Gets the value of the map after local updates are applied.
--spec dirty_value(map()) -> [raw_entry()].
+-spec dirty_value(crdt_map()) -> [raw_entry()].
 dirty_value(#map{value=V, updates=U, removes=R}) ->
     Merged = orddict:merge(fun(K, _Value, Update) ->
                                    Mod = type_module(K),
@@ -124,7 +124,7 @@ dirty_value(#map{value=V, updates=U, removes=R}) ->
 
 %% @doc Extracts an operation from the map that can be encoded into an
 %% update request.
--spec to_op(map()) -> riakc_datatype:update(map_op()).
+-spec to_op(crdt_map()) -> riakc_datatype:update(map_op()).
 to_op(#map{updates=U, removes=R, context=C}) ->
     Updates = [ {remove, Key} || Key <- R ] ++
         orddict:fold(fun fold_extract_op/3, [], U),
@@ -151,7 +151,7 @@ type() -> map.
 %% whose value has been added via `add/2' or locally modified via
 %% `update/3' nullifies any of those modifications, without recording
 %% a remove operation.
--spec erase(key(), map()) -> map().
+-spec erase(key(), crdt_map()) -> crdt_map().
 erase(Key, #map{updates=U, removes=R}=M) ->
     case orddict:is_key(Key, U) of
         true ->
@@ -165,7 +165,7 @@ erase(Key, #map{updates=U, removes=R}=M) ->
 %% it will be initialized to the empty value for its type before being
 %% passed to the function. If the key was previously removed with
 %% `erase/2', the remove operation will be nullified.
--spec update(key(), update_fun(), map()) -> map().
+-spec update(key(), update_fun(), crdt_map()) -> crdt_map().
 update(Key, Fun, #map{value=V, updates=U0, removes=R0}=M) ->
     R = ordsets:del_element(Key, R0),
     U = case orddict:is_key(Key, U0) of
@@ -179,36 +179,36 @@ update(Key, Fun, #map{value=V, updates=U0, removes=R0}=M) ->
 %% ==== Queries ====
 
 %% @doc Returns the number of entries in the map.
--spec size(map()) -> pos_integer().
+-spec size(crdt_map()) -> pos_integer().
 size(#map{value=Entries}) ->
     orddict:size(Entries).
 
 %% @doc Returns the "unwrapped" value associated with the key in the
 %% map. If the key is not present, an exception is generated.
--spec fetch(key(), map()) -> term().
+-spec fetch(key(), crdt_map()) -> term().
 fetch(Key, #map{value=Entries}) ->
     orddict:fetch(Key, Entries).
 
 %% @doc Searches for a key in the map. Returns `{ok, UnwrappedValue}'
 %% when the key is present, or `error' if the key is not present in
 %% the map.
--spec find(key(), map()) -> {ok, term()} | error.
+-spec find(key(), crdt_map()) -> {ok, term()} | error.
 find(Key, #map{value=Entries}) ->
     orddict:find(Key, Entries).
 
 %% @doc Test if the key is contained in the map.
--spec is_key(key(), map()) -> boolean().
+-spec is_key(key(), crdt_map()) -> boolean().
 is_key(Key, #map{value=Entries}) ->
     orddict:is_key(Key, Entries).
 
 %% @doc Returns a list of all keys in the map.
--spec fetch_keys(map()) -> [key()].
+-spec fetch_keys(crdt_map()) -> [key()].
 fetch_keys(#map{value=Entries}) ->
     orddict:fetch_keys(Entries).
 
 %% @doc Folds over the entries in the map. This yields raw values,
 %% not container types.
--spec fold(fun((key(), term(), term()) -> term()), term(), map()) -> term().
+-spec fold(fun((key(), term(), term()) -> term()), term(), crdt_map()) -> term().
 fold(Fun, Acc0, #map{value=Entries}) ->
     orddict:fold(Fun, Acc0, Entries).
 
