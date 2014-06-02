@@ -2368,6 +2368,15 @@ reset_riak() ->
             reset_riak_12()
     end.
 
+reset_solr(Pid) ->
+    %% clear indexes
+    {ok, Indexes} = ?MODULE:list_search_indexes(Pid),
+    [ ?MODULE:delete_search_index(Pid, proplists:get_value(index,Index)) || Index <- Indexes ],
+    wait_until( fun() ->
+        {ok, []} == ?MODULE:list_search_indexes(Pid)
+    end, 20, 1000),
+    ok.
+
 %% Resets a Riak 1.2+ node, which can run the memory backend in 'test'
 %% mode.
 reset_riak_12() ->
@@ -3352,60 +3361,76 @@ live_node_tests() ->
      {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
-                ?assertEqual({ok, []}, ?MODULE:list_search_indexes(Pid)),
+                reset_solr(Pid),
+                Index = <<"indextest">>,
+                SchemaName = <<"_yz_default">>,
                 ?assertEqual(ok,
                     ?MODULE:create_search_index(Pid,
-                                                <<"indextest">>,
-                                                <<"_yz_default">>,
+                                                Index,
+                                                SchemaName,
                                                 [{n_val,2}])),
-                F = fun() ->
-                    {ok, [{index,<<"indextest">>},
-                          {schema,<<"_yz_default">>},
-                          {n_val,2}]} ==
-                        ?MODULE:get_search_index(Pid, <<"indextest">>)
-                end,
-                wait_until(F),
-                ?assertEqual({ok, [[{index,<<"indextest">>},
-                                    {schema,<<"_yz_default">>},
+                wait_until( fun() ->
+                    case ?MODULE:get_search_index(Pid, Index) of
+                        {ok, IndexData} ->
+                            proplists:get_value(index, IndexData) == Index andalso
+                            proplists:get_value(schema, IndexData) == SchemaName andalso
+                            proplists:get_value(n_val, IndexData) == 2;
+                        {error, <<"notfound">>} ->
+                            false
+                    end
+                end, 20, 1000 ),
+                ?assertEqual({ok, [[{index,Index},
+                                    {schema,SchemaName},
                                     {n_val,2}]]},
                              ?MODULE:list_search_indexes(Pid)),
-                ?assertEqual(ok, ?MODULE:delete_search_index(Pid, <<"indextest">>))
+                ?assertEqual(ok, ?MODULE:delete_search_index(Pid, Index))
          end)}},
      {"create a search schema / get",
       {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
+                reset_solr(Pid),
                 Schema = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
 <schema name=\"test\" version=\"1.5\">
 <fields>
-   <field name=\"_yz_id\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" required=\"true\" />
-   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
-   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
-   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
-   <field name=\"_yz_vtag\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_node\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_rt\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_rk\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_rb\" type=\"_yz_str\" indexed=\"true\" stored=\"true\"/>
-   <field name=\"_yz_err\" type=\"_yz_str\" indexed=\"true\" stored=\"false\"/>
+   <field name=\"_yz_id\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" required=\"true\" multiValued=\"false\"/>
+   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
+   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
+   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
+   <field name=\"_yz_vtag\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
+   <field name=\"_yz_rt\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
+   <field name=\"_yz_rk\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
+   <field name=\"_yz_rb\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
+   <field name=\"_yz_err\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
 </fields>
 <uniqueKey>_yz_id</uniqueKey>
 <types>
     <fieldType name=\"_yz_str\" class=\"solr.StrField\" sortMissingLast=\"true\" />
 </types>
 </schema>">>,
-                SchemaName = <<"myschema">>,
                 Index = <<"schemaindex">>,
+                SchemaName = <<"myschema">>,
                 ?assertEqual(ok, ?MODULE:create_search_schema(Pid, SchemaName, Schema)),
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index, SchemaName, [])),
                 wait_until( fun() ->
-                    {ok, [[{index, Index},{schema, SchemaName}]]} ==
-                        ?MODULE:list_search_indexes(Pid)
-                end ),
+                    case ?MODULE:list_search_indexes(Pid) of
+                        {ok, []} ->
+                            false;
+                        {ok, [IndexData|_]} ->
+                            proplists:get_value(index, IndexData) == Index andalso
+                            proplists:get_value(schema, IndexData) == SchemaName andalso
+                            proplists:get_value(n_val, IndexData) == 3
+                    end
+                end, 20, 1000 ),
                 wait_until( fun() ->
-                    {ok, [{name, SchemaName},{content, Schema}]} ==
-                        ?MODULE:get_search_schema(Pid, SchemaName)
-                end )
+                    case ?MODULE:get_search_schema(Pid, SchemaName) of
+                        {ok, SchemaData} ->
+                            proplists:get_value(name, SchemaData) == SchemaName andalso
+                            proplists:get_value(content, SchemaData) == Schema;
+                        {error, <<"notefound">>} ->
+                            false
+                    end
+                end, 20, 1000 )
          end)}},
      {"create a search index and tie to a bucket",
      {timeout, 30, ?_test(begin
@@ -3415,32 +3440,37 @@ live_node_tests() ->
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
                 wait_until( fun() ->
-                    {ok, [{index,Index},
-                          {schema,<<"_yz_default">>},
-                          {n_val,3}]} ==
-                        ?MODULE:get_search_index(Pid, Index)
-                end ),
+                    case ?MODULE:get_search_index(Pid, Index) of
+                        {ok, IndexData} ->
+                            proplists:get_value(index, IndexData) == Index;
+                        {error, <<"notfound">>} ->
+                            false
+                    end
+                end, 20, 1000 ),
                 ok = ?MODULE:set_search_index(Pid, Bucket, Index),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"Freddy\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
                 wait_until( fun() ->
                     {ok, Result} = search(Pid, Index, <<"*:*">>),
                     1 == Result#search_results.num_found
-                end )
+                end, 20, 1000 )
          end)}},
      {"search utf8",
      {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
+                reset_solr(Pid),
                 Index = <<"myindex">>,
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
                 wait_until( fun() ->
-                    {ok, [{index,Index},
-                          {schema, <<"_yz_default">>},
-                          {n_val,3}]} ==
-                        ?MODULE:get_search_index(Pid, Index)
-                end ),
+                    case ?MODULE:get_search_index(Pid, Index) of
+                        {ok, IndexData} ->
+                            proplists:get_value(index, IndexData) == Index;
+                        {error, <<"notfound">>} ->
+                            false
+                    end
+                end, 20, 1000 ),
                 ok = ?MODULE:set_search_index(Pid, Bucket, Index),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"בָּרָא\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
