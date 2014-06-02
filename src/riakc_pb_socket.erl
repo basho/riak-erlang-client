@@ -3436,7 +3436,6 @@ live_node_tests() ->
      {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
-                reset_solr(Pid),
                 Index = <<"myindex">>,
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
