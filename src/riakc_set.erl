@@ -102,7 +102,7 @@ value(#set{value=V}) -> V.
 %% applied.
 -spec dirty_value(riakc_set()) -> ordsets:ordset(binary()).
 dirty_value(#set{value=V, adds=A, removes=R}) ->
-    ordsets:union(ordsets:subtract(V, R), A).
+    ordsets:subtract(ordsets:union(V, A), R).
 
 %% @doc Extracts an operation from the set that can be encoded into an
 %% update request.
