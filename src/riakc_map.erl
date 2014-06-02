@@ -30,12 +30,11 @@
 %% serialized into `register' fields if last-write-wins semantics are
 %% sufficient.</li>
 %% <li>Like the other eventually-consistent types, updates are not
-%% applied to local state. Instead, additions, removals, and
+%% applied to local state. Instead, removals, and
 %% modifications are captured for later application by Riak. Use
 %% `dirty_value/1' to access a local "view" of the updates.</li>
-%% <li>You may not "store" values in a map, but you may create new
-%% entries using `add/2', which inserts an empty value of the
-%% specified type. Existing or non-existing entries can be modified
+%% <li>You may not "store" values in a map.
+%%  Existing or non-existing entries can be modified
 %% using `update/3', which is analogous to `dict:update/3'. If the
 %% entry is not present, it will be populated with a new value before
 %% the update function is applied. The update function will receive
@@ -43,9 +42,9 @@
 %% <li>Like sets, removals will be processed before additions and
 %% updates in Riak. Removals performed without a context may result in
 %% failure.</li>
-%% <li>Adding or updating an entry followed by removing that same
+%% <li> Updating an entry followed by removing that same
 %% entry will result in no operation being recorded. Likewise,
-%% removing an entry followed by adding or updating that entry will
+%% removing an entry followed by updating that entry will
 %% cancel the removal operation.</li>
 %% </ul>
 %% @end
@@ -66,8 +65,7 @@
          type/0]).
 
 %% Operations
--export([add/2,
-         erase/2,
+-export([erase/2,
          update/3]).
 
 %% Queries
@@ -80,7 +78,6 @@
 
 -record(map, {value = [] :: [raw_entry()], %% orddict
               updates = [] :: [entry()], %% orddict
-              adds = [] :: ordsets:ordset(key()),
               removes = [] :: ordsets:ordset(key()),
               context = undefined :: riakc_datatype:context() }).
 
@@ -95,7 +92,7 @@
                             riakc_register:register_op() |
                             map_op().
 -type field_update() :: {update, key(), embedded_type_op()}.
--type simple_map_op() :: {add, key()} | {remove, key()} | field_update().
+-type simple_map_op() :: {remove, key()} | field_update().
 -type map_op() :: {update, [simple_map_op()]}.
 
 -export_type([map/0]).
@@ -128,10 +125,9 @@ dirty_value(#map{value=V, updates=U, removes=R}) ->
 %% @doc Extracts an operation from the map that can be encoded into an
 %% update request.
 -spec to_op(map()) -> riakc_datatype:update(map_op()).
-to_op(#map{updates=U, adds=A, removes=R, context=C}) ->
-    Updates = [ {add, Key} || Key <- A ] ++
-        [ {remove, Key} || Key <- R ] ++
-         orddict:fold(fun fold_extract_op/3, [], U),
+to_op(#map{updates=U, removes=R, context=C}) ->
+    Updates = [ {remove, Key} || Key <- R ] ++
+        orddict:fold(fun fold_extract_op/3, [], U),
     case Updates of
         [] -> undefined;
         _ ->
@@ -150,39 +146,16 @@ type() -> map.
 
 %% ==== Operations ====
 
-%% @doc Adds a key to the map, inserting the empty value for its type.
-%% Adding a key that already exists in the map has no effect. If the
-%% key has been previously removed from the map, the removal will be
-%% discarded, but no explicit add will be recorded.
--spec add(key(), map()) -> map().
-add(Key, #map{value=V, updates=U, adds=A, removes=R}=M) ->
-    case {orddict:is_key(Key, U), ordsets:is_element(Key, R)} of
-        %% It is already in the updates, do nothing.
-        {true, _} ->
-            M;
-        %% It was previously removed, clear that removal.
-        {false, true} ->
-            M#map{removes=ordsets:del_element(Key, R)};
-        %% It is brand new, record the add and store a value in the
-        %% updates. If it was in the original value, initialize it
-        %% with that.
-        {false, false} ->
-            Value = find_or_new(Key, V),
-            M#map{adds=ordsets:add_element(Key, A),
-                  updates=orddict:store(Key, Value, U)}
-    end.
-
 %% @doc Removes a key and its value from the map. Removing a key that
 %% does not exist simply records a remove operation. Removing a key
 %% whose value has been added via `add/2' or locally modified via
 %% `update/3' nullifies any of those modifications, without recording
 %% a remove operation.
 -spec erase(key(), map()) -> map().
-erase(Key, #map{updates=U, adds=A, removes=R}=M) ->
+erase(Key, #map{updates=U, removes=R}=M) ->
     case orddict:is_key(Key, U) of
         true ->
-            M#map{updates=orddict:erase(Key, U),
-                  adds=ordsets:del_element(Key, A)};
+            M#map{updates=orddict:erase(Key, U)};
         false ->
             M#map{removes=ordsets:add_element(Key, R)}
     end.
@@ -261,12 +234,8 @@ type_module({_, T}) ->
 -spec fold_extract_op(key(), riakc_datatype:datatype(), [field_update()]) -> [field_update()].
 fold_extract_op(Key, Value, Acc0) ->
     Mod = type_module(Key),
-    case Mod:to_op(Value) of
-        undefined ->
-            [{add, Key}|Acc0];
-        {_Type, Op, _Context} ->
-            [{update, Key, Op} | Acc0]
-    end.
+    {_Type, Op, _Context} =  Mod:to_op(Value),
+    [{update, Key, Op} | Acc0].
 
 -ifdef(EQC).
 gen_type() ->
@@ -299,7 +268,6 @@ gen_key() ->
 
 gen_op() ->
     oneof([
-           {add, [gen_key()]},
            {erase, [gen_key()]},
            ?LAZY({update, ?LET({_,T}=Key, gen_key(), [Key,
                                                       gen_update_fun(T)])})
