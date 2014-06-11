@@ -31,8 +31,7 @@
 %% sufficient.</li>
 %% <li>Like the other eventually-consistent types, updates are not
 %% applied to local state. Instead, removals, and
-%% modifications are captured for later application by Riak. Use
-%% `dirty_value/1' to access a local "view" of the updates.</li>
+%% modifications are captured for later application by Riak.</li>
 %% <li>You may not "store" values in a map.
 %%  Existing or non-existing entries can be modified
 %% using `update/3', which is analogous to `dict:update/3'. If the
@@ -59,7 +58,6 @@
 %% Callbacks
 -export([new/0, new/2,
          value/1,
-         dirty_value/1,
          to_op/1,
          is_type/1,
          type/0]).
@@ -112,16 +110,6 @@ new(Values, Context) when is_list(Values) ->
 -spec value(crdt_map()) -> [raw_entry()].
 value(#map{value=V}) -> V.
 
-%% @doc Gets the value of the map after local updates are applied.
--spec dirty_value(crdt_map()) -> [raw_entry()].
-dirty_value(#map{value=V, updates=U, removes=R}) ->
-    Merged = orddict:merge(fun(K, _Value, Update) ->
-                                   Mod = type_module(K),
-                                   Mod:dirty_value(Update)
-                           end, V, U),
-    [ Pair || {Key, _}=Pair <- Merged,
-              not ordsets:is_element(Key, R) ].
-
 %% @doc Extracts an operation from the map that can be encoded into an
 %% update request.
 -spec to_op(crdt_map()) -> riakc_datatype:update(map_op()).
@@ -147,34 +135,20 @@ type() -> map.
 %% ==== Operations ====
 
 %% @doc Removes a key and its value from the map. Removing a key that
-%% does not exist simply records a remove operation. Removing a key
-%% whose value has been added via `add/2' or locally modified via
-%% `update/3' nullifies any of those modifications, without recording
-%% a remove operation.
+%% does not exist simply records a remove operation.
 -spec erase(key(), crdt_map()) -> crdt_map().
-erase(Key, #map{updates=U, removes=R}=M) ->
-    case orddict:is_key(Key, U) of
-        true ->
-            M#map{updates=orddict:erase(Key, U)};
-        false ->
-            M#map{removes=ordsets:add_element(Key, R)}
-    end.
+erase(Key, #map{removes=R}=M) ->
+    M#map{removes=ordsets:add_element(Key, R)}.
+
 
 %% @doc Updates the value stored at the key by calling the passed
 %% function to get the new value. If the key did not previously exist,
 %% it will be initialized to the empty value for its type before being
-%% passed to the function. If the key was previously removed with
-%% `erase/2', the remove operation will be nullified.
+%% passed to the function.
 -spec update(key(), update_fun(), crdt_map()) -> crdt_map().
-update(Key, Fun, #map{value=V, updates=U0, removes=R0}=M) ->
-    R = ordsets:del_element(Key, R0),
-    U = case orddict:is_key(Key, U0) of
-            true ->
-                orddict:update(Key, Fun, U0);
-            false ->
-                orddict:store(Key, Fun(find_or_new(Key, V)), U0)
-        end,
-    M#map{removes=R, updates=U}.
+update(Key, Fun, #map{value=V, updates=U0}=M) ->
+    U = orddict:store(Key, Fun(find_or_new(Key, V)), U0),
+    M#map{updates=U}.
 
 %% ==== Queries ====
 

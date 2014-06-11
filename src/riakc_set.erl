@@ -28,8 +28,7 @@
 %% <li>Like the other eventually-consistent types, updates
 %% (`add_element/2' and `del_element/2') are not applied to local
 %% state. Instead, additions and removals are captured for later
-%% application by Riak. Use `dirty_value/1' to access a local "view"
-%% of the updates.</li>
+%% application by Riak.</li>
 %% <li>Additions and removals are non-exclusive. You can add and
 %% remove the same element in the same session, both operations will
 %% be performed in Riak (removal first). Removals performed without a
@@ -42,8 +41,7 @@
 %% operation.</li>
 %% <li>The query functions `size/1', `is_element/1' and `fold/3' only
 %% operate on the original value of the set, disregarding local
-%% updates. To query the modified state, use `dirty_value/1' with the
-%% `ordsets' module.</li>
+%% updates.</li>
 %% </ul> 
 %% @end
 -module(riakc_set).
@@ -57,7 +55,6 @@
 %% Callbacks
 -export([new/0, new/2,
          value/1,
-         dirty_value/1,
          to_op/1,
          is_type/1,
          type/0]).
@@ -98,12 +95,6 @@ new(Value, Context) when is_list(Value) ->
 -spec value(riakc_set()) -> ordsets:ordset(binary()).
 value(#set{value=V}) -> V.
 
-%% @doc Returns the value of the set after locally updates are
-%% applied.
--spec dirty_value(riakc_set()) -> ordsets:ordset(binary()).
-dirty_value(#set{value=V, adds=A, removes=R}) ->
-    ordsets:union(ordsets:subtract(V, R), A).
-
 %% @doc Extracts an operation from the set that can be encoded into an
 %% update request.
 -spec to_op(riakc_set()) -> riakc_datatype:update(set_op()).
@@ -136,23 +127,19 @@ del_element(Bin, #set{removes=R0}=Set) when is_binary(Bin) ->
     Set#set{removes=ordsets:add_element(Bin, R0)}.
 
 %% @doc Returns the cardinality (size) of the set. <em>Note: this only
-%% operates on the original value, use the result of dirty_value/1 if
-%% you want to account for locally-queued operations.</em>
+%% operates on the original value as retrieved from Riak.</em>
 -spec size(riakc_set()) -> pos_integer().
 size(#set{value=V}) ->
     ordsets:size(V).
 
 %% @doc Test whether an element is a member of the set. <em>Note: this
-%% only operates on the original value, use the result of
-%% dirty_value/1 if you want to account for locally-queued
-%% operations.</em>
+%% only operates on the original value as retrieved from Riak.</em>
 -spec is_element(binary(), riakc_set()) -> boolean().
 is_element(Bin, #set{value=V}) when is_binary(Bin) ->
     ordsets:is_element(Bin, V).
 
 %% @doc Folds over the members of the set. <em>Note: this only
-%% operates on the original value, use the result of dirty_value/1 if
-%% you want to account for locally-queued operations.</em>
+%% operates on the original value as retrieved from Riak.</em>
 -spec fold(fun((binary(), term()) -> term()), term(), riakc_set()) -> term().
 fold(Fun, Acc0, #set{value=V}) ->
     ordsets:fold(Fun, Acc0, V).

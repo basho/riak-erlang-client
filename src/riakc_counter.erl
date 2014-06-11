@@ -25,8 +25,7 @@
 %% can be incremented or decremented. Like the other
 %% eventually-consistent types, the original fetched value is
 %% unmodified by increments. Instead, increments are captured for
-%% later application in Riak. Use `dirty_value/1' to access a local
-%% "view" of the updated value.
+%% later application in Riak.
 -module(riakc_counter).
 -behaviour(riakc_datatype).
 
@@ -38,7 +37,6 @@
 %% Callbacks
 -export([new/0, new/2,
          value/1,
-         dirty_value/1,
          to_op/1,
          is_type/1,
          type/0]).
@@ -72,11 +70,6 @@ new(Value, _Context) when is_integer(Value) ->
 -spec value(counter()) -> integer().
 value(#counter{value=Value}) ->
     Value.
-
-%% @doc Gets the value of the counter after local updates are applied.
--spec dirty_value(counter()) -> integer().
-dirty_value(#counter{value=Value, increment=Incr}) ->
-    Value + Incr.
 
 %% @doc Increments the counter by 1.
 -spec increment(counter()) -> counter().

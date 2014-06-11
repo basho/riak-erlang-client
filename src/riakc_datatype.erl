@@ -60,10 +60,6 @@
 %% not include the application of any locally-queued operations.
 -callback value(datatype()) -> term().
 
-%% Returns a version of the value with locally-queued operations
-%% applied.
--callback dirty_value(datatype()) -> term().
-
 %% Extracts an operation from the container that can be encoded
 %% into an update request. 'undefined' should be returned if the type
 %% is unmodified. This should be passed to
