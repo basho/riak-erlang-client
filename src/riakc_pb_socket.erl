@@ -3626,6 +3626,34 @@ live_node_tests() ->
                     ?assert(lists:member(<<"Z">>, L1)),
                     ?assertEqual(length(L1), 1)
              end)},
+     {"increment nested counter in map while also removing counter",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(riakc_map:update({<<"counter">>, counter},
+                                                                      fun(C) ->
+                                                                              riakc_counter:increment(5, C)
+                                                                      end, riakc_map:new()))),
+                    {ok, M0} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    C0 = riakc_map:fetch({<<"counter">>, counter}, M0),
+                    ?assertEqual(C0, 5),
+
+                    M1 = riakc_map:update({<<"counter">>, counter},
+                                          fun(C) -> riakc_counter:increment(2, C) end,
+                                          M0),
+                    M2 = riakc_map:erase({<<"counter">>, counter}, M1),
+
+                    ok = update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M2)),
+                    {ok, M3} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    C1 = riakc_map:fetch({<<"counter">>, counter}, M3),
+
+                    %% Expected result depends on combination of vnodes involved, so accept either answer
+                    ?assert(C1 =:= 2 orelse C1 =:= 7)
+             end)},
      {"add item to nested set in nested map in map while also removing nested map",
          ?_test(begin
                     reset_riak(),
