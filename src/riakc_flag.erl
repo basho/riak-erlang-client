@@ -24,8 +24,7 @@
 %% can be enabled or disabled. Like the other eventually-consistent
 %% types, the original fetched value is unmodified by enabling or
 %% disabling. Instead, the effective operation (`enable' or `disable')
-%% is captured for later application in Riak. Use `dirty_value/1' to
-%% access a local "view" of the updated value. Note that it is
+%% is captured for later application in Riak. Note that it is
 %% possible to `enable' a flag that is already `true' and `disable' a
 %% flag that is already `false'. Flags are only available as values in
 %% maps.
@@ -40,7 +39,6 @@
 %% Callbacks
 -export([new/0, new/2,
          value/1,
-         dirty_value/1,
          to_op/1,
          is_type/1,
          type/0]).
@@ -71,13 +69,6 @@ new(Value, _Context) when is_boolean(Value) ->
 %% false is disabled.
 -spec value(flag()) -> boolean().
 value(#flag{value=V}) -> V.
-
-%% @doc Extracts the value of the flag with local modifications
-%% applied.
--spec dirty_value(flag()) -> boolean().
-dirty_value(#flag{value=V, op=undefined}) -> V;
-dirty_value(#flag{op=enable}) -> true;
-dirty_value(#flag{op=disable}) -> false.
 
 %% @doc Extracts an operation from the flag that can be encoded into
 %% an update request.
