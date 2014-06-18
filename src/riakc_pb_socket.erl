@@ -3636,6 +3636,38 @@ live_node_tests() ->
                     ?assert(lists:member(<<"Z">>, L1)),
                     ?assertEqual(length(L1), 1)
              end)},
+     {"add and remove items in nested set in map",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(riakc_map:update({<<"set">>, set},
+                                                                      fun(S) ->
+                                                                              riakc_set:add_element(<<"X">>,
+                                                                                                    riakc_set:add_element(<<"Y">>, S))
+                                                                      end, riakc_map:new()))),
+                    {ok, M0} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L0 = riakc_map:fetch({<<"set">>, set}, M0),
+                    ?assert(lists:member(<<"X">>, L0)),
+                    ?assert(lists:member(<<"Y">>, L0)),
+                    ?assertEqual(length(L0), 2),
+
+                    M1 = riakc_map:update({<<"set">>, set},
+                                          fun(S) -> riakc_set:del_element(<<"X">>,
+                                                                          riakc_set:add_element(<<"Z">>, S)) end,
+                                          M0),
+
+                    ok = update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M1)),
+                    {ok, M2} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L1 = riakc_map:fetch({<<"set">>, set}, M2),
+
+                    ?assert(lists:member(<<"Y">>, L1)),
+                    ?assert(lists:member(<<"Z">>, L1)),
+                    ?assertEqual(length(L1), 2)
+             end)},
      {"increment nested counter in map while also removing counter",
          ?_test(begin
                     reset_riak(),
