@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# Activate CRDT bucket types for testing.
+# Takes full path to riak-admin as argument.
+
+TIMEOUT=30
+
+test -x $1 || exit 1
+ADMIN=$1
+
+$ADMIN bucket-type create map_bucket '{"props":{"datatype":"map"}}' || exit 1
+$ADMIN bucket-type create set_bucket '{"props":{"datatype":"set"}}' || exit 1
+$ADMIN bucket-type create counter_bucket '{"props":{"datatype":"counter"}}' || exit 1
+
+loop_counter=0
+
+until
+    $ADMIN bucket-type activate map_bucket && \
+    $ADMIN bucket-type activate set_bucket && \
+    $ADMIN bucket-type activate counter_bucket
+do
+    echo "Waiting until activation"
+    loop_counter=`expr $loop_counter + 1`
+
+    test $loop_counter -gt $TIMEOUT && exit 1
+    sleep 1
+done
