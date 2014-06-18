@@ -42,7 +42,7 @@
 %% <li>The query functions `size/1', `is_element/1' and `fold/3' only
 %% operate on the original value of the set, disregarding local
 %% updates.</li>
-%% </ul> 
+%% </ul>
 %% @end
 -module(riakc_set).
 -behaviour(riakc_datatype).
@@ -122,7 +122,10 @@ add_element(Bin, #set{adds=A0}=Set) when is_binary(Bin) ->
     Set#set{adds=ordsets:add_element(Bin, A0)}.
 
 %% @doc Removes an element from the set.
+%% @throws undefined_context
 -spec del_element(binary(), riakc_set()) -> riakc_set().
+del_element(_Bin, #set{context=undefined}) ->
+    throw(undefined_context);
 del_element(Bin, #set{removes=R0}=Set) when is_binary(Bin) ->
     Set#set{removes=ordsets:add_element(Bin, R0)}.
 
