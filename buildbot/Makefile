@@ -14,7 +14,7 @@ preconfigure:
 	echo "nodename = riak@127.0.0.1" >> ${RIAK_CONF}
 
 configure:
-	./crdt-setup $RIAK_ADMIN
+	./crdt-setup ${RIAK_ADMIN}
 
 compile:
 	@${MAKE} -C .. compile
