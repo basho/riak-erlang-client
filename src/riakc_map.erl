@@ -57,6 +57,7 @@
 
 %% Callbacks
 -export([new/0, new/2,
+         nested/0, nested/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -77,6 +78,7 @@
 -record(map, {value = [] :: [raw_entry()], %% orddict
               updates = [] :: [entry()], %% orddict
               removes = [] :: ordsets:ordset(key()),
+              nested = false,
               context = undefined :: riakc_datatype:context() }).
 
 -type datatype() :: counter | flag | register | set | map.
@@ -101,10 +103,21 @@
 new() ->
     #map{}.
 
+%% @doc Creates a new, empty nested map container type.
+-spec nested() -> crdt_map().
+nested() ->
+    #map{nested=true}.
+
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> crdt_map().
 new(Values, Context) when is_list(Values) ->
     #map{value=orddict:from_list(Values), context=Context}.
+
+%% @doc Creates a new nested map with the specified key-value pairs and context.
+-spec nested([raw_entry()], riakc_datatype:context()) -> crdt_map().
+nested(Values, Context) ->
+    Map = new(Values, Context),
+    Map#map{nested=true}.
 
 %% @doc Gets the original value of the map.
 -spec value(crdt_map()) -> [raw_entry()].
@@ -138,7 +151,7 @@ type() -> map.
 %% does not exist simply records a remove operation.
 %% @throws undefined_context
 -spec erase(key(), crdt_map()) -> crdt_map().
-erase(_Key, #map{context=undefined}) ->
+erase(_Key, #map{context=undefined,nested=false}) ->
     throw(undefined_context);
 erase(Key, #map{removes=R}=M) ->
     M#map{removes=ordsets:add_element(Key, R)}.
@@ -195,9 +208,9 @@ find_or_new(Key, Values) ->
     Mod = type_module(Key),
     case orddict:find(Key, Values) of
         {ok, Found} ->
-            Mod:new(Found, undefined);
+            Mod:nested(Found, undefined);
         error ->
-            Mod:new()
+            Mod:nested()
     end.
 
 %% @doc Determines the module for the container type of the value

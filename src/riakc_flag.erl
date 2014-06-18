@@ -38,6 +38,7 @@
 
 %% Callbacks
 -export([new/0, new/2,
+         nested/0, nested/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -60,10 +61,21 @@
 new() ->
     #flag{}.
 
+%% @doc Creates a new, empty nested flag container type.
+-spec nested() -> flag().
+nested() ->
+    new().
+
 %% @doc Creates a new flag with the specified value and context.
 -spec new(boolean(), riakc_datatype:context()) -> flag().
 new(Value, _Context) when is_boolean(Value) ->
     #flag{value=Value}.
+
+%% @doc Creates a new nested flag with the specified value and
+%% context.
+-spec nested(boolean(), riakc_datatype:context()) -> flag().
+nested(Value, Context) ->
+    new(Value, Context).
 
 %% @doc Extracts the original value of the flag. true is enabled,
 %% false is disabled.

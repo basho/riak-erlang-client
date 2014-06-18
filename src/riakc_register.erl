@@ -38,6 +38,7 @@
 
 %% Callbacks
 -export([new/0, new/2,
+         nested/0, nested/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -59,10 +60,20 @@
 new() ->
     #register{value = <<>>}.
 
+%% @doc Creates a new, empty nested register container type.
+-spec nested() -> register().
+nested() ->
+    new().
+
 %% @doc Creates a new register with the specified value and context.
 -spec new(binary(), riakc_datatype:context()) -> register().
 new(Value, _Context) when is_binary(Value) ->
     #register{value=Value}.
+
+%% @doc Creates a new nested register with the specified value and context.
+-spec nested(binary(), riakc_datatype:context()) -> register().
+nested(Value, Context) ->
+    new(Value, Context).
 
 %% @doc Extracts the value of the register.
 -spec value(register()) -> binary() | undefined.
