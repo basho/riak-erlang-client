@@ -163,7 +163,7 @@ erase(Key, #map{removes=R}=M) ->
 %% passed to the function.
 -spec update(key(), update_fun(), crdt_map()) -> crdt_map().
 update(Key, Fun, #map{value=V, updates=U0}=M) ->
-    U = orddict:store(Key, Fun(find_or_new(Key, V)), U0),
+    U = orddict:store(Key, Fun(find_or_new(Key, V, U0)), U0),
     M#map{updates=U}.
 
 %% ==== Queries ====
@@ -204,13 +204,18 @@ fold(Fun, Acc0, #map{value=Entries}) ->
 
 %% ==== Internal functions ====
 
-find_or_new(Key, Values) ->
+find_or_new(Key, Values, Updates) ->
     Mod = type_module(Key),
-    case orddict:find(Key, Values) of
+    case orddict:find(Key, Updates) of
         {ok, Found} ->
-            Mod:nested(Found, undefined);
+            Found;
         error ->
-            Mod:nested()
+            case orddict:find(Key, Values) of
+                {ok, Found} ->
+                    Found;
+                error ->
+                    Mod:nested()
+            end
     end.
 
 %% @doc Determines the module for the container type of the value
