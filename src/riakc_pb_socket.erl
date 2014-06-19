@@ -3501,13 +3501,13 @@ live_node_tests() ->
                     reset_riak(),
                     {ok, Pid} = start_link(test_ip(), test_port()),
                     ok = riakc_pb_socket:update_type(Pid,
-                                     {<<"map_bucket">>, <<"42bucket">>}, <<"key">>,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
                                      riakc_map:to_op(riakc_map:update({<<"set">>, set},
                                                                       fun(S) ->
                                                                               riakc_set:add_element(<<"X">>,
                                                                                                     riakc_set:add_element(<<"Y">>, S))
                                                                       end, riakc_map:new()))),
-                    {ok, M0} = riakc_pb_socket:fetch_type(Pid, {<<"map_bucket">>, <<"42bucket">>}, <<"key">>),
+                    {ok, M0} = riakc_pb_socket:fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
                     L0 = riakc_map:fetch({<<"set">>, set}, M0),
                     ?assert(lists:member(<<"X">>, L0)),
                     ?assert(lists:member(<<"Y">>, L0)),
@@ -3519,7 +3519,7 @@ live_node_tests() ->
                                           M0),
 
                     ok = riakc_pb_socket:update_type(Pid,
-                                     {<<"map_bucket">>, <<"42bucket">>}, <<"key">>,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
                                      riakc_map:to_op(M1)),
                     {ok, M2} = riakc_pb_socket:fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
                     L1 = riakc_map:fetch({<<"set">>, set}, M2),
@@ -3571,12 +3571,13 @@ live_node_tests() ->
                                                      {<<"map_bucket">>, <<"bucket">>},
                                                      <<"key">>,
                                      riakc_map:to_op(
+                                       riakc_map:update(
                                        {<<"register">>, register},
                                        fun(R) ->
                                                riakc_register:set(
                                                  term_to_binary({"barney", "rubble", StoneInRussian}),
                                                  R)
-                                       end, riakc_map:new())),
+                                       end, riakc_map:new()))),
                     {ok, M0} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
                     R0 = riakc_map:fetch({<<"register">>, register}, M0),
                     ?assertEqual(binary_to_term(R0), {"barney", "rubble", StoneInRussian}),
@@ -3585,12 +3586,13 @@ live_node_tests() ->
                                                      {<<"map_bucket">>, <<"bucket">>},
                                                      <<"key">>,
                                      riakc_map:to_op(
+                                       riakc_map:update(
                                        {<<"register">>, register},
                                        fun(R) ->
                                                riakc_register:set(
                                                  term_to_binary({"barney", "rubble", StoneInThai}),
                                                  R)
-                                       end, M0)),
+                                       end, M0))),
 
                     {ok, M1} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
                     R1 = riakc_map:fetch({<<"register">>, register}, M1),
