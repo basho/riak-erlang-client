@@ -54,7 +54,6 @@
 
 %% Callbacks
 -export([new/0, new/2,
-         nested/0, nested/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -72,7 +71,6 @@
 -record(set, {value = ordsets:new() :: ordsets:ordset(binary()),
               adds = ordsets:new() :: ordsets:ordset(binary()),
               removes = ordsets:new() :: ordsets:ordset(binary()),
-              nested = false,
               context = undefined :: riakc_datatype:context() }).
 
 -export_type([riakc_set/0, set_op/0]).
@@ -86,24 +84,12 @@
 new() ->
     #set{}.
 
-%% @doc Creates a new, empty nested set container type.
--spec nested() -> riakc_set().
-nested() ->
-    #set{nested=true}.
-
 %% @doc Creates a new set container with the given members and opaque
 %% context.
 -spec new([binary()], riakc_datatype:context()) -> riakc_set().
 new(Value, Context) when is_list(Value) ->
     #set{value=ordsets:from_list(Value),
          context=Context}.
-
-%% @doc Creates a new nested set container with the given members and opaque
-%% context.
--spec nested([binary()], riakc_datatype:context()) -> riakc_set().
-nested(Value, Context) ->
-    Set = new(Value, Context),
-    Set#set{nested=true}.
 
 %% @doc Returns the original value of the set as an ordset.
 -spec value(riakc_set()) -> ordsets:ordset(binary()).
@@ -138,7 +124,7 @@ add_element(Bin, #set{adds=A0}=Set) when is_binary(Bin) ->
 %% @doc Removes an element from the set.
 %% @throws undefined_context
 -spec del_element(binary(), riakc_set()) -> riakc_set().
-del_element(_Bin, #set{context=undefined,nested=false}) ->
+del_element(_Bin, #set{context=undefined}) ->
     throw(undefined_context);
 del_element(Bin, #set{removes=R0}=Set) when is_binary(Bin) ->
     Set#set{removes=ordsets:add_element(Bin, R0)}.

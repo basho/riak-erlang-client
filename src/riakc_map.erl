@@ -57,7 +57,6 @@
 
 %% Callbacks
 -export([new/0, new/2,
-         nested/0, nested/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -78,7 +77,6 @@
 -record(map, {value = [] :: [raw_entry()], %% orddict
               updates = [] :: [entry()], %% orddict
               removes = [] :: ordsets:ordset(key()),
-              nested = false,
               context = undefined :: riakc_datatype:context() }).
 
 -type datatype() :: counter | flag | register | set | map.
@@ -103,11 +101,6 @@
 new() ->
     #map{}.
 
-%% @doc Creates a new, empty nested map container type.
--spec nested() -> crdt_map().
-nested() ->
-    #map{nested=true}.
-
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> crdt_map().
 new(Values, Context) when is_list(Values) ->
@@ -120,7 +113,7 @@ populate_types(List, Context) ->
     lists:foldl(
       fun({Key, Value}, Accum) ->
               Mod = type_module(Key),
-              Accum ++ [{Key, Mod:nested(Value, Context)}]
+              Accum ++ [{Key, Mod:new(Value, Context)}]
       end, [], List).
 
 %% @doc Convert nested data types to external form
@@ -131,12 +124,6 @@ depopulate_types(List) ->
               Mod = type_module(Key),
               Accum ++ [{Key, Mod:value(Value)}]
       end, [], List).
-
-%% @doc Creates a new nested map with the specified key-value pairs and context.
--spec nested([raw_entry()], riakc_datatype:context()) -> crdt_map().
-nested(Values, Context) ->
-    Map = new(Values, Context),
-    Map#map{nested=true}.
 
 %% @doc Gets the original value of the map.
 -spec value(crdt_map()) -> [raw_entry()].
@@ -170,7 +157,7 @@ type() -> map.
 %% does not exist simply records a remove operation.
 %% @throws undefined_context
 -spec erase(key(), crdt_map()) -> crdt_map().
-erase(_Key, #map{context=undefined,nested=false}) ->
+erase(_Key, #map{context=undefined}) ->
     throw(undefined_context);
 erase(Key, #map{removes=R}=M) ->
     M#map{removes=ordsets:add_element(Key, R)}.
@@ -234,7 +221,7 @@ find_or_new(Key, Values, Updates) ->
                 {ok, Found} ->
                     Found;
                 error ->
-                    Mod:nested()
+                    Mod:new()
             end
     end.
 

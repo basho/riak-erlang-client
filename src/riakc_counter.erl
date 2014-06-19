@@ -36,7 +36,6 @@
 
 %% Callbacks
 -export([new/0, new/2,
-         nested/0, nested/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -61,22 +60,11 @@
 new() ->
     #counter{}.
 
-%% @doc Creates a new nested counter type with a value of 0.
--spec nested() -> counter().
-nested() ->
-    new().
-
 %% @doc Creates a new counter type with the passed integer and
 %% context.
 -spec new(integer(), riakc_datatype:context()) -> counter().
 new(Value, _Context) when is_integer(Value) ->
     #counter{value=Value}.
-
-%% @doc Creates a new nested counter type with the passed integer and
-%% context.
--spec nested(integer(), riakc_datatype:context()) -> counter().
-nested(Value, Context) ->
-    new(Value, Context).
 
 %% @doc Gets the original value of the counter.
 -spec value(counter()) -> integer().
