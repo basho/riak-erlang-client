@@ -3606,7 +3606,8 @@ live_node_tests() ->
                                                                                                riakc_set:new()))),
                     ?assertThrow(undefined_context, riakc_map:erase({<<"counter">>, counter}, riakc_map:new())),
                     ?assertThrow(undefined_context, riakc_map:erase({<<"set">>, set}, riakc_map:new())),
-                    ?assertThrow(undefined_context, riakc_map:erase({<<"map">>, map}, riakc_map:new()))
+                    ?assertThrow(undefined_context, riakc_map:erase({<<"map">>, map}, riakc_map:new())),
+                    ?assertThrow(undefined_context, riakc_map:update({<<"set">>, set}, fun(S) -> riakc_set:del_element(<<"Y">>, S) end, riakc_map:new()))
              end)},
      {"delete bogus item from set",
          ?_test(begin

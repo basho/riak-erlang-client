@@ -111,15 +111,16 @@ nested() ->
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> crdt_map().
 new(Values, Context) when is_list(Values) ->
-    #map{value=orddict:from_list(populate_types(Values)), context=Context}.
+    #map{value=orddict:from_list(populate_types(Values, Context)), context=Context}.
 
 %% @doc Convert nested values from Riak into "real" data types
--spec populate_types(list(raw_entry())) -> list(riakc_datatype:datatype()).
-populate_types(List) ->
+-spec populate_types(list(raw_entry()), riakc_datatype:context()) ->
+                            list(riakc_datatype:datatype()).
+populate_types(List, Context) ->
     lists:foldl(
       fun({Key, Value}, Accum) ->
               Mod = type_module(Key),
-              Accum ++ [{Key, Mod:nested(Value, undefined)}]
+              Accum ++ [{Key, Mod:nested(Value, Context)}]
       end, [], List).
 
 %% @doc Convert nested data types to external form
