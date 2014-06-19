@@ -111,7 +111,25 @@ nested() ->
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> crdt_map().
 new(Values, Context) when is_list(Values) ->
-    #map{value=orddict:from_list(Values), context=Context}.
+    #map{value=orddict:from_list(populate_types(Values)), context=Context}.
+
+%% @doc Convert nested values from Riak into "real" data types
+-spec populate_types(list(raw_entry())) -> list(riakc_datatype:datatype()).
+populate_types(List) ->
+    lists:foldl(
+      fun({Key, Value}, Accum) ->
+              Mod = type_module(Key),
+              Accum ++ [{Key, Mod:nested(Value, undefined)}]
+      end, [], List).
+
+%% @doc Convert nested data types to external form
+-spec depopulate_types(list(raw_entry())) -> list(riakc_datatype:datatype()).
+depopulate_types(List) ->
+    lists:foldl(
+      fun({Key, Value}, Accum) ->
+              Mod = type_module(Key),
+              Accum ++ [{Key, Mod:value(Value)}]
+      end, [], List).
 
 %% @doc Creates a new nested map with the specified key-value pairs and context.
 -spec nested([raw_entry()], riakc_datatype:context()) -> crdt_map().
@@ -121,7 +139,7 @@ nested(Values, Context) ->
 
 %% @doc Gets the original value of the map.
 -spec value(crdt_map()) -> [raw_entry()].
-value(#map{value=V}) -> V.
+value(#map{value=V}) -> depopulate_types(V).
 
 %% @doc Extracts an operation from the map that can be encoded into an
 %% update request.
@@ -177,7 +195,8 @@ size(#map{value=Entries}) ->
 %% map. If the key is not present, an exception is generated.
 -spec fetch(key(), crdt_map()) -> term().
 fetch(Key, #map{value=Entries}) ->
-    orddict:fetch(Key, Entries).
+    Mod = type_module(Key),
+    Mod:value(orddict:fetch(Key, Entries)).
 
 %% @doc Searches for a key in the map. Returns `{ok, UnwrappedValue}'
 %% when the key is present, or `error' if the key is not present in
