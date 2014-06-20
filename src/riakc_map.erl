@@ -74,7 +74,7 @@
          fetch_keys/1,
          fold/3]).
 
--record(map, {value = [] :: [raw_entry()], %% orddict
+-record(map, {value = [] :: [entry()], %% orddict
               updates = [] :: [entry()], %% orddict
               removes = [] :: ordsets:ordset(key()),
               context = undefined :: riakc_datatype:context() }).
