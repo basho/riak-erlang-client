@@ -96,10 +96,10 @@ type() -> flag.
 enable(#flag{}=F) -> F#flag{op=enable}.
 
 %% @doc Disables the flag, setting its value to false.
-%% @throws undefined_context
+%% @throws context_required
 -spec disable(flag()) -> flag().
 disable(#flag{context=undefined}) ->
-    throw(undefined_context);
+    throw(context_required);
 disable(#flag{}=F) -> F#flag{op=disable}.
 
 -ifdef(EQC).

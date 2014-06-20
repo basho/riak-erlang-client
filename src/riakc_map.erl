@@ -160,10 +160,10 @@ type() -> map.
 
 %% @doc Removes a key and its value from the map. Removing a key that
 %% does not exist simply records a remove operation.
-%% @throws undefined_context
+%% @throws context_required
 -spec erase(key(), crdt_map()) -> crdt_map().
 erase(_Key, #map{context=undefined}) ->
-    throw(undefined_context);
+    throw(context_required);
 erase(Key, #map{removes=R}=M) ->
     M#map{removes=ordsets:add_element(Key, R)}.
 

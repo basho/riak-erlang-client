@@ -127,10 +127,10 @@ add_element(Bin, #set{adds=A0}=Set) when is_binary(Bin) ->
     Set#set{adds=ordsets:add_element(Bin, A0)}.
 
 %% @doc Removes an element from the set.
-%% @throws undefined_context
+%% @throws context_required
 -spec del_element(binary(), riakc_set()) -> riakc_set().
 del_element(_Bin, #set{context=undefined}) ->
-    throw(undefined_context);
+    throw(context_required);
 del_element(Bin, #set{removes=R0}=Set) when is_binary(Bin) ->
     Set#set{removes=ordsets:add_element(Bin, R0)}.
 
