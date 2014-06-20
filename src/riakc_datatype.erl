@@ -51,6 +51,10 @@
 %% creating a new key.
 -callback new() -> datatype().
 
+%% Constructs a new, empty container with context for the type. Use
+%% this when creating a new key inside a map.
+-callback new(context()) -> datatype().
+
 %% Constructs a new container for the type with the specified
 %% value and opaque server-side context. This should only be used
 %% internally by the client code.
