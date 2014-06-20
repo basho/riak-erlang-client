@@ -48,7 +48,8 @@
 -export([enable/1, disable/1]).
 
 -record(flag, {value = false :: boolean(),
-               op = undefined :: undefined | flag_op()}).
+               op = undefined :: undefined | flag_op(),
+               context = undefined :: undefined | boolean()}).
 
 -export_type([flag/0, flag_op/0]).
 -opaque flag() :: #flag{}.
@@ -60,17 +61,15 @@
 new() ->
     #flag{}.
 
-%% @doc Creates a new flag with the passed context. It's ignored, but
-%% we need this constructor for new nested (in maps) objects on the
-%% fly
+%% @doc Creates a new flag with the passed context.
 -spec new(riakc_datatype:context()) -> flag().
-new(_Context) ->
-    #flag{}.
+new(Context) ->
+    #flag{context=Context}.
 
 %% @doc Creates a new flag with the specified value and context.
 -spec new(boolean(), riakc_datatype:context()) -> flag().
-new(Value, _Context) when is_boolean(Value) ->
-    #flag{value=Value}.
+new(Value, Context) when is_boolean(Value) ->
+    #flag{value=Value, context=Context}.
 
 %% @doc Extracts the original value of the flag. true is enabled,
 %% false is disabled.
@@ -97,12 +96,15 @@ type() -> flag.
 enable(#flag{}=F) -> F#flag{op=enable}.
 
 %% @doc Disables the flag, setting its value to false.
+%% @throws undefined_context
 -spec disable(flag()) -> flag().
+disable(#flag{context=undefined}) ->
+    throw(undefined_context);
 disable(#flag{}=F) -> F#flag{op=disable}.
 
 -ifdef(EQC).
 gen_type() ->
-    ?LET(Flag, bool(), new(Flag, undefined)).
+    ?LET(Flag, bool(), new(Flag, binary())).
 
 gen_op() ->
     {elements([enable, disable]), []}.
