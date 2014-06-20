@@ -53,7 +53,7 @@
 -endif.
 
 %% Callbacks
--export([new/0, new/2,
+-export([new/0, new/1, new/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -83,6 +83,11 @@
 -spec new() -> riakc_set().
 new() ->
     #set{}.
+
+%% @doc Creates a new set container with the opaque context.
+-spec new(riakc_datatype:context()) -> riakc_set().
+new(Context) ->
+    #set{context=Context}.
 
 %% @doc Creates a new set container with the given members and opaque
 %% context.

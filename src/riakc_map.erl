@@ -56,7 +56,7 @@
 -endif.
 
 %% Callbacks
--export([new/0, new/2,
+-export([new/0, new/1, new/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -100,6 +100,11 @@
 -spec new() -> crdt_map().
 new() ->
     #map{}.
+
+%% @doc Creates a new map with the specified context.
+-spec new(riakc_datatype:context()) -> crdt_map().
+new(Context) ->
+    #map{context=Context}.
 
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> crdt_map().
@@ -168,8 +173,8 @@ erase(Key, #map{removes=R}=M) ->
 %% it will be initialized to the empty value for its type before being
 %% passed to the function.
 -spec update(key(), update_fun(), crdt_map()) -> crdt_map().
-update(Key, Fun, #map{value=V, updates=U0}=M) ->
-    U = orddict:store(Key, Fun(find_or_new(Key, V, U0)), U0),
+update(Key, Fun, #map{value=V, updates=U0, context=C}=M) ->
+    U = orddict:store(Key, Fun(find_or_new(Key, V, U0, C)), U0),
     M#map{updates=U}.
 
 %% ==== Queries ====
@@ -211,7 +216,7 @@ fold(Fun, Acc0, #map{value=Entries}) ->
 
 %% ==== Internal functions ====
 
-find_or_new(Key, Values, Updates) ->
+find_or_new(Key, Values, Updates, MapContext) ->
     Mod = type_module(Key),
     case orddict:find(Key, Updates) of
         {ok, Found} ->
@@ -221,7 +226,7 @@ find_or_new(Key, Values, Updates) ->
                 {ok, Found} ->
                     Found;
                 error ->
-                    Mod:new()
+                    Mod:new(MapContext)
             end
     end.
 

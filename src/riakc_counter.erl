@@ -35,7 +35,7 @@
 -endif.
 
 %% Callbacks
--export([new/0, new/2,
+-export([new/0, new/1, new/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -58,6 +58,13 @@
 %% @doc Creates a new counter type with a value of 0.
 -spec new() -> counter().
 new() ->
+    #counter{}.
+
+%% @doc Creates a new counter type with the passed context. It's
+%% ignored, but we need this constructor for new nested (in maps)
+%% objects on the fly
+-spec new(riakc_datatype:context()) -> counter().
+new(_Context) ->
     #counter{}.
 
 %% @doc Creates a new counter type with the passed integer and

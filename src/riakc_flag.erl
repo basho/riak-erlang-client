@@ -37,7 +37,7 @@
 -endif.
 
 %% Callbacks
--export([new/0, new/2,
+-export([new/0, new/1, new/2,
          value/1,
          to_op/1,
          is_type/1,
@@ -58,6 +58,13 @@
 %% @doc Creates a new, empty flag container type.
 -spec new() -> flag().
 new() ->
+    #flag{}.
+
+%% @doc Creates a new flag with the passed context. It's ignored, but
+%% we need this constructor for new nested (in maps) objects on the
+%% fly
+-spec new(riakc_datatype:context()) -> flag().
+new(_Context) ->
     #flag{}.
 
 %% @doc Creates a new flag with the specified value and context.
