@@ -49,7 +49,7 @@
 
 -record(flag, {value = false :: boolean(),
                op = undefined :: undefined | flag_op(),
-               context = undefined :: undefined | boolean()}).
+               context = undefined :: riakc_datatype:context()}).
 
 -export_type([flag/0, flag_op/0]).
 -opaque flag() :: #flag{}.
