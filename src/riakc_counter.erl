@@ -48,7 +48,7 @@
 
 -record(counter, {
           value = 0 :: integer(),
-          increment = 0 :: integer()
+          increment = undefined :: undefined | integer()
          }).
 
 -export_type([counter/0, counter_op/0]).
@@ -85,6 +85,8 @@ increment(Counter) ->
 
 %% @doc Increments the counter by the passed amount.
 -spec increment(integer(), counter()) -> counter().
+increment(Amount, #counter{increment=undefined}=Counter) when is_integer(Amount) ->
+    Counter#counter{increment=Amount};
 increment(Amount, #counter{increment=Incr}=Counter) when is_integer(Amount) ->
     Counter#counter{increment=Incr+Amount}.
 
@@ -100,10 +102,10 @@ decrement(Amount, Counter) ->
 
 %% @doc Extracts the changes to this counter as an operation.
 -spec to_op(counter()) -> riakc_datatype:update(counter_op()).
-to_op(#counter{increment=Incr}) when Incr /= 0->
-    {type(), {increment, Incr}, undefined};
-to_op(#counter{}) ->
-    undefined.
+to_op(#counter{increment=undefined}) ->
+    undefined;
+to_op(#counter{increment=Incr}) ->
+    {type(), {increment, Incr}, undefined}.
 
 %% @doc Determines whether the passed term is a counter container.
 -spec is_type(term()) -> boolean().

@@ -74,7 +74,7 @@
          fetch_keys/1,
          fold/3]).
 
--record(map, {value = [] :: [entry()], %% orddict
+-record(map, {value = [] :: [raw_entry()], %% orddict
               updates = [] :: [entry()], %% orddict
               removes = [] :: ordsets:ordset(key()),
               context = undefined :: riakc_datatype:context() }).
@@ -109,30 +109,11 @@ new(Context) ->
 %% @doc Creates a new map with the specified key-value pairs and context.
 -spec new([raw_entry()], riakc_datatype:context()) -> crdt_map().
 new(Values, Context) when is_list(Values) ->
-    #map{value=orddict:from_list(populate_types(Values, Context)), context=Context}.
-
-%% @doc Convert nested values from Riak into "real" data types
--spec populate_types(list(raw_entry()), riakc_datatype:context()) ->
-                            list(riakc_datatype:datatype()).
-populate_types(List, Context) ->
-    lists:foldl(
-      fun({Key, Value}, Accum) ->
-              Mod = type_module(Key),
-              Accum ++ [{Key, Mod:new(Value, Context)}]
-      end, [], List).
-
-%% @doc Convert nested data types to external form
--spec depopulate_types(list(raw_entry())) -> list(riakc_datatype:datatype()).
-depopulate_types(List) ->
-    lists:foldl(
-      fun({Key, Value}, Accum) ->
-              Mod = type_module(Key),
-              Accum ++ [{Key, Mod:value(Value)}]
-      end, [], List).
+    #map{value=orddict:from_list(Values), context=Context}.
 
 %% @doc Gets the original value of the map.
 -spec value(crdt_map()) -> [raw_entry()].
-value(#map{value=V}) -> depopulate_types(V).
+value(#map{value=V}) -> V.
 
 %% @doc Extracts an operation from the map that can be encoded into an
 %% update request.
@@ -173,9 +154,12 @@ erase(Key, #map{removes=R}=M) ->
 %% it will be initialized to the empty value for its type before being
 %% passed to the function.
 -spec update(key(), update_fun(), crdt_map()) -> crdt_map().
-update(Key, Fun, #map{value=V, updates=U0, context=C}=M) ->
-    U = orddict:store(Key, Fun(find_or_new(Key, V, U0, C)), U0),
-    M#map{updates=U}.
+update(Key, Fun, #map{updates=U}=M) ->
+    %% In order, search for key in 1) batched updates, then 2) values
+    %% taken from Riak, and otherwise 3) create a new, empty data type
+    %% for the update
+    O = update_value_or_new(orddict:find(Key, U), Key, M),
+    M#map{updates=orddict:store(Key, Fun(O), U)}.
 
 %% ==== Queries ====
 
@@ -188,8 +172,7 @@ size(#map{value=Entries}) ->
 %% map. If the key is not present, an exception is generated.
 -spec fetch(key(), crdt_map()) -> term().
 fetch(Key, #map{value=Entries}) ->
-    Mod = type_module(Key),
-    Mod:value(orddict:fetch(Key, Entries)).
+    orddict:fetch(Key, Entries).
 
 %% @doc Searches for a key in the map. Returns `{ok, UnwrappedValue}'
 %% when the key is present, or `error' if the key is not present in
@@ -216,20 +199,6 @@ fold(Fun, Acc0, #map{value=Entries}) ->
 
 %% ==== Internal functions ====
 
-find_or_new(Key, Values, Updates, MapContext) ->
-    Mod = type_module(Key),
-    case orddict:find(Key, Updates) of
-        {ok, Found} ->
-            Found;
-        error ->
-            case orddict:find(Key, Values) of
-                {ok, Found} ->
-                    Found;
-                error ->
-                    Mod:new(MapContext)
-            end
-    end.
-
 %% @doc Determines the module for the container type of the value
 %% pointed to by the given key.
 %% @private
@@ -243,6 +212,27 @@ fold_extract_op(Key, Value, Acc0) ->
     Mod = type_module(Key),
     {_Type, Op, _Context} =  Mod:to_op(Value),
     [{update, Key, Op} | Acc0].
+
+%% @doc Helper function for `update/3`. Look for a key in this map's
+%% updates, and if not found, invoke `value_or_new/3`.
+-spec update_value_or_new({'ok', riakc_datatype:datatype()} | error,
+                          key(), crdt_map()) ->
+                                 riakc_datatype:datatype().
+update_value_or_new({ok, O}, _Key, _Map) ->
+    O;
+update_value_or_new(error, Key, #map{value=V, context=C}) ->
+    Mod = type_module(Key),
+    value_or_new(orddict:find(Key, V), Mod, C).
+
+%% @doc Helper function for `update/3`. Look for a key in the map's
+%% value, and if not found, instantiate a new data type record.
+-spec value_or_new({'ok', term()} | error,
+                   module(), riakc_datatype:context()) ->
+                          riakc_datatype:datatype().
+value_or_new({ok, Val}, Mod, Context) ->
+    Mod:new(Val, Context);
+value_or_new(error, Mod, Context) ->
+    Mod:new(Context).
 
 -ifdef(EQC).
 gen_type() ->
