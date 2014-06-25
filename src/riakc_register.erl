@@ -25,8 +25,9 @@
 %% value with last-write-wins semantics. Like the other
 %% eventually-consistent types, the original fetched value is
 %% unmodified by setting the register. Instead, the new value is
-%% captured for later application in Riak. Use `dirty_value/1' to
-%% access the local "view" of the updated value.
+%% captured for later application in Riak.
+%%
+%% Registers are only available as values in maps.
 -module(riakc_register).
 -behaviour(riakc_datatype).
 
@@ -36,9 +37,8 @@
 -endif.
 
 %% Callbacks
--export([new/0, new/2,
+-export([new/0, new/1, new/2,
          value/1,
-         dirty_value/1,
          to_op/1,
          is_type/1,
          type/0]).
@@ -46,7 +46,7 @@
 %% Operations
 -export([set/2]).
 
--record(register, {value :: binary(),
+-record(register, {value = <<>> :: binary(),
                    new_value = undefined :: undefined | binary()}).
 
 -export_type([register/0, register_op/0]).
@@ -57,7 +57,14 @@
 %% @doc Creates a new, empty register container type.
 -spec new() -> register().
 new() ->
-    #register{value = <<>>}.
+    #register{}.
+
+%% @doc Creates a new counter type with the passed context. It's
+%% ignored, but we need this constructor for new nested (in maps)
+%% objects on the fly
+-spec new(riakc_datatype:context()) -> register().
+new(_Context) ->
+    #register{}.
 
 %% @doc Creates a new register with the specified value and context.
 -spec new(binary(), riakc_datatype:context()) -> register().
@@ -67,12 +74,6 @@ new(Value, _Context) when is_binary(Value) ->
 %% @doc Extracts the value of the register.
 -spec value(register()) -> binary() | undefined.
 value(#register{value=V}) -> V.
-
-%% @doc Extracts the value of the register with locally-queued
-%% operations applied.
--spec dirty_value(register()) -> binary().
-dirty_value(#register{value=V, new_value=undefined}) -> V;
-dirty_value(#register{new_value=NV}) -> NV.
 
 %% @doc Extracts an operation from the register that can be encoded
 %% into an update request.

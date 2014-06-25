@@ -3478,7 +3478,338 @@ live_node_tests() ->
                     {ok, Result} = search(Pid, Index, <<"name_s:בָּרָא">>),
                     1 == Result#search_results.num_found
                 end )
-         end)}}
+         end)}},
+     {"trivial set delete",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>, riakc_set:new()))),
+                    {ok, S0} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S0)),
+                    ?assertEqual(riakc_set:size(S0), 1),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:del_element(<<"X">>, S0))),
+                    {ok, S1} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assertNot(riakc_set:is_element(<<"X">>, S1)),
+                    ?assertEqual(riakc_set:size(S1), 0)
+             end)},
+     {"add and remove items in nested set in map",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(riakc_map:update({<<"set">>, set},
+                                                                      fun(S) ->
+                                                                              riakc_set:add_element(<<"X">>,
+                                                                                                    riakc_set:add_element(<<"Y">>, S))
+                                                                      end, riakc_map:new()))),
+                    {ok, M0} = riakc_pb_socket:fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L0 = riakc_map:fetch({<<"set">>, set}, M0),
+                    ?assert(lists:member(<<"X">>, L0)),
+                    ?assert(lists:member(<<"Y">>, L0)),
+                    ?assertEqual(length(L0), 2),
+
+                    M1 = riakc_map:update({<<"set">>, set},
+                                          fun(S) -> riakc_set:del_element(<<"X">>,
+                                                                          riakc_set:add_element(<<"Z">>, S)) end,
+                                          M0),
+
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M1)),
+                    {ok, M2} = riakc_pb_socket:fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L1 = riakc_map:fetch({<<"set">>, set}, M2),
+
+                    ?assert(lists:member(<<"Y">>, L1)),
+                    ?assert(lists:member(<<"Z">>, L1)),
+                    ?assertEqual(length(L1), 2)
+             end)},
+     {"increment nested counter",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(riakc_map:update({<<"counter">>, counter},
+                                                                      fun(C) ->
+                                                                              riakc_counter:increment(5, C)
+                                                                      end, riakc_map:new()))),
+                    {ok, M0} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    C0 = riakc_map:fetch({<<"counter">>, counter}, M0),
+                    ?assertEqual(C0, 5),
+
+                    M1 = riakc_map:update({<<"counter">>, counter},
+                                          fun(C) -> riakc_counter:increment(200, C) end,
+                                          M0),
+                    M2 = riakc_map:update({<<"counter">>, counter},
+                                          fun(C) -> riakc_counter:decrement(117, C) end,
+                                          M1),
+                    M3 = riakc_map:update({<<"counter">>, counter},
+                                          fun(C) -> riakc_counter:increment(256, C) end,
+                                          M2),
+
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M3)),
+                    {ok, M4} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    C1 = riakc_map:fetch({<<"counter">>, counter}, M4),
+                    ?assertEqual(C1, 344)
+             end)},
+     {"updated nested lww register",
+         ?_test(begin
+                    reset_riak(),
+                    %% The word "stone" translated into Russian and Thai
+                    StoneInRussian = [1051,1102,1082,32,1082,1072,1084,1085,1077,1091,1083,1086,
+                                      1074,1080,1090,1077,1083,1103],
+                    StoneInThai = [3627,3636,3609],
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                                     {<<"map_bucket">>, <<"bucket">>},
+                                                     <<"key">>,
+                                     riakc_map:to_op(
+                                       riakc_map:update(
+                                       {<<"register">>, register},
+                                       fun(R) ->
+                                               riakc_register:set(
+                                                 term_to_binary({"barney", "rubble", StoneInRussian}),
+                                                 R)
+                                       end, riakc_map:new()))),
+                    {ok, M0} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    R0 = riakc_map:fetch({<<"register">>, register}, M0),
+                    ?assertEqual(binary_to_term(R0), {"barney", "rubble", StoneInRussian}),
+
+                    ok = riakc_pb_socket:update_type(Pid,
+                                                     {<<"map_bucket">>, <<"bucket">>},
+                                                     <<"key">>,
+                                     riakc_map:to_op(
+                                       riakc_map:update(
+                                       {<<"register">>, register},
+                                       fun(R) ->
+                                               riakc_register:set(
+                                                 term_to_binary({"barney", "rubble", StoneInThai}),
+                                                 R)
+                                       end, M0))),
+
+                    {ok, M1} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    R1 = riakc_map:fetch({<<"register">>, register}, M1),
+                    ?assertEqual(binary_to_term(R1), {"barney", "rubble", StoneInThai})
+             end)},
+     {"throw exception for undefined context for delete",
+         ?_test(begin
+                    reset_riak(),
+                    ?assertThrow(context_required, riakc_set:del_element(<<"X">>,
+                                                                         riakc_set:add_element(<<"X">>,
+                                                                                               riakc_set:new()))),
+                    ?assertThrow(context_required, riakc_map:erase({<<"counter">>, counter}, riakc_map:new())),
+                    ?assertThrow(context_required, riakc_map:erase({<<"set">>, set}, riakc_map:new())),
+                    ?assertThrow(context_required, riakc_map:erase({<<"map">>, map}, riakc_map:new())),
+                    ?assertThrow(context_required, riakc_map:update({<<"set">>, set}, fun(S) -> riakc_set:del_element(<<"Y">>, S) end, riakc_map:new())),
+                    ?assertThrow(context_required, riakc_flag:disable(riakc_flag:new()))
+             end)},
+     {"delete bogus item from set",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>, riakc_set:new()))),
+                    {ok, S0} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S0)),
+                    ?assertEqual(riakc_set:size(S0), 1),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:del_element(<<"Y">>, S0))),
+                    {ok, S1} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S1)),
+                    ?assertEqual(riakc_set:size(S1), 1)
+             end)},
+     {"add redundant item to set",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>, riakc_set:new()))),
+                    {ok, S0} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S0)),
+                    ?assertEqual(riakc_set:size(S0), 1),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>, S0))),
+                    {ok, S1} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S1)),
+                    ?assertEqual(riakc_set:size(S1), 1)
+             end)},
+     {"add and remove redundant item to/from set",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>,
+                                                                           riakc_set:add_element(<<"Y">>, riakc_set:new())))),
+                    {ok, S0} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S0)),
+                    ?assert(riakc_set:is_element(<<"Y">>, S0)),
+                    ?assertEqual(riakc_set:size(S0), 2),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:del_element(<<"X">>, riakc_set:add_element(<<"X">>, S0)))),
+                    {ok, S1} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S1)),
+                    ?assert(riakc_set:is_element(<<"Y">>, S1)),
+                    ?assertEqual(riakc_set:size(S1), 2)
+             end)},
+     {"remove then add redundant item from/to set",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>,
+                                                                           riakc_set:add_element(<<"Y">>, riakc_set:new())))),
+                    {ok, S0} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S0)),
+                    ?assert(riakc_set:is_element(<<"Y">>, S0)),
+                    ?assertEqual(riakc_set:size(S0), 2),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>, riakc_set:del_element(<<"X">>, S0)))),
+                    {ok, S1} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S1)),
+                    ?assert(riakc_set:is_element(<<"Y">>, S1)),
+                    ?assertEqual(riakc_set:size(S1), 2)
+             end)},
+     {"remove item from set with outdated context",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>,
+                                                                           riakc_set:add_element(<<"Y">>, riakc_set:new())))),
+                    {ok, S0} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S0)),
+                    ?assert(riakc_set:is_element(<<"Y">>, S0)),
+                    ?assertEqual(riakc_set:size(S0), 2),
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:add_element(<<"Z">>, riakc_set:new()))),
+
+                    ok = update_type(Pid,
+                                     {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_set:to_op(riakc_set:del_element(<<"Z">>, S0))),
+                    {ok, S1} = fetch_type(Pid, {<<"set_bucket">>, <<"bucket">>}, <<"key">>),
+                    ?assert(riakc_set:is_element(<<"X">>, S1)),
+                    ?assert(riakc_set:is_element(<<"Y">>, S1)),
+                    ?assert(riakc_set:is_element(<<"Z">>, S1)),
+                    ?assertEqual(riakc_set:size(S1), 3)
+             end)},
+     {"add item to nested set in map while also removing set",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(riakc_map:update({<<"set">>, set},
+                                                                      fun(S) ->
+                                                                              riakc_set:add_element(<<"X">>,
+                                                                                                    riakc_set:add_element(<<"Y">>, S))
+                                                                      end, riakc_map:new()))),
+                    {ok, M0} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L0 = riakc_map:fetch({<<"set">>, set}, M0),
+                    ?assert(lists:member(<<"X">>, L0)),
+                    ?assert(lists:member(<<"Y">>, L0)),
+                    ?assertEqual(length(L0), 2),
+
+                    M1 = riakc_map:update({<<"set">>, set},
+                                          fun(S) -> riakc_set:add_element(<<"Z">>, S) end,
+                                          M0),
+                    M2 = riakc_map:erase({<<"set">>, set}, M1),
+
+                    ok = update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M2)),
+                    {ok, M3} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L1 = riakc_map:fetch({<<"set">>, set}, M3),
+
+                    ?assert(lists:member(<<"Z">>, L1)),
+                    ?assertEqual(length(L1), 1)
+             end)},
+     {"increment nested counter in map while also removing counter",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(riakc_map:update({<<"counter">>, counter},
+                                                                      fun(C) ->
+                                                                              riakc_counter:increment(5, C)
+                                                                      end, riakc_map:new()))),
+                    {ok, M0} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    C0 = riakc_map:fetch({<<"counter">>, counter}, M0),
+                    ?assertEqual(C0, 5),
+
+                    M1 = riakc_map:update({<<"counter">>, counter},
+                                          fun(C) -> riakc_counter:increment(2, C) end,
+                                          M0),
+                    M2 = riakc_map:erase({<<"counter">>, counter}, M1),
+
+                    ok = update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M2)),
+                    {ok, M3} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    C1 = riakc_map:fetch({<<"counter">>, counter}, M3),
+
+                    %% Expected result depends on combination of vnodes involved, so accept either answer
+                    ?assert(C1 =:= 2 orelse C1 =:= 7)
+             end)},
+     {"add item to nested set in nested map in map while also removing nested map",
+         ?_test(begin
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    M0 = riakc_map:update({<<"map">>, map},
+                                          fun(M) ->
+                                                  riakc_map:update({<<"set">>, set},
+                                                                   fun(S) ->
+                                                                           riakc_set:add_element(<<"X">>,
+                                                                                                 riakc_set:add_element(<<"Y">>, S))
+                                                                   end,
+                                                                   M)
+                                          end,
+                                          riakc_map:new()),
+                    ok = riakc_pb_socket:update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M0)),
+
+                    {ok, M1} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L0 = orddict:fetch({<<"set">>, set}, riakc_map:fetch({<<"map">>, map}, M1)),
+
+                    ?assert(lists:member(<<"X">>, L0)),
+                    ?assert(lists:member(<<"Y">>, L0)),
+                    ?assertEqual(length(L0), 2),
+
+                    M2 = riakc_map:update({<<"map">>, map},
+                                          fun(M) -> riakc_map:update({<<"set">>, set},
+                                                                     fun(S) -> riakc_set:add_element(<<"Z">>, S) end,
+                                                                     M)
+                                          end,
+                                          M1),
+                    M3 = riakc_map:erase({<<"map">>, map}, M2),
+
+                    ok = update_type(Pid,
+                                     {<<"map_bucket">>, <<"bucket">>}, <<"key">>,
+                                     riakc_map:to_op(M3)),
+                    {ok, M4} = fetch_type(Pid, {<<"map_bucket">>, <<"bucket">>}, <<"key">>),
+                    L1 = orddict:fetch({<<"set">>, set}, riakc_map:fetch({<<"map">>, map}, M4)),
+
+                    ?assert(lists:member(<<"Z">>, L1)),
+                    ?assertEqual(length(L1), 1)
+             end)}
      ].
 
 -endif.

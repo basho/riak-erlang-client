@@ -51,6 +51,10 @@
 %% creating a new key.
 -callback new() -> datatype().
 
+%% Constructs a new, empty container with context for the type. Use
+%% this when creating a new key inside a map.
+-callback new(context()) -> datatype().
+
 %% Constructs a new container for the type with the specified
 %% value and opaque server-side context. This should only be used
 %% internally by the client code.
@@ -59,10 +63,6 @@
 %% Returns the original, unmodified value of the type. This does
 %% not include the application of any locally-queued operations.
 -callback value(datatype()) -> term().
-
-%% Returns a version of the value with locally-queued operations
-%% applied.
--callback dirty_value(datatype()) -> term().
 
 %% Extracts an operation from the container that can be encoded
 %% into an update request. 'undefined' should be returned if the type

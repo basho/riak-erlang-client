@@ -1,7 +1,7 @@
 RIAK_CONF = ${RIAK_DIR}/etc/riak.conf
 ADVANCED_CONF = ${RIAK_DIR}/etc/advanced.config
 # RIAK = ${RIAK_DIR}/bin/riak
-# RIAK_ADMIN = ${RIAK_DIR}/bin/riak-admin
+RIAK_ADMIN = ${RIAK_DIR}/bin/riak-admin
 # CERTS_DIR = $(shell pwd)/../src/test/resources
 
 preconfigure:
@@ -14,7 +14,7 @@ preconfigure:
 	echo "nodename = riak@127.0.0.1" >> ${RIAK_CONF}
 
 configure:
-	@echo "Nothing to configure on the live node."
+	./crdt-setup ${RIAK_ADMIN}
 
 compile:
 	@${MAKE} -C .. compile
