@@ -103,6 +103,7 @@ module_for_term(T) ->
 -ifdef(EQC).
 -define(MODPROPS, [prop_value_immutable,
                    prop_unmodified,
+                   prop_map_nested_defaults,
                    prop_modified,
                    prop_is_type,
                    prop_module_for_term]).
@@ -151,6 +152,16 @@ prop_unmodified(Mod) ->
     %% An unmodified type returns 'undefined' for the op.
     ?FORALL(Type, Mod:gen_type(),
             Mod:to_op(Type) == undefined).
+
+prop_map_nested_defaults(_Mod) ->
+    %% A map with default-initialized nested objects should
+    %% effectively be a no-op
+    ?FORALL(Nops, non_empty(list(riakc_map:gen_key())),
+            begin
+                Map = lists:foldl(fun(K,M) -> riakc_map:update(K, fun(V) -> V end, M) end,
+                                  riakc_map:new(), Nops),
+                undefined == riakc_map:to_op(Map)
+            end).
 
 prop_modified(Mod) ->
     %% A modified type does not return 'undefined' for the op.
