@@ -210,7 +210,12 @@ type_module({_, T}) ->
 -spec fold_extract_op(key(), riakc_datatype:datatype(), [field_update()]) -> [field_update()].
 fold_extract_op(Key, Value, Acc0) ->
     Mod = type_module(Key),
-    {_Type, Op, _Context} =  Mod:to_op(Value),
+    fold_ignore_noop(Mod:to_op(Value), Key, Acc0).
+
+%% @doc Assist `fold_extract_op/3`
+fold_ignore_noop(undefined, _Key, Acc0) ->
+    Acc0;
+fold_ignore_noop({_Type, Op, _Context}, Key, Acc0) ->
     [{update, Key, Op} | Acc0].
 
 %% @doc Helper function for `update/3`. Look for a key in this map's
