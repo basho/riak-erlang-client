@@ -52,6 +52,7 @@
 
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
+-include_lib("eunit/include/eunit.hrl").
 -compile(export_all).
 -endif.
 
@@ -240,6 +241,9 @@ value_or_new(error, Mod, Context) ->
     Mod:new(Context).
 
 -ifdef(EQC).
+-define(QC_OUT(P),
+        eqc:on_output(fun(Str, Args) -> io:format(user, Str, Args) end, P)).
+
 gen_type() ->
     ?SIZED(S, gen_type(S)).
 
@@ -294,4 +298,18 @@ gen_update_fun2(Type) ->
                                      erlang:apply(Mod, Op, Args ++ [Acc])
                              end, R, OpList)
          end).
+
+prop_nested_defaults() ->
+    %% A map with default-initialized nested objects should
+    %% effectively be a no-op
+    ?FORALL(Nops, non_empty(list(gen_key())),
+            begin
+                Map = lists:foldl(fun(K,M) -> riakc_map:update(K, fun(V) -> V end, M) end,
+                                  riakc_map:new(), Nops),
+                undefined == riakc_map:to_op(Map)
+            end).
+
+prop_nested_defaults_test() ->
+    ?assert(eqc:quickcheck(?QC_OUT(prop_nested_defaults()))).
+
 -endif.
