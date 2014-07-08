@@ -52,6 +52,7 @@
 
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
+-include_lib("eunit/include/eunit.hrl").
 -compile(export_all).
 -endif.
 
@@ -210,7 +211,12 @@ type_module({_, T}) ->
 -spec fold_extract_op(key(), riakc_datatype:datatype(), [field_update()]) -> [field_update()].
 fold_extract_op(Key, Value, Acc0) ->
     Mod = type_module(Key),
-    {_Type, Op, _Context} =  Mod:to_op(Value),
+    fold_ignore_noop(Mod:to_op(Value), Key, Acc0).
+
+%% @doc Assist `fold_extract_op/3`
+fold_ignore_noop(undefined, _Key, Acc0) ->
+    Acc0;
+fold_ignore_noop({_Type, Op, _Context}, Key, Acc0) ->
     [{update, Key, Op} | Acc0].
 
 %% @doc Helper function for `update/3`. Look for a key in this map's
@@ -235,6 +241,9 @@ value_or_new(error, Mod, Context) ->
     Mod:new(Context).
 
 -ifdef(EQC).
+-define(QC_OUT(P),
+        eqc:on_output(fun(Str, Args) -> io:format(user, Str, Args) end, P)).
+
 gen_type() ->
     ?SIZED(S, gen_type(S)).
 
@@ -289,4 +298,18 @@ gen_update_fun2(Type) ->
                                      erlang:apply(Mod, Op, Args ++ [Acc])
                              end, R, OpList)
          end).
+
+prop_nested_defaults() ->
+    %% A map with default-initialized nested objects should
+    %% effectively be a no-op
+    ?FORALL(Nops, non_empty(list(gen_key())),
+            begin
+                Map = lists:foldl(fun(K,M) -> riakc_map:update(K, fun(V) -> V end, M) end,
+                                  riakc_map:new(), Nops),
+                undefined == riakc_map:to_op(Map)
+            end).
+
+prop_nested_defaults_test() ->
+    ?assert(eqc:quickcheck(?QC_OUT(prop_nested_defaults()))).
+
 -endif.
