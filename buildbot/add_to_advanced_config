@@ -1,0 +1,11 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+main([File|Additions]) ->
+    {ok, Settings} = file:consult(File),
+    Terms = [ begin
+                  {ok, Tokens, _} = erl_scan:string(String),
+                  {ok, Term} = erl_parse:parse_term(Tokens),
+                  Term
+              end || String <- Additions ],
+    Merged = lists:flatten(Terms++Settings),
+    file:write_file(File, io_lib:format("~p.",[Merged])).
