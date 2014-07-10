@@ -10,7 +10,7 @@ main([File|Additions]) ->
                   {ok, Term} = erl_parse:parse_term(Tokens),
                   Term
               end || String <- Additions ],
-    Merged = overlay(Settings, Terms),
+    Merged = overlay(lists:flatten(Settings), Terms),
     file:write_file(File, io_lib:format("~p.",[Merged])).
 
 overlay(InputConfig, NewConfig) ->
