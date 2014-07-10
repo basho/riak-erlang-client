@@ -1,4 +1,4 @@
-%% #!/usr/bin/env escript
+#!/usr/bin/env escript
 %% -*- erlang -*-
 main([File|Additions]) ->
     Settings = case file:consult(File) of
