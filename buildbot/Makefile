@@ -7,7 +7,7 @@ RIAK_ADMIN = ${RIAK_DIR}/bin/riak-admin
 preconfigure:
 	echo "storage_backend = memory" >> ${RIAK_CONF}
 	echo "anti_entropy = passive" >> ${RIAK_CONF}
-	echo "[{riak_kv,[{test,true}]}]." > ${ADVANCED_CONF}
+	./add_to_advanced_config ${ADVANCED_CONF} '{riak_kv,[{test,true}]}.'
 	echo "search = on" >> ${RIAK_CONF}
 	echo "listener.protobuf.internal = 127.0.0.1:8087" >> ${RIAK_CONF}
 	echo "distributed_cookie = riak" >> ${RIAK_CONF}

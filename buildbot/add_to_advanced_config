@@ -1,0 +1,32 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+main([File|Additions]) ->
+    Settings = case file:consult(File) of
+                   {ok, S} -> S;
+                   _ -> []
+               end,
+    Terms = [ begin
+                  {ok, Tokens, _} = erl_scan:string(String),
+                  {ok, Term} = erl_parse:parse_term(Tokens),
+                  Term
+              end || String <- Additions ],
+    Merged = overlay(lists:flatten(Settings), Terms),
+    file:write_file(File, io_lib:format("~p.",[Merged])).
+
+overlay(InputConfig, NewConfig) ->
+    lists:foldl(
+        fun({ApplicationName, ApplicationConfig}, OuterAcc) ->
+            GeneratedApplicationConfig = proplists:get_value(ApplicationName, InputConfig, []),
+            Updated = lists:foldl(
+                fun({ConfigElementName, ConfigElement}, Acc) ->
+                    replace_proplist_value(ConfigElementName, ConfigElement, Acc)
+                end,
+                GeneratedApplicationConfig,
+                ApplicationConfig),
+            replace_proplist_value(ApplicationName, Updated, OuterAcc)
+        end,
+        InputConfig,
+        NewConfig).
+
+replace_proplist_value(Key, Value, Proplist) ->
+    lists:keystore(Key, 1, Proplist, {Key, Value}).
