@@ -92,9 +92,9 @@ assign(NewVal, MR) ->
 to_op(#rangereg{new_value=undefined}) ->
     undefined;
 to_op(#rangereg{new_value=NewVal}) ->
-    {rangereg, {assign, NewVal}, undefined}.
+    {type(), {assign, NewVal}, undefined}.
 
--spec is_type(term()) -> bool.
+-spec is_type(term()) -> boolean().
 is_type(T) -> is_record(T, rangereg).
 
 -spec type() -> atom().
