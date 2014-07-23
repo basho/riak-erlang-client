@@ -31,7 +31,7 @@
 
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
--compile(export_all).
+-export([gen_type/0, gen_op/0]).
 -endif.
 
 %% Callbacks

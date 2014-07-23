@@ -78,6 +78,15 @@
 %% set, map, counter.
 -callback type() -> typename().
 
+
+-ifdef(EQC).
+
+-callback gen_type() -> eqc_gen:gen(datatype()).
+
+-callback gen_op()   -> eqc_gen:gen({atom(), [term()]}).
+
+-endif.
+
 %% Returns the module that is a container for the given abstract
 %% type.
 -spec module_for_type(Type::atom()) -> module().

@@ -53,6 +53,7 @@
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eunit/include/eunit.hrl").
+-export([gen_type/0, gen_op/0]).
 -compile(export_all).
 -endif.
 
