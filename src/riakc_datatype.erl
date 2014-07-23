@@ -34,7 +34,8 @@
 -endif.
 
 
--define(MODULES, [riakc_set, riakc_counter, riakc_flag, riakc_register, riakc_map]).
+-define(MODULES, [riakc_set, riakc_counter, riakc_flag, riakc_register, riakc_map,
+                  riakc_rangereg]).
 
 -export([module_for_type/1,
          module_for_term/1]).
@@ -94,7 +95,8 @@ module_for_type(set)      -> riakc_set;
 module_for_type(counter)  -> riakc_counter;
 module_for_type(flag)     -> riakc_flag;
 module_for_type(register) -> riakc_register;
-module_for_type(map)      -> riakc_map.
+module_for_type(map)      -> riakc_map;
+module_for_type(rangereg) -> riakc_rangereg.
 
 %% @doc Returns the appropriate container module for the given term,
 %% if possible.
