@@ -1,4 +1,4 @@
-.PHONY: deps doc
+.PHONY: all clean compile deps distclean
 
 all: deps compile
 
