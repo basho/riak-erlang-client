@@ -213,14 +213,14 @@ fold_extract_op(Key, Value, Acc0) ->
     Mod = type_module(Key),
     fold_ignore_noop(Mod:to_op(Value), Key, Acc0).
 
-%% @doc Assist `fold_extract_op/3`
+%% @doc Assist `fold_extract_op/3'
 fold_ignore_noop(undefined, _Key, Acc0) ->
     Acc0;
 fold_ignore_noop({_Type, Op, _Context}, Key, Acc0) ->
     [{update, Key, Op} | Acc0].
 
 %% @doc Helper function for `update/3`. Look for a key in this map's
-%% updates, and if not found, invoke `value_or_new/3`.
+%% updates, and if not found, invoke `value_or_new/3'.
 -spec update_value_or_new({'ok', riakc_datatype:datatype()} | error,
                           key(), crdt_map()) ->
                                  riakc_datatype:datatype().
