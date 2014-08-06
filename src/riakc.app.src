@@ -7,13 +7,8 @@
                   stdlib,
                   riak_pb
                  ]},
-  {modules, [riakc_counter,
-	     riakc_map,
-	     riakc_register,
-	     riakc_datatype,
+  {modules, [
 	     riakc_obj,
-	     riakc_set,
-	     riakc_flag,
 	     riakc_pb_socket]},
   {registered, []},
   {env, [
