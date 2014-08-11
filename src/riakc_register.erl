@@ -59,7 +59,7 @@
 new() ->
     #register{}.
 
-%% @doc Creates a new counter type with the passed context. It's
+%% @doc Creates a new register type with the passed context. It's
 %% ignored, but we need this constructor for new nested (in maps)
 %% objects on the fly
 -spec new(riakc_datatype:context()) -> register().
