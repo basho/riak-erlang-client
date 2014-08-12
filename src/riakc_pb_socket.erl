@@ -41,6 +41,7 @@
          set_options/2, set_options/3,
          is_connected/1, is_connected/2,
          ping/1, ping/2,
+	 queue_len/1,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
@@ -192,6 +193,9 @@ ping(Pid) ->
 -spec ping(pid(), timeout()) -> pong.  % or gen_server:call exception on timeout
 ping(Pid, Timeout) ->
     gen_server:call(Pid, {req, rpbpingreq, Timeout}, infinity).
+
+queue_len(Pid) ->
+    gen_server:call(Pid, {check, queue_len}, infinity).
 
 %% @doc Get the client id for this connection
 %% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
@@ -989,6 +993,8 @@ init([Address, Port, Options]) ->
     end.
 
 %% @private
+handle_call({check, queue_len}, _From, #state{queue = Queue} = State) ->
+    {reply, queue:len(Queue), State};
 handle_call({req, Msg, Timeout}, From, State) when State#state.sock =:= undefined ->
     case State#state.queue_if_disconnected of
         true ->
