@@ -35,7 +35,7 @@
          type/0]).
 
 -export([max/1, min/1, first/1, last/1,
-         assign/2]).
+         add/2]).
 
 -record(range, {
           value :: undefined | fieldlist(),
@@ -84,8 +84,8 @@ last(#range{value=undefined}) -> undefined;
 last(#range{value=Val}) ->
     proplists:get_value(last, Val).
 
--spec assign(integer(), range()) -> range().
-assign(NewVal, MR) ->
+-spec add(integer(), range()) -> range().
+add(NewVal, MR) ->
     MR#range{new_value=NewVal}.
 
 -spec to_op(range()) -> riakc_datatype:update(range_op()).
@@ -106,7 +106,7 @@ gen_type() ->
     ?LET(Value, int(), new([{max, Value}, {min, Value-10}, {first, Value-10}, {last, Value}], undefined)).
 
 gen_op() ->
-    {assign,
+    {add,
      ?LET(NewVal, int(), [NewVal])
     }.
 
