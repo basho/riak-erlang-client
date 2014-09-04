@@ -20,7 +20,7 @@
 %%
 %% -------------------------------------------------------------------
 
--module(riakc_rangereg).
+-module(riakc_range).
 -behaviour(riakc_datatype).
 
 -ifdef(EQC).
@@ -37,68 +37,68 @@
 -export([max/1, min/1, first/1, last/1,
          assign/2]).
 
--record(rangereg, {
+-record(range, {
           value :: undefined | fieldlist(),
           new_value = undefined :: undefined | integer()
          }).
 -type field() :: min | max | first | last.
 -type fieldlist() :: [{field(), integer()}].
 
--export_type([rangereg/0, rangereg_op/0]).
--opaque rangereg() :: #rangereg{}.
--type rangereg_op() :: {assign, integer()}.
+-export_type([range/0, range_op/0]).
+-opaque range() :: #range{}.
+-type range_op() :: {assign, integer()}.
 
--spec new() -> rangereg().
+-spec new() -> range().
 new() ->
-    #rangereg{}.
+    #range{}.
 
--spec new(riakc_datatype:context()) -> rangereg().
+-spec new(riakc_datatype:context()) -> range().
 new(_Ctx) ->
-    #rangereg{}.
+    #range{}.
 
--spec new(fieldlist(), riakc_datatype:context()) -> rangereg().
+-spec new(fieldlist(), riakc_datatype:context()) -> range().
 new(Value, _Ctx) ->
-    #rangereg{value=Value}.
+    #range{value=Value}.
 
--spec value(rangereg()) -> undefined | fieldlist().
-value(#rangereg{value=Val}) ->
+-spec value(range()) -> undefined | fieldlist().
+value(#range{value=Val}) ->
     Val.
 
--spec max(rangereg()) -> undefined | integer().
-max(#rangereg{value=undefined}) -> undefined;
-max(#rangereg{value=Val}) ->
+-spec max(range()) -> undefined | integer().
+max(#range{value=undefined}) -> undefined;
+max(#range{value=Val}) ->
     proplists:get_value(max, Val).
 
--spec min(rangereg()) -> undefined | integer().
-min(#rangereg{value=undefined}) -> undefined;
-min(#rangereg{value=Val}) ->
+-spec min(range()) -> undefined | integer().
+min(#range{value=undefined}) -> undefined;
+min(#range{value=Val}) ->
     proplists:get_value(min, Val).
 
--spec first(rangereg()) -> undefined | integer().
-first(#rangereg{value=undefined}) -> undefined;
-first(#rangereg{value=Val}) ->
+-spec first(range()) -> undefined | integer().
+first(#range{value=undefined}) -> undefined;
+first(#range{value=Val}) ->
     proplists:get_value(first, Val).
 
--spec last(rangereg()) -> undefined | integer().
-last(#rangereg{value=undefined}) -> undefined;
-last(#rangereg{value=Val}) ->
+-spec last(range()) -> undefined | integer().
+last(#range{value=undefined}) -> undefined;
+last(#range{value=Val}) ->
     proplists:get_value(last, Val).
 
--spec assign(integer(), rangereg()) -> rangereg().
+-spec assign(integer(), range()) -> range().
 assign(NewVal, MR) ->
-    MR#rangereg{new_value=NewVal}.
+    MR#range{new_value=NewVal}.
 
--spec to_op(rangereg()) -> riakc_datatype:update(rangereg_op()).
-to_op(#rangereg{new_value=undefined}) ->
+-spec to_op(range()) -> riakc_datatype:update(range_op()).
+to_op(#range{new_value=undefined}) ->
     undefined;
-to_op(#rangereg{new_value=NewVal}) ->
-    {type(), {assign, NewVal}, undefined}.
+to_op(#range{new_value=NewVal}) ->
+    {type(), {add, NewVal}, undefined}.
 
 -spec is_type(term()) -> boolean().
-is_type(T) -> is_record(T, rangereg).
+is_type(T) -> is_record(T, range).
 
 -spec type() -> atom().
-type() -> rangereg.
+type() -> range.
 
 -ifdef(EQC).
 
