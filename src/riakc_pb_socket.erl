@@ -42,10 +42,12 @@
          is_connected/1, is_connected/2,
          ping/1, ping/2,
 	 queue_len/1,
+	 set_max_queue_len/2,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
-         get/3, get/4, get/5,
+         get1/3, get1/4, get1/5,
+         get2/3, get2/4, get2/5,
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
@@ -119,10 +121,13 @@
                 sock :: port(),       % gen_tcp socket
                 active :: #request{} | undefined,     % active request
                 queue :: queue() | undefined,      % queue of pending requests
+		queue_len=0 :: non_neg_integer(), % queue size
+		max_queue_len=infinity, % max queue size
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
-                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
+                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer(),
+		test_val = false}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
@@ -192,10 +197,13 @@ ping(Pid) ->
 %% @doc Ping the server specifying timeout
 -spec ping(pid(), timeout()) -> pong.  % or gen_server:call exception on timeout
 ping(Pid, Timeout) ->
-    gen_server:call(Pid, {req, rpbpingreq, Timeout}, infinity).
+    gen_server:call(Pid, {req, rpbpingreq, Timeout, 1}, infinity).
 
 queue_len(Pid) ->
     gen_server:call(Pid, {check, queue_len}, infinity).
+
+set_max_queue_len(Pid, MQL) when is_integer(MQL); MQL == infinity ->
+    gen_server:call(Pid, {set_max_queue_len, MQL}, infinity).
 
 %% @doc Get the client id for this connection
 %% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
@@ -206,7 +214,7 @@ get_client_id(Pid) ->
 %% @doc Get the client id for this connection specifying timeout
 -spec get_client_id(pid(), timeout()) -> {ok, client_id()} | {error, term()}.
 get_client_id(Pid, Timeout) ->
-    gen_server:call(Pid, {req, rpbgetclientidreq, Timeout}, infinity).
+    gen_server:call(Pid, {req, rpbgetclientidreq, Timeout, 1}, infinity).
 
 %% @doc Set the client id for this connection
 %% @equiv set_client_id(Pid, ClientId, default_timeout(set_client_id_timeout))
@@ -217,7 +225,7 @@ set_client_id(Pid, ClientId) ->
 %% @doc Set the client id for this connection specifying timeout
 -spec set_client_id(pid(), client_id(), timeout()) -> {ok, client_id()} | {error, term()}.
 set_client_id(Pid, ClientId, Timeout) ->
-    gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}, Timeout}, infinity).
+    gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}, Timeout, 1}, infinity).
 
 %% @doc Get the server information for this connection
 %% @equiv get_server_info(Pid, default_timeout(get_server_info_timeout))
@@ -228,34 +236,63 @@ get_server_info(Pid) ->
 %% @doc Get the server information for this connection specifying timeout
 -spec get_server_info(pid(), timeout()) -> {ok, server_info()} | {error, term()}.
 get_server_info(Pid, Timeout) ->
-    gen_server:call(Pid, {req, rpbgetserverinforeq, Timeout}, infinity).
+    gen_server:call(Pid, {req, rpbgetserverinforeq, Timeout, 1}, infinity).
 
 %% @doc Get bucket/key from the server.
 %%      Will return {error, notfound} if the key is not on the server.
-%% @equiv get(Pid, Bucket, Key, [], default_timeout(get_timeout))
--spec get(pid(), bucket(), key()) -> {ok, riakc_obj()} | {error, term()}.
-get(Pid, Bucket, Key) ->
-    get(Pid, Bucket, Key, [], default_timeout(get_timeout)).
+%% @equiv get1(Pid, Bucket, Key, [], default_timeout(get_timeout))
+-spec get1(pid(), bucket(), key()) -> {ok, riakc_obj()} | {error, term()}.
+get1(Pid, Bucket, Key) ->
+    get1(Pid, Bucket, Key, [], default_timeout(get_timeout)).
 
 %% @doc Get bucket/key from the server specifying timeout.
 %%      Will return {error, notfound} if the key is not on the server.
-%% @equiv get(Pid, Bucket, Key, Options, Timeout)
--spec get(pid(), bucket(), key(), TimeoutOrOptions::timeout() |  get_options()) ->
+%% @equiv get1(Pid, Bucket, Key, Options, Timeout)
+-spec get1(pid(), bucket(), key(), TimeoutOrOptions::timeout() |  get_options()) ->
                  {ok, riakc_obj()} | {error, term()} | unchanged.
-get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
-    get(Pid, Bucket, Key, [], Timeout);
-get(Pid, Bucket, Key, Options) ->
-    get(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
+get1(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    get1(Pid, Bucket, Key, [], Timeout);
+get1(Pid, Bucket, Key, Options) ->
+    get1(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
 
 %% @doc Get bucket/key from the server supplying options and timeout.
 %%      <code>unchanged</code> will be returned when the
 %%      <code>{if_modified, Vclock}</code> option is specified and the
 %%      object is unchanged.
--spec get(pid(), bucket(), key(), get_options(), timeout()) ->
-                 {ok, riakc_obj()} | {error, term()} | unchanged.
-get(Pid, Bucket, Key, Options, Timeout) ->
+-spec get1(pid(), bucket(), key(), get_options(), timeout()) ->
+    {ok, riakc_obj()} | {error, term()} | unchanged.
+
+get1(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
+
+%% @doc Get bucket/key from the server.
+%%      Will return {error, notfound} if the key is not on the server.
+%% @equiv get2(Pid, Bucket, Key, [], default_timeout(get_timeout))
+-spec get2(pid(), bucket(), key()) -> {ok, riakc_obj()} | {error, term()}.
+get2(Pid, Bucket, Key) ->
+    get2(Pid, Bucket, Key, [], default_timeout(get_timeout)).
+
+%% @doc Get bucket/key from the server specifying timeout.
+%%      Will return {error, notfound} if the key is not on the server.
+%% @equiv get2(Pid, Bucket, Key, Options, Timeout)
+-spec get2(pid(), bucket(), key(), TimeoutOrOptions::timeout() |  get_options()) ->
+                 {ok, riakc_obj()} | {error, term()} | unchanged.
+get2(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    get2(Pid, Bucket, Key, [], Timeout);
+get2(Pid, Bucket, Key, Options) ->
+    get2(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
+
+%% @doc Get bucket/key from the server supplying options and timeout.
+%%      <code>unchanged</code> will be returned when the
+%%      <code>{if_modified, Vclock}</code> option is specified and the
+%%      object is unchanged.
+-spec get2(pid(), bucket(), key(), get_options(), timeout()) ->
+    {ok, riakc_obj()} | {error, term()} | unchanged.
+
+get2(Pid, Bucket, Key, Options, Timeout) ->
+    Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
+    gen_server:call(Pid, {req, Req, Timeout, 2}, infinity).
 
 %% @doc Put the metadata/value in the object under bucket/key
 %% @equiv put(Pid, Obj, [])
@@ -288,15 +325,16 @@ put(Pid, Obj, Options) ->
 %% @end
 -spec put(pid(), riakc_obj(), put_options(), timeout()) ->
                  ok | {ok, riakc_obj()} | riakc_obj() | {ok, key()} | {error, term()}.
+% put(_Pid, _Obj, _Options, _Timeout) -> ok.
 put(Pid, Obj, Options, Timeout) ->
     Content = riak_pb_kv_codec:encode_content({riakc_obj:get_update_metadata(Obj),
-                                               riakc_obj:get_update_value(Obj)}),
+					       riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
-                      #rpbputreq{bucket = riakc_obj:bucket(Obj),
-                                 key = riakc_obj:key(Obj),
-                                 vclock = riakc_obj:vclock(Obj),
-                                 content = Content}),
-    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+		      #rpbputreq{bucket = riakc_obj:bucket(Obj),
+				 key = riakc_obj:key(Obj),
+				 vclock = riakc_obj:vclock(Obj),
+				 content = Content}),
+    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
 
 %% @doc Delete the key/value
 %% @equiv delete(Pid, Bucket, Key, [])
@@ -317,7 +355,7 @@ delete(Pid, Bucket, Key, Options) ->
 -spec delete(pid(), bucket(), key(), delete_options(), timeout()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
 
 %% @doc Delete the object at Bucket/Key, giving the vector clock.
 %% @equiv delete_vclock(Pid, Bucket, Key, VClock, [])
@@ -343,7 +381,7 @@ delete_vclock(Pid, Bucket, Key, VClock, Options) ->
 delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
             vclock=VClock}),
-    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
 
 
 %% @doc Delete the riak object.
@@ -405,7 +443,7 @@ stream_list_buckets(Pid, Options) ->
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout,
                                                   stream=true},
-                          ServerTimeout, {ReqId, self()}}, infinity).
+                          ServerTimeout, {ReqId, self()}, 1}, infinity).
 
 legacy_list_buckets(Pid, Options) ->
     ServerTimeout =
@@ -414,7 +452,7 @@ legacy_list_buckets(Pid, Options) ->
             ST -> ST
         end,
     gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
-                          ServerTimeout}, infinity).
+                          ServerTimeout, 1}, infinity).
 
 
 %% @doc List all keys in a bucket
@@ -470,7 +508,7 @@ stream_list_keys(Pid, Bucket, Options) ->
         end,
     ReqMsg = #rpblistkeysreq{bucket = Bucket, timeout = ServerTimeout},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, ServerTimeout, {ReqId, self()}},
+    gen_server:call(Pid, {req, ReqMsg, ServerTimeout, {ReqId, self()}, 1},
                     infinity).
 
 %% @doc Get bucket properties.
@@ -490,7 +528,7 @@ get_bucket(Pid, Bucket, Timeout) ->
                                                            {error, term()}.
 get_bucket(Pid, Bucket, Timeout, CallTimeout) ->
     Req = #rpbgetbucketreq{bucket = Bucket},
-    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
 
 %% @doc Set bucket properties.
 %% @equiv set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket_timeout))
@@ -510,7 +548,7 @@ set_bucket(Pid, Bucket, BucketProps, Timeout) ->
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
-    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
 
 %% @doc Reset bucket properties back to the defaults.
 %% @equiv reset_bucket(Pid, Bucket, default_timeout(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout))
@@ -528,7 +566,7 @@ reset_bucket(Pid, Bucket, Timeout) ->
 -spec reset_bucket(pid(), bucket, timeout(), timeout()) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket, Timeout, CallTimeout) ->
     Req = #rpbresetbucketreq{bucket = Bucket},
-    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
 
 %% @doc Perform a MapReduce job across the cluster.
 %%      See the MapReduce documentation for explanation of behavior.
@@ -738,7 +776,7 @@ search(Pid, Index, SearchQuery, Options, Timeout) ->
                     {ok, search_result()} | {error, term()}.
 search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout) ->
     Req = search_options(Options, #rpbsearchqueryreq{q = SearchQuery, index = Index}),
-    gen_server:call(Pid, {req, Req, Timeout}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
 
 
 %% Deprecated, argument explosion functions for indexes
@@ -827,9 +865,9 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, Timeout, {ReqId, self()}};
+                   {req, Req, Timeout, {ReqId, self()}, 1};
                false ->
-                   {req, Req, Timeout}
+                   {req, Req, Timeout, 1}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -879,9 +917,9 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, Timeout, {ReqId, self()}};
+                   {req, Req, Timeout, {ReqId, self()}, 1};
                false ->
-                   {req, Req, Timeout}
+                   {req, Req, Timeout, 1}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -913,7 +951,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(O
                           continuation=Continuation,
                           timeout=Timeout},
     ReqId = mk_reqid(),
-    Call = {req, Req, Timeout, {ReqId, self()}},
+    Call = {req, Req, Timeout, {ReqId, self()}, 1},
     gen_server:call(Pid, Call, CallTimeout).
 
 %% @doc Return the default timeout for an operation if none is provided.
@@ -937,7 +975,7 @@ default_timeout(OpTimeout) ->
 -spec tunnel(pid(), msg_id(), binary(), timeout()) -> {ok, binary()} | {error, term()}.
 tunnel(Pid, MsgId, Pkt, Timeout) ->
     Req = {tunneled, MsgId, Pkt},
-    gen_server:call(Pid, {req, Req, Timeout}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
 
 %% @doc increment the counter at `bucket', `key' by `amount'
 -spec counter_incr(pid(), bucket(), key(), integer()) -> ok.
@@ -952,7 +990,7 @@ counter_incr(Pid, Bucket, Key, Amount) ->
     ok | {error, term()}.
 counter_incr(Pid, Bucket, Key, Amount, Options) ->
     Req = counter_incr_options(Options, #rpbcounterupdatereq{bucket=Bucket, key=Key, amount=Amount}),
-    gen_server:call(Pid, {req, Req, default_timeout(put_timeout)}).
+    gen_server:call(Pid, {req, Req, default_timeout(put_timeout), 1}).
 
 %% @doc get the current value of the counter at `Bucket', `Key'.
 -spec counter_val(pid(), bucket(), key()) ->
@@ -966,7 +1004,7 @@ counter_val(Pid, Bucket, Key) ->
                          {ok, integer()} | {error, term()}.
 counter_val(Pid, Bucket, Key, Options) ->
     Req = counter_val_options(Options, #rpbcountergetreq{bucket=Bucket, key=Key}),
-    gen_server:call(Pid, {req, Req, default_timeout(get_timeout)}).
+    gen_server:call(Pid, {req, Req, default_timeout(get_timeout), 1}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -993,30 +1031,39 @@ init([Address, Port, Options]) ->
     end.
 
 %% @private
-handle_call({check, queue_len}, _From, #state{queue = Queue} = State) ->
-    {reply, queue:len(Queue), State};
-handle_call({req, Msg, Timeout}, From, State) when State#state.sock =:= undefined ->
+handle_call({req, _Msg, _Timeout, 2}, _From,
+	    #state{queue_len = QL, max_queue_len = MQL} = State) when QL >= MQL ->
+    {reply, {error, max_queue_len}, State};
+
+handle_call({req, Msg, Timeout, _}, From, State) when State#state.sock =:= undefined ->
     case State#state.queue_if_disconnected of
         true ->
             {noreply, queue_request(new_request(Msg, From, Timeout), State)};
         false ->
             {reply, {error, disconnected}, State}
     end;
-handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.sock =:= undefined ->
+handle_call({req, Msg, Timeout, Ctx, _}, From, State) when State#state.sock =:= undefined ->
     case State#state.queue_if_disconnected of
         true ->
             {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
         false ->
             {reply, {error, disconnected}, State}
     end;
-handle_call({req, Msg, Timeout}, From, State) when State#state.active =/= undefined ->
+
+handle_call({req, Msg, Timeout, _}, From, State) when State#state.active =/= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.active =/= undefined ->
+handle_call({req, Msg, Timeout, Ctx, _}, From, State) when State#state.active =/= undefined ->
     {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
-handle_call({req, Msg, Timeout}, From, State) ->
+handle_call({req, Msg, Timeout, _}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, Msg, Timeout, Ctx}, From, State) ->
+handle_call({req, Msg, Timeout, Ctx, _}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout, Ctx), State)};
+handle_call({set_max_queue_len, MQL}, _From, State) ->
+    {reply, ok, State#state{max_queue_len = MQL}};
+handle_call({check, queue_len}, _From, #state{queue_len = QueueLen} = State) ->
+    {reply, QueueLen, State};
+handle_call({set_test_val, Val}, _From, State) ->
+    {reply, ok, State#state{test_val = Val}};
 handle_call(is_connected, _From, State) ->
     case State#state.sock of
         undefined ->
@@ -1028,7 +1075,9 @@ handle_call({set_options, Options}, _From, State) ->
     {reply, ok, parse_options(Options, State)};
 handle_call(stop, _From, State) ->
     _ = disconnect(State),
-    {stop, normal, ok, State}.
+    {stop, normal, ok, State};
+handle_call(get_state, _From, State) ->
+    {reply, State, State}.
 
 %% @private
 handle_info({tcp_error, _Socket, Reason}, State) ->
@@ -1564,7 +1613,7 @@ send_mapred_req(Pid, MapRed, ClientPid, CallTimeout) ->
            true ->
                Timeout
            end,
-    gen_server:call(Pid, {req, ReqMsg, Timeout1, {ReqId, ClientPid}}, CallTimeout).
+    gen_server:call(Pid, {req, ReqMsg, Timeout1, {ReqId, ClientPid}, 1}, CallTimeout).
 
 %% @private
 %% Make a new request that can be sent or queued
@@ -1678,7 +1727,11 @@ send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.a
 %% Unencoded Request (the normal PB client path)
 send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riak_pb_codec:encode(Request#request.msg),
-    case gen_tcp:send(State#state.sock, Pkt) of
+    Ret = case State#state.test_val of
+	      true -> ok;
+	      _ -> gen_tcp:send(State#state.sock, Pkt)
+	  end,
+    case Ret of
         ok ->
             maybe_reply(after_send(Request, State#state{active = Request}));
         {error, closed} ->
@@ -1707,22 +1760,25 @@ enqueue_or_reply_error(Request, State) ->
 
 %% Queue up a request if one is pending
 %% @private
-queue_request(Request, State) ->
-    State#state{queue = queue:in(Request, State#state.queue)}.
+queue_request(Request, #state{queue_len = QLen,
+			      queue = Q} = State) ->
+    State#state{queue_len = QLen + 1,
+		queue = queue:in(Request, Q)}.
 
 %% Try and dequeue request and send onto the server if one is waiting
 %% @private
-dequeue_request(State) ->
+dequeue_request(#state{queue_len = QLen} = State) ->
     case queue:out(State#state.queue) of
         {empty, _} ->
             State;
         {{value, Request}, Q2} ->
-            send_request(Request, State#state{queue = Q2})
+            send_request(Request, State#state{queue_len = QLen - 1,
+					      queue = Q2})
     end.
 
 %% Remove a queued request by reference - returns same queue if ref not present
 %% @private
-remove_queued_request(Ref, State) ->
+remove_queued_request(Ref, #state{queue_len = QLen} = State) ->
     L = queue:to_list(State#state.queue),
     case lists:keytake(Ref, #request.ref, L) of
         false -> % Ref not queued up
@@ -1730,7 +1786,8 @@ remove_queued_request(Ref, State) ->
         {value, Req, L2} ->
             {reply, Reply, NewState} = on_timeout(Req, State),
             _ = send_caller(Reply, Req),
-            NewState#state{queue = queue:from_list(L2)}
+            NewState#state{queue_len = QLen - 1,
+			   queue = queue:from_list(L2)}
     end.
 
 %% @private
@@ -2219,7 +2276,7 @@ live_node_tests() ->
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
-                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+                 {ok, GO} = ?MODULE:get1(Pid, <<"b">>, <<"k">>),
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
@@ -2230,7 +2287,7 @@ live_node_tests() ->
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [{w, 1}, {dw, 1}, return_body]),
-                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>, 500),
+                 {ok, GO} = ?MODULE:get1(Pid, <<"b">>, <<"k">>, 500),
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
@@ -2241,7 +2298,7 @@ live_node_tests() ->
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [{w, 1}, {dw, 1}, return_body]),
-                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>, [{r, 1}]),
+                 {ok, GO} = ?MODULE:get1(Pid, <<"b">>, <<"k">>, [{r, 1}]),
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
@@ -2252,7 +2309,7 @@ live_node_tests() ->
                  O0 = riakc_obj:new(<<"b">>, <<"k">>),
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, PO} = ?MODULE:put(Pid, O, [{w, all}, {dw, quorum}, return_body]),
-                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>, [{r, one}]),
+                 {ok, GO} = ?MODULE:get1(Pid, <<"b">>, <<"k">>, [{r, one}]),
                  ?assertEqual(riakc_obj:get_contents(PO), riakc_obj:get_contents(GO))
              end)},
 
@@ -2262,10 +2319,10 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  PO = riakc_obj:new(<<"b">>, <<"puttimeouttest">>, <<"value">>),
                  ok = ?MODULE:put(Pid, PO, 500),
-                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"puttimeouttest">>, 500),
+                 {ok, GO} = ?MODULE:get1(Pid, <<"b">>, <<"puttimeouttest">>, 500),
                  ?assertEqual(<<"value">>, riakc_obj:get_value(GO)),
                  ok = ?MODULE:delete(Pid, <<"b">>, <<"puttimeouttest">>, 500),
-                 {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"puttimeouttest">>)
+                 {error, notfound} = ?MODULE:get1(Pid, <<"b">>, <<"puttimeouttest">>)
              end)},
 
      {"update_should_change_value_test()",
@@ -2277,7 +2334,7 @@ live_node_tests() ->
                  {ok, PO} = ?MODULE:put(Pid, O, [return_body]),
                  PO2 = riakc_obj:update_value(PO, <<"v2">>),
                  ok = ?MODULE:put(Pid, PO2),
-                 {ok, GO} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+                 {ok, GO} = ?MODULE:get1(Pid, <<"b">>, <<"k">>),
                  ?assertEqual(<<"v2">>, riakc_obj:get_value(GO))
              end)},
 
@@ -2290,11 +2347,11 @@ live_node_tests() ->
                  O = riakc_obj:update_value(O0, <<"v">>),
                  {ok, _PO} = ?MODULE:put(Pid, O, [return_body]),
                  %% Prove it really got stored
-                 {ok, GO1} = ?MODULE:get(Pid, <<"b">>, <<"k">>),
+                 {ok, GO1} = ?MODULE:get1(Pid, <<"b">>, <<"k">>),
                  ?assertEqual(<<"v">>, riakc_obj:get_value(GO1)),
                  %% Delete and check no longer found
                  ok = ?MODULE:delete(Pid, <<"b">>, <<"k">>),
-                 {error, notfound} = ?MODULE:get(Pid, <<"b">>, <<"k">>)
+                 {error, notfound} = ?MODULE:get1(Pid, <<"b">>, <<"k">>)
              end)},
 
     {"delete missing key test",
@@ -2303,7 +2360,7 @@ live_node_tests() ->
                  {ok, Pid} = start_link(test_ip(), test_port()),
                   %% Delete and check no longer found
                  ok = ?MODULE:delete(Pid, <<"notabucket">>, <<"k">>, [{rw, 1}]),
-                 {error, notfound} = ?MODULE:get(Pid, <<"notabucket">>, <<"k">>)
+                 {error, notfound} = ?MODULE:get1(Pid, <<"notabucket">>, <<"k">>)
              end)},
 
      {"empty_list_buckets_test()",
@@ -2375,18 +2432,18 @@ live_node_tests() ->
                  {ok, Pid2} = start_link(test_ip(), test_port()),
                  ok = set_bucket(Pid1, <<"multibucket">>, [{allow_mult, true}]),
                  ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>),
-                 {error, notfound} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 {error, notfound} = ?MODULE:get1(Pid1, <<"multibucket">>, <<"foo">>),
                  O = riakc_obj:new(<<"multibucket">>, <<"foo">>),
                  O1 = riakc_obj:update_value(O, <<"pid1">>),
                  O2 = riakc_obj:update_value(O, <<"pid2">>),
                  ok = ?MODULE:put(Pid1, O1),
 
                  ok = ?MODULE:put(Pid2, O2),
-                 {ok, O3} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 {ok, O3} = ?MODULE:get1(Pid1, <<"multibucket">>, <<"foo">>),
                  ?assertEqual([<<"pid1">>, <<"pid2">>], lists:sort(riakc_obj:get_values(O3))),
                  O4 = riakc_obj:update_value(riakc_obj:select_sibling(1, O3), <<"resolved">>),
                  ok = ?MODULE:put(Pid1, O4),
-                 {ok, GO} = ?MODULE:get(Pid1, <<"multibucket">>, <<"foo">>),
+                 {ok, GO} = ?MODULE:get1(Pid1, <<"multibucket">>, <<"foo">>),
                  ?assertEqual([<<"resolved">>], lists:sort(riakc_obj:get_values(GO))),
                  ?MODULE:delete(Pid1, <<"multibucket">>, <<"foo">>)
              end)},
@@ -2718,8 +2775,8 @@ live_node_tests() ->
                  ok = rpc:call(TestNode, riak_client, put, [TermObj, 1, C]),
 
                  {ok, Pid} = start_link(test_ip(), test_port()),
-                 {ok, GotBinObj} = ?MODULE:get(Pid, <<"b">>, <<"a_bin">>),
-                 {ok, GotTermObj} = ?MODULE:get(Pid, <<"b">>, <<"a_term">>),
+                 {ok, GotBinObj} = ?MODULE:get1(Pid, <<"b">>, <<"a_bin">>),
+                 {ok, GotTermObj} = ?MODULE:get1(Pid, <<"b">>, <<"a_term">>),
 
                  ?assertEqual(riakc_obj:get_value(GotBinObj), MyBin),
                  ?assertEqual(riakc_obj:get_content_type(GotTermObj),
@@ -2755,15 +2812,15 @@ live_node_tests() ->
                     {ok, Pid} = start_link(test_ip(), test_port()),
                     PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
                     ?MODULE:put(Pid, PO),
-                    {ok, Obj} = ?MODULE:get(Pid, <<"b">>, <<"key">>),
+                    {ok, Obj} = ?MODULE:get1(Pid, <<"b">>, <<"key">>),
                     VClock = riakc_obj:vclock(Obj),
                     %% object hasn't changed
-                    ?assertEqual(unchanged, ?MODULE:get(Pid, <<"b">>, <<"key">>,
+                    ?assertEqual(unchanged, ?MODULE:get1(Pid, <<"b">>, <<"key">>,
                             [{if_modified, VClock}])),
                     %% change the object and make sure unchanged isn't returned
                     P1 = riakc_obj:update_value(Obj, <<"newvalue">>),
                     ?MODULE:put(Pid, P1),
-                    ?assertMatch({ok, _}, ?MODULE:get(Pid, <<"b">>, <<"key">>,
+                    ?assertMatch({ok, _}, ?MODULE:get1(Pid, <<"b">>, <<"key">>,
                             [{if_modified, VClock}]))
              end)},
      {"the head get option should return the object metadata without the value",
@@ -2772,9 +2829,9 @@ live_node_tests() ->
                     {ok, Pid} = start_link(test_ip(), test_port()),
                     PO = riakc_obj:new(<<"b">>, <<"key">>, <<"value">>),
                     ?MODULE:put(Pid, PO),
-                    {ok, Obj} = ?MODULE:get(Pid, <<"b">>, <<"key">>, [head]),
+                    {ok, Obj} = ?MODULE:get1(Pid, <<"b">>, <<"key">>, [head]),
                     ?assertEqual(<<>>, riakc_obj:get_value(Obj)),
-                    {ok, Obj2} = ?MODULE:get(Pid, <<"b">>, <<"key">>, []),
+                    {ok, Obj2} = ?MODULE:get1(Pid, <<"b">>, <<"key">>, []),
                     ?assertEqual(<<"value">>, riakc_obj:get_value(Obj2))
              end)},
      {"conditional put should allow you to avoid overwriting a value if it already exists",
@@ -2831,13 +2888,13 @@ live_node_tests() ->
                     MD1 = riakc_obj:set_user_metadata_entry(MD0, {<<"Key1">>,<<"Val1">>}),
                     O1 = riakc_obj:update_metadata(O0, MD1),
                     ?assertEqual(ok, ?MODULE:put(Pid, O1)),
-                    {ok, O2} = ?MODULE:get(Pid, <<"b">>, <<"key0">>),
+                    {ok, O2} = ?MODULE:get1(Pid, <<"b">>, <<"key0">>),
                     MD2 = riakc_obj:get_update_metadata(O2),
                     ?assertEqual([{<<"Key1">>,<<"Val1">>}], riakc_obj:get_user_metadata_entries(MD2)),
                     MD3 = riakc_obj:set_user_metadata_entry(MD2, {<<"Key2">>,<<"Val2">>}),
                     O3 = riakc_obj:update_metadata(O2, MD3),
                     ?assertEqual(ok, ?MODULE:put(Pid, O3)),
-                    {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key0">>),
+                    {ok, O4} = ?MODULE:get1(Pid, <<"b">>, <<"key0">>),
                     ?assertEqual(2, length(riakc_obj:get_user_metadata_entries(riakc_obj:get_update_metadata(O4))))
              end)},
     {"binary secondary index manipulation",
@@ -2849,14 +2906,14 @@ live_node_tests() ->
                     MD1 = riakc_obj:set_secondary_index(MD0, [{{binary_index, "idx"},[<<"aaa">>]}]),
                     O1 = riakc_obj:update_metadata(O0, MD1),
                     ?assertEqual(ok, ?MODULE:put(Pid, O1)),
-                    {ok, O2} = ?MODULE:get(Pid, <<"b">>, <<"key1">>),
+                    {ok, O2} = ?MODULE:get1(Pid, <<"b">>, <<"key1">>),
                     MD2 = riakc_obj:get_update_metadata(O2),
                     ?assertEqual([<<"aaa">>], lists:sort(riakc_obj:get_secondary_index(MD2,{binary_index,"idx"}))),
                     MD3 = riakc_obj:add_secondary_index(MD2, [{{binary_index, "idx"},[<<"bbb">>,<<"aaa">>,<<"ccc">>]}]),
                     O3 = riakc_obj:update_metadata(O2, MD3),
                     ?assertEqual(ok, ?MODULE:put(Pid, O3)),
                     ?assertEqual({ok,[<<"key1">>]}, ?MODULE:get_index(Pid, <<"b">>, {binary_index, "idx"}, <<"bbb">>)),
-                    {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key1">>),
+                    {ok, O4} = ?MODULE:get1(Pid, <<"b">>, <<"key1">>),
                     MD4 = riakc_obj:get_update_metadata(O4),
                     ?assertEqual([<<"aaa">>,<<"bbb">>,<<"ccc">>], lists:sort(riakc_obj:get_secondary_index(MD4, {binary_index, "idx"}))),
                     MD5 = riakc_obj:delete_secondary_index(MD4,{binary_index,"idx"}),
@@ -2872,14 +2929,14 @@ live_node_tests() ->
                     MD1 = riakc_obj:set_secondary_index(MD0, [{{integer_index, "idx"},[67]}]),
                     O1 = riakc_obj:update_metadata(O0, MD1),
                     ?assertEqual(ok, ?MODULE:put(Pid, O1)),
-                    {ok, O2} = ?MODULE:get(Pid, <<"b">>, <<"key2">>),
+                    {ok, O2} = ?MODULE:get1(Pid, <<"b">>, <<"key2">>),
                     MD2 = riakc_obj:get_update_metadata(O2),
                     ?assertEqual([67], lists:sort(riakc_obj:get_secondary_index(MD2,{integer_index,"idx"}))),
                     MD3 = riakc_obj:add_secondary_index(MD2, [{{integer_index, "idx"},[56,10000,100]}]),
                     O3 = riakc_obj:update_metadata(O2, MD3),
                     ?assertEqual(ok, ?MODULE:put(Pid, O3)),
                     ?assertEqual({ok,[<<"key2">>]}, ?MODULE:get_index(Pid, <<"b">>, {integer_index, "idx"}, 50, 60)),
-                    {ok, O4} = ?MODULE:get(Pid, <<"b">>, <<"key2">>),
+                    {ok, O4} = ?MODULE:get1(Pid, <<"b">>, <<"key2">>),
                     MD4 = riakc_obj:get_update_metadata(O4),
                     ?assertEqual([56,67,100,10000], lists:sort(riakc_obj:get_secondary_index(MD4, {integer_index, "idx"}))),
                     MD5 = riakc_obj:delete_secondary_index(MD4,{integer_index,"idx"}),
@@ -2901,5 +2958,74 @@ live_node_tests() ->
              end)}
 
      ].
+
+
+queue_test() ->
+    {ok, Pid} = start_link(test_ip(), test_port()),
+    
+    set_max_queue_len(Pid, 5),
+    gen_server:call(Pid, {set_test_val, true}),
+    
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q01} = gen_server:call(Pid,get_state),
+    ?assertEqual(0, Q01), % Queued
+
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q02} = gen_server:call(Pid,get_state),
+    ?assertEqual(1, Q02), % Queued
+    
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q03} = gen_server:call(Pid,get_state),
+    ?assertEqual(2, Q03), % Queued
+    
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q04} = gen_server:call(Pid,get_state),
+    ?assertEqual(3, Q04), % Queued
+
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q05} = gen_server:call(Pid,get_state),
+    ?assertEqual(4, Q05), % Queued
+
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q06} = gen_server:call(Pid,get_state),
+    ?assertEqual(5, Q06), % Queued
+
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q07} = gen_server:call(Pid,get_state),
+    ?assertEqual(5, Q07), % Discarded
+
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q08} = gen_server:call(Pid,get_state),
+    ?assertEqual(5, Q08), % Discarded
+
+    spawn(?MODULE, put, [Pid, riakc_obj:new(<<"qwer">>, <<"qwer">>, <<"qwer">>)]),
+    timer:sleep(100),
+    #state{queue_len = Q09} = gen_server:call(Pid,get_state),
+    ?assertEqual(6, Q09), % Queued
+
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q10} = gen_server:call(Pid,get_state),
+    ?assertEqual(6, Q10), % Discarded
+
+    spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q11} = gen_server:call(Pid,get_state),
+    ?assertEqual(6, Q11), % Discarded
+    
+    spawn(?MODULE, get1, [Pid, <<"qwer">>, <<"qwer">>]),
+    timer:sleep(100),
+    #state{queue_len = Q12} = gen_server:call(Pid,get_state),
+    ?assertEqual(7, Q12), % Queued
+
+    stop(Pid).
 
 -endif.
