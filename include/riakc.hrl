@@ -54,7 +54,9 @@
                         {pw, PrimaryWriteQuorum::quorum()}. %% Valid quorum options for write requests.
 -type delete_option() :: delete_quorum()  |
                       {n_val, pos_integer()} |
-                      {sloppy_quorum, boolean()}.
+                      {sloppy_quorum, boolean()} |
+                      {delete_mode, delete_mode()}.
+-type delete_mode :: keep|immediate| DeleteAfter::non_neg_integer().
 -type delete_quorum() :: read_quorum() |
                          write_quorum() |
                          {rw, ReadWriteQuorum::quorum()}. %% Valid quorum options for delete requests. Note that `rw' is deprecated in Riak 1.0 and later.

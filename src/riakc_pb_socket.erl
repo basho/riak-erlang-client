@@ -1232,6 +1232,8 @@ delete_options([{n_val, N} | Rest], Req)
 delete_options([{sloppy_quorum, Bool} | Rest], Req)
   when Bool == true; Bool == false ->
     delete_options(Rest, Req#rpbdelreq{sloppy_quorum = Bool});
+delete_options([{delete_mode, DM} | Rest], Req) ->
+    delete_options(Rest, Req#rpbdelreq{delete_mode = riak_pb_kv_codec:encode_delete_mode(DM)});
 delete_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
