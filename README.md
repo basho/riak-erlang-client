@@ -612,6 +612,68 @@ Create a qfun that returns the size of the record and feed this into the existin
 
  As expected, total size of data is 15 bytes.
 
+Security
+========
+
+If you are using Riak's new [security
+feature](http://docs.basho.com/riak/latest/ops/running/authz/)
+introduced in version 2.0, you will need to configure your Riak Erlang
+client to use SSL when connecting to Riak. The required setup depends on
+the [security
+source](http://docs.basho.com/riak/latest/ops/running/security-sources/)
+that you choose. A general primer on Riak client security can be found
+in our [official
+docs](http://docs.basho.com/riak/latest/dev/advanced/client-security/).
+
+Regardless of which authentication source you use, your client will need
+to have access to a certificate authority (CA) shared by your Riak
+server. You will also need to provide a username that corresponds to the
+username for the user or role that you have [created in
+Riak](http://docs.basho.com/riak/latest/ops/running/authz/#User-Management).
+
+Let's say that your CA is stored in the `/ssl_dir` directory and bears
+the name `cacertfile.pem` and that you need provide a username of
+`riakuser` and a password of `rosebud`. You can input that information
+as a list of tuples when you create your process identifier (PID) for
+further connections to Riak:
+
+```erlang
+CertDir = "/ssl_dir",
+SecurityOptions = [
+                   {credentials, "riakuser", "rosebud"},
+                   {cacertfile, filename:join([CertDir, "cacertfile.pem"])}
+                  ],
+{ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
+```
+
+This setup will suffice for
+[password-](http://docs.basho.com/riak/latest/ops/running/security-sources/#Password-based-Authentication),
+[PAM-](http://docs.basho.com/riak/latest/ops/running/security-sources/#PAM-based-Authentication)
+and
+[trust](http://docs.basho.com/riak/latest/ops/running/security-sources/#Trust-based-Authentication)-based
+authentication.
+
+If you are using [certificate-based
+authentication](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/#Certificate-based-Authentication),
+you will also need to specify a cert and keyfile. The example below uses
+the same connection information from the sample above but also points to
+a cert called `cert.pem` and a keyfile called `key.pem` (both stored in
+the same `/ssl_dir` directory as the CA):
+
+```erlang
+CertDir = "/ssl_dir",
+SecurityOptions = [
+                   {credentials, "riakuser", "rosebud"},
+                   {cacertfile, filename:join([CertDir, "cacertfile.pem"])},
+                   {certfile, filename:join([CertDir, "cert.pem"])},
+                   {keyfile, filename:join([CertDir, "key.pem"])}
+                  ],
+{ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
+```
+
+More detailed information can be found in our [official
+documentation](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/).
+
 Troubleshooting
 ==================
 
