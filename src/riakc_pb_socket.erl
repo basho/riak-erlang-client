@@ -1593,7 +1593,7 @@ process_response(#request{msg = #rpbgetreq{}}, rpbgetresp, State) ->
     %% server just returned the rpbgetresp code - no message was encoded
     {reply, {error, notfound}, State};
 process_response(#request{msg = #rpbgetreq{deletedvclock=true}},
-                 #rpbgetresp{vclock=VC, content=undefined}, State) ->
+                 #rpbgetresp{vclock=VC, content=[]}, State) ->
     %% server returned a notfound with a vector clock, meaning a tombstone
     {reply, {error, notfound, VC}, State};
 process_response(#request{msg = #rpbgetreq{}}, #rpbgetresp{unchanged=true}, State) ->
