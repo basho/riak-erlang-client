@@ -898,13 +898,13 @@ create_search_index(Pid, Index, SchemaName, Opts) ->
     call_infinity(Pid, {req, Req, Timeout}).
 
 
-%% @doc Create a search index.
+%% @doc Delete a search index.
 -spec delete_search_index(pid(), binary()) ->
                     ok | {error, term()}.
 delete_search_index(Pid, Index) ->
     delete_search_index(Pid, Index, []).
 
-%% @doc Create a search index.
+%% @doc Delete a search index.
 -spec delete_search_index(pid(), binary(), search_admin_opts()) ->
                     ok | {error, term()}.
 delete_search_index(Pid, Index, Opts) ->
