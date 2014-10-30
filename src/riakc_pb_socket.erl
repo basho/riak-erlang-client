@@ -41,8 +41,8 @@
          set_options/2, set_options/3,
          is_connected/1, is_connected/2,
          ping/1, ping/2,
-	 queue_len/1,
-	 set_max_queue_len/2,
+         queue_len/1,
+         set_max_queue_len/2,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
@@ -121,13 +121,13 @@
                 sock :: port(),       % gen_tcp socket
                 active :: #request{} | undefined,     % active request
                 queue :: queue() | undefined,      % queue of pending requests
-		queue_len=0 :: non_neg_integer(), % queue size
-		max_queue_len=infinity, % max queue size
+                queue_len=0 :: non_neg_integer(), % queue size
+                max_queue_len=infinity, % max queue size
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer(),
-		test_val = false}).
+                test_val = false}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
@@ -328,12 +328,12 @@ put(Pid, Obj, Options) ->
 % put(_Pid, _Obj, _Options, _Timeout) -> ok.
 put(Pid, Obj, Options, Timeout) ->
     Content = riak_pb_kv_codec:encode_content({riakc_obj:get_update_metadata(Obj),
-					       riakc_obj:get_update_value(Obj)}),
+                                               riakc_obj:get_update_value(Obj)}),
     Req = put_options(Options,
-		      #rpbputreq{bucket = riakc_obj:bucket(Obj),
-				 key = riakc_obj:key(Obj),
-				 vclock = riakc_obj:vclock(Obj),
-				 content = Content}),
+                      #rpbputreq{bucket = riakc_obj:bucket(Obj),
+                                 key = riakc_obj:key(Obj),
+                                 vclock = riakc_obj:vclock(Obj),
+                                 content = Content}),
     gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
 
 %% @doc Delete the key/value
@@ -1024,7 +1024,7 @@ init([Address, Port, Options]) ->
         false ->
             case connect(State) of
                 {error, Reason} ->
-                    {stop, {tcp, Reason}};
+                    {stop, normal};
                 Ok ->
                     Ok
             end
@@ -1032,7 +1032,7 @@ init([Address, Port, Options]) ->
 
 %% @private
 handle_call({req, _Msg, _Timeout, 2}, _From,
-	    #state{queue_len = QL, max_queue_len = MQL} = State) when QL >= MQL ->
+            #state{queue_len = QL, max_queue_len = MQL} = State) when QL >= MQL ->
     {reply, {error, max_queue_len}, State};
 
 handle_call({req, Msg, Timeout, _}, From, State) when State#state.sock =:= undefined ->
@@ -1698,7 +1698,7 @@ disconnect(State) ->
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {noreply, increase_reconnect_interval(NewState)};
         false ->
-            {stop, disconnected, NewState}
+            {stop, normal, NewState}
     end.
 
 %% Double the reconnect interval up to the maximum
@@ -1728,9 +1728,9 @@ send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.a
 send_request(Request, State) when State#state.active =:= undefined ->
     Pkt = riak_pb_codec:encode(Request#request.msg),
     Ret = case State#state.test_val of
-	      true -> ok;
-	      _ -> gen_tcp:send(State#state.sock, Pkt)
-	  end,
+              true -> ok;
+              _ -> gen_tcp:send(State#state.sock, Pkt)
+          end,
     case Ret of
         ok ->
             maybe_reply(after_send(Request, State#state{active = Request}));
@@ -1761,9 +1761,9 @@ enqueue_or_reply_error(Request, State) ->
 %% Queue up a request if one is pending
 %% @private
 queue_request(Request, #state{queue_len = QLen,
-			      queue = Q} = State) ->
+                              queue = Q} = State) ->
     State#state{queue_len = QLen + 1,
-		queue = queue:in(Request, Q)}.
+                queue = queue:in(Request, Q)}.
 
 %% Try and dequeue request and send onto the server if one is waiting
 %% @private
@@ -1773,7 +1773,7 @@ dequeue_request(#state{queue_len = QLen} = State) ->
             State;
         {{value, Request}, Q2} ->
             send_request(Request, State#state{queue_len = QLen - 1,
-					      queue = Q2})
+                                              queue = Q2})
     end.
 
 %% Remove a queued request by reference - returns same queue if ref not present
@@ -1787,7 +1787,7 @@ remove_queued_request(Ref, #state{queue_len = QLen} = State) ->
             {reply, Reply, NewState} = on_timeout(Req, State),
             _ = send_caller(Reply, Req),
             NewState#state{queue_len = QLen - 1,
-			   queue = queue:from_list(L2)}
+                           queue = queue:from_list(L2)}
     end.
 
 %% @private
@@ -2962,10 +2962,10 @@ live_node_tests() ->
 
 queue_test() ->
     {ok, Pid} = start_link(test_ip(), test_port()),
-    
+
     set_max_queue_len(Pid, 5),
     gen_server:call(Pid, {set_test_val, true}),
-    
+
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
     timer:sleep(100),
     #state{queue_len = Q01} = gen_server:call(Pid,get_state),
@@ -2975,12 +2975,12 @@ queue_test() ->
     timer:sleep(100),
     #state{queue_len = Q02} = gen_server:call(Pid,get_state),
     ?assertEqual(1, Q02), % Queued
-    
+
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
     timer:sleep(100),
     #state{queue_len = Q03} = gen_server:call(Pid,get_state),
     ?assertEqual(2, Q03), % Queued
-    
+
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
     timer:sleep(100),
     #state{queue_len = Q04} = gen_server:call(Pid,get_state),
@@ -3020,7 +3020,7 @@ queue_test() ->
     timer:sleep(100),
     #state{queue_len = Q11} = gen_server:call(Pid,get_state),
     ?assertEqual(6, Q11), % Discarded
-    
+
     spawn(?MODULE, get1, [Pid, <<"qwer">>, <<"qwer">>]),
     timer:sleep(100),
     #state{queue_len = Q12} = gen_server:call(Pid,get_state),

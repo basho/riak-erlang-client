@@ -65,7 +65,8 @@
          clear_links/1,
          delete_links/2,
          set_link/2,
-         add_link/2
+         add_link/2,
+         is_riakc_obj/1
         ]).
 %% Internal library use only
 -export([new_obj/4,index_id_to_bin/1]).
@@ -109,7 +110,7 @@
 
 -type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
 -export_type([riakc_obj/0, bucket/0, key/0, vclock/0, contents/0, metadata/0, value/0,
-              binary_index_id/0, binary_index/0, integer_index_id/0, integer_index/0, 
+              binary_index_id/0, binary_index/0, integer_index_id/0, integer_index/0,
               secondary_index/0, metadata_key/0, metadata_value/0, metadata_entry/0]).
 
 %% ====================================================================
@@ -163,7 +164,7 @@ vclock(O) ->
 
 %% @doc  Return the number of values (siblings) of this riakc_obj.
 -spec value_count(Object::riakc_obj()) -> non_neg_integer().
-value_count(#riakc_obj{contents=Contents}) -> 
+value_count(#riakc_obj{contents=Contents}) ->
     length(Contents).
 
 %% @doc  Select the sibling to use for update - starting from 1.
@@ -253,7 +254,7 @@ update_value(Object=#riakc_obj{}, V) -> Object#riakc_obj{updatevalue=V}.
 
 %% @doc  Set the updated value of an object to V
 -spec update_value(riakc_obj(), value(), content_type()) -> riakc_obj().
-update_value(Object=#riakc_obj{}, V, CT) -> 
+update_value(Object=#riakc_obj{}, V, CT) ->
     O1 = update_content_type(Object, CT),
     O1#riakc_obj{updatevalue=V}.
 
@@ -266,7 +267,7 @@ get_update_metadata(#riakc_obj{updatemetadata=UM}=Object) ->
         UM ->
             UM
     end.
-           
+
 %% @doc Return the content type of the update value
 -spec get_update_content_type(riakc_obj()) -> content_type().
 get_update_content_type(Object=#riakc_obj{}) ->
@@ -275,7 +276,7 @@ get_update_content_type(Object=#riakc_obj{}) ->
 
 %% @doc  Return the updated value of this riakc_obj.
 -spec get_update_value(Object::riakc_obj()) -> value().
-get_update_value(#riakc_obj{updatevalue=UV}=Object) -> 
+get_update_value(#riakc_obj{updatevalue=UV}=Object) ->
     case UV of
         undefined ->
             get_value(Object);
@@ -302,7 +303,7 @@ set_vclock(Object=#riakc_obj{}, Vclock) ->
 -spec get_user_metadata_entry(metadata(), metadata_key()) -> metadata_value() | notfound.
 get_user_metadata_entry(MD, Key) ->
     case dict:find(?MD_USERMETA, MD) of
-        {ok, Entries} -> 
+        {ok, Entries} ->
             case lists:keyfind(Key, 1, Entries) of
                 false ->
                     notfound;
@@ -317,7 +318,7 @@ get_user_metadata_entry(MD, Key) ->
 -spec get_user_metadata_entries(metadata()) -> [metadata_entry()].
 get_user_metadata_entries(MD) ->
     case dict:find(?MD_USERMETA, MD) of
-        {ok, Entries} -> 
+        {ok, Entries} ->
             Entries;
         error ->
             []
@@ -332,7 +333,7 @@ clear_user_metadata_entries(MD) ->
 -spec delete_user_metadata_entry(metadata(), metadata_key()) -> metadata().
 delete_user_metadata_entry(MD, Key) ->
     case dict:find(?MD_USERMETA, MD) of
-        {ok, Entries} -> 
+        {ok, Entries} ->
             case [{K, V} || {K, V} <- Entries, K /= Key] of
                 [] ->
                     dict:erase(?MD_USERMETA, MD);
@@ -394,7 +395,7 @@ get_secondary_indexes(MD) ->
             []
     end.
 
-%% @doc  Clear all secondary indexes 
+%% @doc  Clear all secondary indexes
 -spec clear_secondary_indexes(metadata()) -> metadata().
 clear_secondary_indexes(MD) ->
     dict:erase(?MD_INDEX, MD).
@@ -487,7 +488,7 @@ get_all_links(MD) ->
     case dict:find(?MD_LINKS, MD) of
         {ok, Links} ->
             dict:to_list(lists:foldl(fun({I, T}, D) ->
-                                        dict:append(T, I, D) 
+                                        dict:append(T, I, D)
                                     end, dict:new(), Links));
         error ->
             []
@@ -547,6 +548,9 @@ add_link(MD, [{T, IdList} | Rest]) ->
             MD2 = dict:store(?MD_LINKS, NewList, MD),
             add_link(MD2, Rest)
     end.
+
+is_riakc_obj(#riakc_obj{}) -> true;
+is_riakc_obj(_)            -> false.
 
 %% @doc  INTERNAL USE ONLY.  Set the contents of riakc_obj to the
 %%       {Metadata, Value} pairs in MVs. Normal clients should use the
@@ -615,7 +619,7 @@ newcontent0_test() ->
     ?assertEqual([], get_values(O)),
     ?assertEqual([], get_contents(O)),
     ?assertEqual(dict:new(), get_metadata(O)),
-    ?assertThrow(no_value, get_value(O)).    
+    ?assertThrow(no_value, get_value(O)).
 
 contents0_test() ->
     O = riakc_obj:new_obj(<<"b">>, <<"k">>, <<"vclock">>, []),
@@ -689,7 +693,7 @@ binary_content_type_test() ->
 get_update_data_test() ->
     MD0 = dict:from_list([{?MD_CTYPE, "text/plain"}]),
     MD1 = dict:from_list([{?MD_CTYPE, "application/json"}]),
-    O = new_obj(<<"b">>, <<"k">>, <<"">>, 
+    O = new_obj(<<"b">>, <<"k">>, <<"">>,
                 [{MD0, <<"v">>}]),
     %% Create an updated metadata object
     Oumd = update_metadata(O, MD1),
@@ -716,11 +720,11 @@ get_update_data_test() ->
     ?assertEqual(<<"both">>, get_update_value(Oboth)),
     MD5 = get_update_metadata(Oboth),
     ?assertEqual("application/json", md_ctype(MD5)).
-   
+
 %% get_update_data_sibs_test() ->
 %%     MD0 = dict:from_list([{?MD_CTYPE, "text/plain"}]),
 %%     MD1 = dict:from_list([{?MD_CTYPE, "application/json"}]),
-%%     O = new_obj(<<"b">>, <<"k">>, <<"">>, 
+%%     O = new_obj(<<"b">>, <<"k">>, <<"">>,
 %%                 [{MD0, <<"v">>},{MD1, <<"sibling">>}]),
 %%     %% Create an updated metadata object
 %%     Oumd = update_metadata(O, MD1),
@@ -728,16 +732,16 @@ get_update_data_test() ->
 %%     Ouv = update_value(O, <<"valueonly">>),
 %%     %% Create updated both object
 %%     Oboth = update_value(Oumd, <<"both">>),
-    
+
 %%     ?assertThrow({error, siblings}, get_update_data(O)),
 %%     ?assertThrow({error, siblings}, get_update_data(Oumd)),
 %%     ?assertEqual({error, siblings}, get_update_data(Ouv)),
 %%     ?assertEqual({ok, {MD1, <<"both">>}}, get_update_data(Oboth)).
-                              
+
 select_sibling_test() ->
     MD0 = dict:from_list([{?MD_CTYPE, "text/plain"}]),
     MD1 = dict:from_list([{?MD_CTYPE, "application/json"}]),
-    O = new_obj(<<"b">>, <<"k">>, <<"">>, 
+    O = new_obj(<<"b">>, <<"k">>, <<"">>,
                 [{MD0, <<"sib_one">>},
                  {MD1, <<"sib_two">>}]),
     O1 = select_sibling(1, O),
@@ -746,7 +750,7 @@ select_sibling_test() ->
     ?assertEqual(<<"sib_one">>, get_update_value(O1)),
     ?assertEqual("application/json", get_update_content_type(O2)),
     ?assertEqual(<<"sib_two">>, get_update_value(O2)).
-   
+
 user_metadata_utilities_test() ->
     MD0 = dict:new(),
     ?assertEqual(dict:to_list(MD0), dict:to_list(delete_user_metadata_entry(MD0, <<"None">>))),
@@ -783,7 +787,7 @@ link_utilities_test() ->
     ?assertEqual([{<<"Tag2">>,[{<<"B">>,<<"K1">>}]}], get_all_links(MD5)),
     MD6 = clear_links(MD5),
     ?assertEqual([], get_all_links(MD6)).
-   
+
 secondary_index_utilities_test() ->
     MD0 = dict:new(),
     ?assertEqual([], get_secondary_indexes(MD0)),
