@@ -1222,17 +1222,13 @@ init([Address, Port, Options]) ->
     State = parse_options(Options, #state{address = Address,
                                           port = Port,
                                           queue = queue:new()}),
-    case State#state.auto_reconnect of
-        true ->
-            self() ! reconnect,
+    case connect(State) of
+        {error, Reason} when State#state.auto_reconnect /= true ->
+            {stop, {tcp, Reason}};
+        {error, _Reason} ->
             {ok, State};
-        false ->
-            case connect(State) of
-                {error, Reason} ->
-                    {stop, {tcp, Reason}};
-                Ok ->
-                    Ok
-            end
+        Ok ->
+            Ok
     end.
 
 %% @private
@@ -2490,7 +2486,7 @@ queue_disconnected_test() ->
 auto_reconnect_bad_connect_test() ->
     %% Start with an unlikely port number
     {ok, Pid} = start({127,0,0,1}, 65535, [auto_reconnect]),
-    ?assertEqual({false, [{econnrefused,1}]}, is_connected(Pid)),
+    ?assertEqual({false, []}, is_connected(Pid)),
     ?assertEqual({error, disconnected}, ping(Pid)),
     ?assertEqual({error, disconnected}, list_keys(Pid, <<"b">>)),
     stop(Pid).
