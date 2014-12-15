@@ -7,6 +7,14 @@ compile-no-deps:
 	${REBAR} compile skip_deps=true
 
 test: compile
+	@echo ""
+	@echo "NOTICE: If Riak is running & listening to the default ProtocolBuffers"
+	@echo "        port, then additional EUnit tests will run."
+	@echo "        Tests will _not_ run correctly if allow_mult=true."
+	@echo "        Also, it would be great to document here what other"
+	@echo "        Riak configuration bits are prerequisites for running"
+	@echo "        the riak_pb_socket:live_node_tests suite..........."
+	@echo ""
 	${REBAR} eunit skip_deps=true
 
 docs:
