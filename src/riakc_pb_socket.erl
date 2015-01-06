@@ -108,7 +108,13 @@
 %% can be overridden by setting the application environment variable
 %% of the same name on the `riakc' application, for example:
 %% `application:set_env(riakc, ping_timeout, 5000).'
--record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
+-record(request, {ref :: reference(),
+                  msg :: rpb_req(),
+                  from,
+                  ctx :: ctx(),
+                  timeout :: timeout(),
+                  time_called,
+                  priority,
                   tref :: reference() | undefined }).
 
 -type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
@@ -128,6 +134,8 @@
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer(),
                 test_val = false}).
+
+-record(queue, {queue1, queue2}).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
@@ -192,12 +200,12 @@ is_connected(Pid, Timeout) ->
 %% @equiv ping(Pid, default_timeout(ping_timeout))
 -spec ping(pid()) -> pong.  % or gen_server:call exception on timeout
 ping(Pid) ->
-    ping(Pid, default_timeout(ping_timeout)).
+    ping(Pid, default_timeout(p1_timeout)).
 
 %% @doc Ping the server specifying timeout
 -spec ping(pid(), timeout()) -> pong.  % or gen_server:call exception on timeout
 ping(Pid, Timeout) ->
-    gen_server:call(Pid, {req, rpbpingreq, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, rpbpingreq, Timeout, ms_time(), 1}, infinity).
 
 queue_len(Pid) ->
     gen_server:call(Pid, {check, queue_len}, infinity).
@@ -209,41 +217,42 @@ set_max_queue_len(Pid, MQL) when is_integer(MQL); MQL == infinity ->
 %% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
 -spec get_client_id(pid()) -> {ok, client_id()} | {error, term()}.
 get_client_id(Pid) ->
-    get_client_id(Pid, default_timeout(get_client_id_timeout)).
+    get_client_id(Pid, default_timeout(p1_timeout)).
 
 %% @doc Get the client id for this connection specifying timeout
 -spec get_client_id(pid(), timeout()) -> {ok, client_id()} | {error, term()}.
 get_client_id(Pid, Timeout) ->
-    gen_server:call(Pid, {req, rpbgetclientidreq, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, rpbgetclientidreq, Timeout, ms_time(), 1}, infinity).
 
 %% @doc Set the client id for this connection
 %% @equiv set_client_id(Pid, ClientId, default_timeout(set_client_id_timeout))
 -spec set_client_id(pid(), client_id()) -> {ok, client_id()} | {error, term()}.
 set_client_id(Pid, ClientId) ->
-    set_client_id(Pid, ClientId, default_timeout(set_client_id_timeout)).
+    set_client_id(Pid, ClientId, default_timeout(p1_timeout)).
 
 %% @doc Set the client id for this connection specifying timeout
 -spec set_client_id(pid(), client_id(), timeout()) -> {ok, client_id()} | {error, term()}.
 set_client_id(Pid, ClientId, Timeout) ->
-    gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId}, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, #rpbsetclientidreq{client_id = ClientId},
+                          Timeout, ms_time(), 1}, infinity).
 
 %% @doc Get the server information for this connection
 %% @equiv get_server_info(Pid, default_timeout(get_server_info_timeout))
 -spec get_server_info(pid()) -> {ok, server_info()} | {error, term()}.
 get_server_info(Pid) ->
-    get_server_info(Pid, default_timeout(get_server_info_timeout)).
+    get_server_info(Pid, default_timeout(p1_timeout)).
 
 %% @doc Get the server information for this connection specifying timeout
 -spec get_server_info(pid(), timeout()) -> {ok, server_info()} | {error, term()}.
 get_server_info(Pid, Timeout) ->
-    gen_server:call(Pid, {req, rpbgetserverinforeq, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, rpbgetserverinforeq, Timeout, ms_time(), 1}, infinity).
 
 %% @doc Get bucket/key from the server.
 %%      Will return {error, notfound} if the key is not on the server.
 %% @equiv get1(Pid, Bucket, Key, [], default_timeout(get_timeout))
 -spec get1(pid(), bucket(), key()) -> {ok, riakc_obj()} | {error, term()}.
 get1(Pid, Bucket, Key) ->
-    get1(Pid, Bucket, Key, [], default_timeout(get_timeout)).
+    get1(Pid, Bucket, Key, [], default_timeout(p1_timeout)).
 
 %% @doc Get bucket/key from the server specifying timeout.
 %%      Will return {error, notfound} if the key is not on the server.
@@ -253,7 +262,7 @@ get1(Pid, Bucket, Key) ->
 get1(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get1(Pid, Bucket, Key, [], Timeout);
 get1(Pid, Bucket, Key, Options) ->
-    get1(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
+    get1(Pid, Bucket, Key, Options, default_timeout(p1_timeout)).
 
 %% @doc Get bucket/key from the server supplying options and timeout.
 %%      <code>unchanged</code> will be returned when the
@@ -264,14 +273,14 @@ get1(Pid, Bucket, Key, Options) ->
 
 get1(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, infinity).
 
 %% @doc Get bucket/key from the server.
 %%      Will return {error, notfound} if the key is not on the server.
 %% @equiv get2(Pid, Bucket, Key, [], default_timeout(get_timeout))
 -spec get2(pid(), bucket(), key()) -> {ok, riakc_obj()} | {error, term()}.
 get2(Pid, Bucket, Key) ->
-    get2(Pid, Bucket, Key, [], default_timeout(get_timeout)).
+    get2(Pid, Bucket, Key, [], default_timeout(p2_timeout)).
 
 %% @doc Get bucket/key from the server specifying timeout.
 %%      Will return {error, notfound} if the key is not on the server.
@@ -281,7 +290,7 @@ get2(Pid, Bucket, Key) ->
 get2(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get2(Pid, Bucket, Key, [], Timeout);
 get2(Pid, Bucket, Key, Options) ->
-    get2(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
+    get2(Pid, Bucket, Key, Options, default_timeout(p2_timeout)).
 
 %% @doc Get bucket/key from the server supplying options and timeout.
 %%      <code>unchanged</code> will be returned when the
@@ -292,7 +301,7 @@ get2(Pid, Bucket, Key, Options) ->
 
 get2(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req, Timeout, 2}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 2}, infinity).
 
 %% @doc Put the metadata/value in the object under bucket/key
 %% @equiv put(Pid, Obj, [])
@@ -310,7 +319,7 @@ put(Pid, Obj) ->
 put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     put(Pid, Obj, [], Timeout);
 put(Pid, Obj, Options) ->
-    put(Pid, Obj, Options, default_timeout(put_timeout)).
+    put(Pid, Obj, Options, default_timeout(p1_timeout)).
 
 %% @doc Put the metadata/value in the object under bucket/key with
 %%      options and timeout. Put throws `siblings' if the
@@ -334,7 +343,7 @@ put(Pid, Obj, Options, Timeout) ->
                                  key = riakc_obj:key(Obj),
                                  vclock = riakc_obj:vclock(Obj),
                                  content = Content}),
-    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, infinity).
 
 %% @doc Delete the key/value
 %% @equiv delete(Pid, Bucket, Key, [])
@@ -349,13 +358,13 @@ delete(Pid, Bucket, Key) ->
 delete(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     delete(Pid, Bucket, Key, [], Timeout);
 delete(Pid, Bucket, Key, Options) ->
-    delete(Pid, Bucket, Key, Options, default_timeout(delete_timeout)).
+    delete(Pid, Bucket, Key, Options, default_timeout(p1_timeout)).
 
 %% @doc Delete the key/value with options and timeout. <em>Note that the rw quorum is deprecated, use r and w.</em>
 -spec delete(pid(), bucket(), key(), delete_options(), timeout()) -> ok | {error, term()}.
 delete(Pid, Bucket, Key, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key}),
-    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, infinity).
 
 %% @doc Delete the object at Bucket/Key, giving the vector clock.
 %% @equiv delete_vclock(Pid, Bucket, Key, VClock, [])
@@ -370,7 +379,7 @@ delete_vclock(Pid, Bucket, Key, VClock) ->
 delete_vclock(Pid, Bucket, Key, VClock, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     delete_vclock(Pid, Bucket, Key, VClock, [], Timeout);
 delete_vclock(Pid, Bucket, Key, VClock, Options) ->
-    delete_vclock(Pid, Bucket, Key, VClock, Options, default_timeout(delete_timeout)).
+    delete_vclock(Pid, Bucket, Key, VClock, Options, default_timeout(p1_timeout)).
 
 %% @doc Delete the key/value with options and timeout and giving the
 %% vector clock. This form of delete ensures that subsequent get and
@@ -381,7 +390,7 @@ delete_vclock(Pid, Bucket, Key, VClock, Options) ->
 delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{bucket = Bucket, key = Key,
             vclock=VClock}),
-    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, infinity).
 
 
 %% @doc Delete the riak object.
@@ -390,7 +399,7 @@ delete_vclock(Pid, Bucket, Key, VClock, Options, Timeout) ->
 -spec delete_obj(pid(), riakc_obj()) -> ok | {error, term()}.
 delete_obj(Pid, Obj) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
-        riakc_obj:vclock(Obj), [], default_timeout(delete_timeout)).
+        riakc_obj:vclock(Obj), [], default_timeout(p1_timeout)).
 
 %% @doc Delete the riak object with options.
 %% @equiv delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj), riakc_obj:vclock(Obj), Options)
@@ -398,7 +407,7 @@ delete_obj(Pid, Obj) ->
 -spec delete_obj(pid(), riakc_obj(), delete_options()) -> ok | {error, term()}.
 delete_obj(Pid, Obj, Options) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
-        riakc_obj:vclock(Obj), Options, default_timeout(delete_timeout)).
+        riakc_obj:vclock(Obj), Options, default_timeout(p1_timeout)).
 
 %% @doc Delete the riak object with options and timeout.
 %% @equiv delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj), riakc_obj:vclock(Obj), Options, Timeout)
@@ -443,7 +452,7 @@ stream_list_buckets(Pid, Options) ->
     ReqId = mk_reqid(),
     gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout,
                                                   stream=true},
-                          ServerTimeout, {ReqId, self()}, 1}, infinity).
+                          ServerTimeout, {ReqId, self()}, ms_time(), 1}, infinity).
 
 legacy_list_buckets(Pid, Options) ->
     ServerTimeout =
@@ -452,7 +461,7 @@ legacy_list_buckets(Pid, Options) ->
             ST -> ST
         end,
     gen_server:call(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
-                          ServerTimeout, 1}, infinity).
+                          ServerTimeout, ms_time(), 1}, infinity).
 
 
 %% @doc List all keys in a bucket
@@ -508,65 +517,65 @@ stream_list_keys(Pid, Bucket, Options) ->
         end,
     ReqMsg = #rpblistkeysreq{bucket = Bucket, timeout = ServerTimeout},
     ReqId = mk_reqid(),
-    gen_server:call(Pid, {req, ReqMsg, ServerTimeout, {ReqId, self()}, 1},
+    gen_server:call(Pid, {req, ReqMsg, ServerTimeout, {ReqId, self()}, ms_time(), 1},
                     infinity).
 
 %% @doc Get bucket properties.
 %% @equiv get_bucket(Pid, Bucket, default_timeout(get_bucket_timeout))
 -spec get_bucket(pid(), bucket()) -> {ok, bucket_props()} | {error, term()}.
 get_bucket(Pid, Bucket) ->
-    get_bucket(Pid, Bucket, default_timeout(get_bucket_timeout)).
+    get_bucket(Pid, Bucket, default_timeout(p1_timeout)).
 
 %% @doc Get bucket properties specifying a server side timeout.
 %% @equiv get_bucket(Pid, Bucket, Timeout, default_timeout(get_bucket_call_timeout))
 -spec get_bucket(pid(), bucket(), timeout()) -> {ok, bucket_props()} | {error, term()}.
 get_bucket(Pid, Bucket, Timeout) ->
-    get_bucket(Pid, Bucket, Timeout, default_timeout(get_bucket_call_timeout)).
+    get_bucket(Pid, Bucket, Timeout, default_timeout(p1_timeout)).
 
 %% @doc Get bucket properties specifying a server side and local call timeout.
 -spec get_bucket(pid(), bucket(), timeout(), timeout()) -> {ok, bucket_props()} |
                                                            {error, term()}.
 get_bucket(Pid, Bucket, Timeout, CallTimeout) ->
     Req = #rpbgetbucketreq{bucket = Bucket},
-    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, CallTimeout).
 
 %% @doc Set bucket properties.
 %% @equiv set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket_timeout))
 -spec set_bucket(pid(), bucket(), bucket_props()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps) ->
-    set_bucket(Pid, Bucket, BucketProps, default_timeout(set_bucket_timeout)).
+    set_bucket(Pid, Bucket, BucketProps, default_timeout(p1_timeout)).
 
 %% @doc Set bucket properties specifying a server side timeout.
 %% @equiv set_bucket(Pid, Bucket, BucketProps, Timeout, default_timeout(set_bucket_call_timeout))
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout) ->
     set_bucket(Pid, Bucket, BucketProps, Timeout,
-               default_timeout(set_bucket_call_timeout)).
+               default_timeout(p1_timeout)).
 
 %% @doc Set bucket properties specifying a server side and local call timeout.
 -spec set_bucket(pid(), bucket(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout, CallTimeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbucketreq{bucket = Bucket, props = PbProps},
-    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, CallTimeout).
 
 %% @doc Reset bucket properties back to the defaults.
 %% @equiv reset_bucket(Pid, Bucket, default_timeout(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout))
 -spec reset_bucket(pid(), bucket) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket) ->
-    reset_bucket(Pid, Bucket, default_timeout(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout)).
+    reset_bucket(Pid, Bucket, default_timeout(p1_timeout), default_timeout(p1_timeout)).
 
 %% @doc Reset bucket properties back to the defaults.
 %% @equiv reset_bucket(Pid, Bucket, Timeout, default_timeout(reset_bucket_call_timeout))
 -spec reset_bucket(pid(), bucket, timeout()) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket, Timeout) ->
-    reset_bucket(Pid, Bucket, Timeout, default_timeout(reset_bucket_call_timeout)).
+    reset_bucket(Pid, Bucket, Timeout, default_timeout(p1_timeout)).
 
 %% @doc Reset bucket properties back to the defaults.
 -spec reset_bucket(pid(), bucket, timeout(), timeout()) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket, Timeout, CallTimeout) ->
     Req = #rpbresetbucketreq{bucket = Bucket},
-    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, CallTimeout).
 
 %% @doc Perform a MapReduce job across the cluster.
 %%      See the MapReduce documentation for explanation of behavior.
@@ -577,7 +586,7 @@ reset_bucket(Pid, Bucket, Timeout, CallTimeout) ->
                     {error, timeout} |
                     {error, term()}.
 mapred(Pid, Inputs, Query) ->
-    mapred(Pid, Inputs, Query, default_timeout(mapred_timeout)).
+    mapred(Pid, Inputs, Query, default_timeout(p1_timeout)).
 
 %% @doc Perform a MapReduce job across the cluster with a job timeout.
 %%      See the MapReduce documentation for explanation of behavior.
@@ -588,7 +597,7 @@ mapred(Pid, Inputs, Query) ->
                     {error, timeout} |
                     {error, term()}.
 mapred(Pid, Inputs, Query, Timeout) ->
-    mapred(Pid, Inputs, Query, Timeout, default_timeout(mapred_call_timeout)).
+    mapred(Pid, Inputs, Query, Timeout, default_timeout(p1_timeout)).
 
 %% @doc Perform a MapReduce job across the cluster with a job and
 %%      local call timeout.  See the MapReduce documentation for
@@ -621,7 +630,7 @@ mapred(Pid, Inputs, Query, Timeout, CallTimeout) ->
                            {error, timeout} |
                            {error, Err :: term()}.
 mapred_stream(Pid, Inputs, Query, ClientPid) ->
-    mapred_stream(Pid, Inputs, Query, ClientPid, default_timeout(mapred_stream_timeout)).
+    mapred_stream(Pid, Inputs, Query, ClientPid, default_timeout(p1_timeout)).
 
 %% @doc Perform a streaming MapReduce job with a timeout across the cluster.
 %%      sending results to ClientPid.
@@ -637,7 +646,7 @@ mapred_stream(Pid, Inputs, Query, ClientPid) ->
                            {error, Err :: term()}.
 mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
     mapred_stream(Pid, Inputs, Query, ClientPid, Timeout,
-                  default_timeout(mapred_stream_call_timeout)).
+                  default_timeout(p1_timeout)).
 
 %% @doc Perform a streaming MapReduce job with a map/red timeout across the cluster,
 %%      a local call timeout and sending results to ClientPid.
@@ -683,7 +692,7 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout, CallTimeout) ->
                            {error, timeout} |
                            {error, Err :: term()}.
 mapred_bucket(Pid, Bucket, Query) ->
-    mapred_bucket(Pid, Bucket, Query, default_timeout(mapred_bucket_timeout)).
+    mapred_bucket(Pid, Bucket, Query, default_timeout(p1_timeout)).
 
 %% @doc Perform a MapReduce job against a bucket with a timeout
 %%      across the cluster.
@@ -696,7 +705,7 @@ mapred_bucket(Pid, Bucket, Query) ->
                            {error, timeout} |
                            {error, Err :: term()}.
 mapred_bucket(Pid, Bucket, Query, Timeout) ->
-    mapred_bucket(Pid, Bucket, Query, Timeout, default_timeout(mapred_bucket_call_timeout)).
+    mapred_bucket(Pid, Bucket, Query, Timeout, default_timeout(p1_timeout)).
 
 %% @doc Perform a MapReduce job against a bucket with a timeout
 %%      across the cluster and local call timeout.
@@ -729,7 +738,7 @@ mapred_bucket(Pid, Bucket, Query, Timeout, CallTimeout) ->
                                   {error, term()}.
 mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout) ->
     mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout,
-                         default_timeout(mapred_bucket_stream_call_timeout)).
+                         default_timeout(p1_timeout)).
 
 %% @doc Perform a streaming MapReduce job against a bucket with a server timeout
 %%      across the cluster and a call timeout.
@@ -759,7 +768,7 @@ search(Pid, Index, SearchQuery) ->
 -spec search(pid(), binary(), binary(), search_options()) ->
                     {ok, search_result()} | {error, term()}.
 search(Pid, Index, SearchQuery, Options) ->
-    Timeout = default_timeout(search_timeout),
+    Timeout = default_timeout(p1_timeout),
     search(Pid, Index, SearchQuery, Options, Timeout).
 
 %% @doc Execute a search query. This command will return an error
@@ -767,7 +776,7 @@ search(Pid, Index, SearchQuery, Options) ->
 -spec search(pid(), binary(), binary(), search_options(), timeout()) ->
                     {ok, search_result()} | {error, term()}.
 search(Pid, Index, SearchQuery, Options, Timeout) ->
-    CallTimeout = default_timeout(search_call_timeout),
+    CallTimeout = default_timeout(p1_timeout),
     search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout).
 
 %% @doc Execute a search query. This command will return an error
@@ -776,7 +785,7 @@ search(Pid, Index, SearchQuery, Options, Timeout) ->
                     {ok, search_result()} | {error, term()}.
 search(Pid, Index, SearchQuery, Options, Timeout, CallTimeout) ->
     Req = search_options(Options, #rpbsearchqueryreq{q = SearchQuery, index = Index}),
-    gen_server:call(Pid, {req, Req, Timeout, 1}, CallTimeout).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, CallTimeout).
 
 
 %% Deprecated, argument explosion functions for indexes
@@ -849,7 +858,7 @@ get_index_eq(Pid, Bucket, {integer_index, Name}, Key, Opts) when is_integer(Key)
     get_index_eq(Pid, Bucket, Index, BinKey, Opts);
 get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Timeout = proplists:get_value(timeout, Opts),
-    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(p1_timeout)),
     MaxResults = proplists:get_value(max_results, Opts),
     PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
@@ -865,9 +874,9 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, Timeout, {ReqId, self()}, 1};
+                   {req, Req, Timeout, {ReqId, self()}, ms_time(), 1};
                false ->
-                   {req, Req, Timeout, 1}
+                   {req, Req, Timeout, ms_time(), 1}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -896,7 +905,7 @@ get_index_range(Pid, Bucket, {integer_index, Name}, StartKey, EndKey, Opts) when
     get_index_range(Pid, Bucket, Index, BinStartKey, BinEndKey, Opts);
 get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Timeout = proplists:get_value(timeout, Opts),
-    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(p1_timeout)),
     ReturnTerms = proplists:get_value(return_terms, Opts),
     TermRegex = proplists:get_value(term_regex, Opts),
     MaxResults = proplists:get_value(max_results, Opts),
@@ -917,9 +926,9 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
-                   {req, Req, Timeout, {ReqId, self()}, 1};
+                   {req, Req, Timeout, {ReqId, self()}, ms_time(), 1};
                false ->
-                   {req, Req, Timeout, 1}
+                   {req, Req, Timeout, ms_time(), 1}
            end,
     gen_server:call(Pid, Call, CallTimeout).
 
@@ -934,7 +943,7 @@ encode_2i(Value) when is_binary(Value) ->
 -spec cs_bucket_fold(pid(), bucket(), cs_opts()) -> {ok, reference()} | {error, term()}.
 cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(Opts) ->
     Timeout = proplists:get_value(timeout, Opts),
-    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(get_index_call_timeout)),
+    CallTimeout = proplists:get_value(call_timeout, Opts, default_timeout(p1_timeout)),
     StartKey = proplists:get_value(start_key, Opts, <<>>),
     EndKey = proplists:get_value(end_key, Opts),
     MaxResults = proplists:get_value(max_results, Opts),
@@ -951,7 +960,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), is_binary(Bucket), is_list(O
                           continuation=Continuation,
                           timeout=Timeout},
     ReqId = mk_reqid(),
-    Call = {req, Req, Timeout, {ReqId, self()}, 1},
+    Call = {req, Req, Timeout, {ReqId, self()}, ms_time(), 1},
     gen_server:call(Pid, Call, CallTimeout).
 
 %% @doc Return the default timeout for an operation if none is provided.
@@ -975,7 +984,7 @@ default_timeout(OpTimeout) ->
 -spec tunnel(pid(), msg_id(), binary(), timeout()) -> {ok, binary()} | {error, term()}.
 tunnel(Pid, MsgId, Pkt, Timeout) ->
     Req = {tunneled, MsgId, Pkt},
-    gen_server:call(Pid, {req, Req, Timeout, 1}, infinity).
+    gen_server:call(Pid, {req, Req, Timeout, ms_time(), 1}, infinity).
 
 %% @doc increment the counter at `bucket', `key' by `amount'
 -spec counter_incr(pid(), bucket(), key(), integer()) -> ok.
@@ -990,7 +999,7 @@ counter_incr(Pid, Bucket, Key, Amount) ->
     ok | {error, term()}.
 counter_incr(Pid, Bucket, Key, Amount, Options) ->
     Req = counter_incr_options(Options, #rpbcounterupdatereq{bucket=Bucket, key=Key, amount=Amount}),
-    gen_server:call(Pid, {req, Req, default_timeout(put_timeout), 1}).
+    gen_server:call(Pid, {req, Req, default_timeout(p1_timeout), ms_time(), 1}).
 
 %% @doc get the current value of the counter at `Bucket', `Key'.
 -spec counter_val(pid(), bucket(), key()) ->
@@ -1004,7 +1013,7 @@ counter_val(Pid, Bucket, Key) ->
                          {ok, integer()} | {error, term()}.
 counter_val(Pid, Bucket, Key, Options) ->
     Req = counter_val_options(Options, #rpbcountergetreq{bucket=Bucket, key=Key}),
-    gen_server:call(Pid, {req, Req, default_timeout(get_timeout), 1}).
+    gen_server:call(Pid, {req, Req, default_timeout(p1_timeout), ms_time(), 1}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -1012,18 +1021,19 @@ counter_val(Pid, Bucket, Key, Options) ->
 
 %% @private
 init([Address, Port, Options]) ->
+    process_flag(trap_exit, true),
     %% Schedule a reconnect as the first action.  If the server is up then
     %% the handle_info(reconnect) will run before any requests can be sent.
     State = parse_options(Options, #state{address = Address,
                                           port = Port,
-                                          queue = queue:new()}),
+                                          queue = queue_new()}),
     case State#state.auto_reconnect of
         true ->
             self() ! reconnect,
             {ok, State};
         false ->
             case connect(State) of
-                {error, Reason} ->
+                {error, _Reason} ->
                     {stop, normal};
                 Ok ->
                     Ok
@@ -1031,33 +1041,44 @@ init([Address, Port, Options]) ->
     end.
 
 %% @private
-handle_call({req, _Msg, _Timeout, 2}, _From,
+handle_call({req, _Msg, _Timeout, _TimeCalled, 2}, _From,
             #state{queue_len = QL, max_queue_len = MQL} = State) when QL >= MQL ->
     {reply, {error, max_queue_len}, State};
 
-handle_call({req, Msg, Timeout, _}, From, State) when State#state.sock =:= undefined ->
+handle_call({req, Msg, Timeout, TimeCalled, Prio}, From, State)
+  when State#state.sock =:= undefined ->
     case State#state.queue_if_disconnected of
         true ->
-            {noreply, queue_request(new_request(Msg, From, Timeout), State)};
+            {noreply,
+             queue_request(
+               new_request(Msg, From, Timeout, TimeCalled, Prio, true), State)};
         false ->
             {reply, {error, disconnected}, State}
     end;
-handle_call({req, Msg, Timeout, Ctx, _}, From, State) when State#state.sock =:= undefined ->
+handle_call({req, Msg, Timeout, Ctx, TimeCalled, Prio}, From, State)
+  when State#state.sock =:= undefined ->
     case State#state.queue_if_disconnected of
         true ->
-            {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
+            {noreply,
+             queue_request(
+               new_request(Msg, From, Timeout, TimeCalled, Ctx, Prio, true), State)};
         false ->
             {reply, {error, disconnected}, State}
     end;
-
-handle_call({req, Msg, Timeout, _}, From, State) when State#state.active =/= undefined ->
-    {noreply, queue_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, Msg, Timeout, Ctx, _}, From, State) when State#state.active =/= undefined ->
-    {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
-handle_call({req, Msg, Timeout, _}, From, State) ->
-    {noreply, send_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, Msg, Timeout, Ctx, _}, From, State) ->
-    {noreply, send_request(new_request(Msg, From, Timeout, Ctx), State)};
+handle_call({req, Msg, Timeout, TimeCalled, Prio}, From, State)
+  when State#state.active =/= undefined ->
+    {noreply, queue_request(
+                new_request(Msg, From, Timeout, TimeCalled, Prio, false), State)};
+handle_call({req, Msg, Timeout, Ctx,TimeCalled, Prio}, From, State)
+  when State#state.active =/= undefined ->
+    {noreply, queue_request(
+                new_request(Msg, From, Timeout, TimeCalled, Ctx, Prio, false), State)};
+handle_call({req, Msg, Timeout, TimeCalled, Prio}, From, State) ->
+    {noreply, send_request(
+                new_request(Msg, From, Timeout, TimeCalled, Prio, false), State)};
+handle_call({req, Msg, Timeout, Ctx, TimeCalled, Prio}, From, State) ->
+    {noreply, send_request(
+                new_request(Msg, From, Timeout, TimeCalled, Ctx, Prio, false), State)};
 handle_call({set_max_queue_len, MQL}, _From, State) ->
     {reply, ok, State#state{max_queue_len = MQL}};
 handle_call({check, queue_len}, _From, #state{queue_len = QueueLen} = State) ->
@@ -1074,7 +1095,7 @@ handle_call(is_connected, _From, State) ->
 handle_call({set_options, Options}, _From, State) ->
     {reply, ok, parse_options(Options, State)};
 handle_call(stop, _From, State) ->
-    _ = disconnect(State),
+    disconnect(State, true),
     {stop, normal, ok, State};
 handle_call(get_state, _From, State) ->
     {reply, State, State}.
@@ -1083,10 +1104,10 @@ handle_call(get_state, _From, State) ->
 handle_info({tcp_error, _Socket, Reason}, State) ->
     error_logger:error_msg("PBC client TCP error for ~p:~p - ~p\n",
                            [State#state.address, State#state.port, Reason]),
-    disconnect(State);
+    disconnect(State, true);
 
 handle_info({tcp_closed, _Socket}, State) ->
-    disconnect(State);
+    disconnect(State, true);
 
 %% Make sure the two Sock's match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
@@ -1110,7 +1131,7 @@ handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
                     %% Send reply and get ready for the next request - send the next request
                     %% if one is queued up
                     cancel_req_timer(Active#request.tref),
-                    _ = send_caller(Response, NewState0#state.active),
+                    send_caller(Response, NewState0#state.active),
                     NewState = dequeue_request(NewState0#state{active = undefined});
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
                     NewActive = restart_req_timer(Active),
@@ -1120,14 +1141,14 @@ handle_info({tcp, Sock, Data}, State=#state{sock = Sock, active = Active}) ->
     ok = inet:setopts(Sock, [{active, once}]),
     {noreply, NewState};
 handle_info({req_timeout, Ref}, State) ->
-    case State#state.active of %%
+    case State#state.active of
         undefined ->
             {noreply, remove_queued_request(Ref, State)};
         Active ->
             case Ref == Active#request.ref of
                 true ->  %% Matches the current operation
                     NewState = maybe_reply(on_timeout(State#state.active, State)),
-                    disconnect(NewState#state{active = undefined});
+                    disconnect(NewState#state{active = undefined}, false);
                 false ->
                     {noreply, remove_queued_request(Ref, State)}
             end
@@ -1139,7 +1160,7 @@ handle_info(reconnect, State) ->
         {error, Reason} ->
             %% Update the failed count and reschedule a reconnection
             NewState = State#state{failed = orddict:update_counter(Reason, 1, State#state.failed)},
-            disconnect(NewState)
+            disconnect(NewState, true)
     end;
 handle_info(_, State) ->
     {noreply, State}.
@@ -1196,7 +1217,7 @@ send_caller(Msg, #request{ctx = {ReqId, Client},
                           from = undefined}=Request) ->
     Client ! {ReqId, Msg},
     Request;
-send_caller(Msg, #request{from = From}=Request) when From /= undefined ->
+send_caller(Msg, #request{from = From} = Request) when From /= undefined ->
     gen_server:reply(From, Msg),
     Request#request{from = undefined}.
 
@@ -1467,7 +1488,7 @@ process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
 process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
     ToSend = process_index_response(Terms, Keys, Results),
-    _ = send_caller(ToSend, Request),
+    send_caller(ToSend, Request),
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
                 true -> DoneResponse;
@@ -1494,7 +1515,7 @@ process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsb
                                              Objects),
                       {ok, CObjects}
               end,
-    _ = send_caller(ToSend, Request),
+    send_caller(ToSend, Request),
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
         true -> DoneResponse;
@@ -1603,7 +1624,7 @@ send_mapred_req(Pid, MapRed, ClientPid, CallTimeout) ->
     ReqMsg = #rpbmapredreq{request = encode_mapred_req(MapRed),
                            content_type = <<"application/x-erlang-binary">>},
     ReqId = mk_reqid(),
-    Timeout = proplists:get_value(timeout, MapRed, default_timeout(mapred_timeout)),
+    Timeout = proplists:get_value(timeout, MapRed, default_timeout(p1_timeout)),
     Timeout1 = if
            is_integer(Timeout) ->
                %% Add an extra 100ms to the mapred timeout and use that
@@ -1613,26 +1634,39 @@ send_mapred_req(Pid, MapRed, ClientPid, CallTimeout) ->
            true ->
                Timeout
            end,
-    gen_server:call(Pid, {req, ReqMsg, Timeout1, {ReqId, ClientPid}, 1}, CallTimeout).
+    gen_server:call(Pid, {req, ReqMsg, Timeout1, {ReqId, ClientPid}, ms_time(), 1}, CallTimeout).
 
 %% @private
 %% Make a new request that can be sent or queued
-new_request(Msg, From, Timeout) ->
+new_request(Msg, From, Timeout, TimeCalled, Prio, CreateTimer) ->
     Ref = make_ref(),
-    #request{ref = Ref, msg = Msg, from = From, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
-new_request(Msg, From, Timeout, Context) ->
+    #request{ref         = Ref,
+             msg         = Msg,
+             from        = From,
+             timeout     = Timeout,
+             time_called = TimeCalled,
+             priority    = Prio,
+             tref        = create_req_timer(Timeout, Ref, CreateTimer)}.
+new_request(Msg, From, Timeout, TimeCalled, Context, Prio, CreateTimer) ->
     Ref = make_ref(),
-    #request{ref =Ref, msg = Msg, from = From, ctx = Context, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
+    #request{ref         = Ref,
+             msg         = Msg,
+             from        = From,
+             ctx         = Context,
+             timeout     = Timeout,
+             time_called = TimeCalled,
+             priority    = Prio,
+             tref        = create_req_timer(Timeout, Ref, CreateTimer)}.
 
 %% @private
 %% Create a request timer if desired, otherwise return undefined.
-create_req_timer(infinity, _Ref) ->
+create_req_timer(_MSecs, _Ref, false) ->
     undefined;
-create_req_timer(undefined, _Ref) ->
+create_req_timer(infinity, _Ref, _) ->
     undefined;
-create_req_timer(Msecs, Ref) ->
+create_req_timer(undefined, _Ref, _) ->
+    undefined;
+create_req_timer(Msecs, Ref, true) ->
     erlang:send_after(Msecs, self(), {req_timeout, Ref}).
 
 %% @private
@@ -1640,7 +1674,7 @@ create_req_timer(Msecs, Ref) ->
 cancel_req_timer(undefined) ->
     ok;
 cancel_req_timer(Tref) ->
-    _ = erlang:cancel_timer(Tref),
+    erlang:cancel_timer(Tref),
     ok.
 
 %% @private
@@ -1653,7 +1687,8 @@ restart_req_timer(Request) ->
         Tref ->
             cancel_req_timer(Tref),
             NewTref = create_req_timer(Request#request.timeout,
-                                       Request#request.ref),
+                                       Request#request.ref,
+                                       true),
             Request#request{tref = NewTref}
     end.
 
@@ -1673,14 +1708,14 @@ connect(State) when State#state.sock =:= undefined ->
 
 %% @private
 %% Disconnect socket if connected
-disconnect(State) ->
+disconnect(State, DelayReconnect) ->
     %% Tell any pending requests we've disconnected
-    _ = case State#state.active of
-            undefined ->
-                ok;
-            Request ->
-                send_caller({error, disconnected}, Request)
-        end,
+    case State#state.active of
+        undefined ->
+            ok;
+        Request ->
+            send_caller({error, disconnected}, Request)
+    end,
 
     %% Make sure the connection is really closed
     case State#state.sock of
@@ -1692,12 +1727,15 @@ disconnect(State) ->
 
     %% Decide whether to reconnect or exit
     NewState = State#state{sock = undefined, active = undefined},
-    case State#state.auto_reconnect of
-        true ->
+    case {State#state.auto_reconnect, DelayReconnect} of
+        {true, true} ->
             %% Schedule the reconnect message and return state
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {noreply, increase_reconnect_interval(NewState)};
-        false ->
+        {true, false} ->
+            self() ! reconnect,
+            {noreply, NewState};
+        {false, _} ->
             {stop, normal, NewState}
     end.
 
@@ -1715,29 +1753,69 @@ increase_reconnect_interval(State) ->
 %% @private
 %% Already encoded (for tunneled messages), but must provide Message Id
 %% for responding to the second form of send_request.
-send_request(#request{msg = {tunneled,MsgId,Pkt}}=Msg, State) when State#state.active =:= undefined ->
-    Request = Msg#request{msg = {tunneled,MsgId}},
-    case gen_tcp:send(State#state.sock, [MsgId|Pkt]) of
-        ok ->
-            State#state{active = Request};
-        {error, closed} ->
-            gen_tcp:close(State#state.sock),
-            maybe_enqueue_and_reconnect(Msg, State#state{sock=undefined})
+send_request(#request{msg         = {tunneled,MsgId,Pkt},
+                      ref         = Ref,
+                      tref        = TRef,
+                      timeout     = Timeout,
+                      time_called = TimeCalled} = Msg, State)
+  when State#state.active =:= undefined ->
+    cancel_req_timer(TRef),
+    case has_op_expired(TimeCalled, Timeout) of
+        true -> % too late
+            dequeue_request(maybe_reply(on_timeout(Msg, State#state{active = Msg})));
+        false -> % do it
+            case gen_tcp:send(State#state.sock, [MsgId|Pkt]) of
+                ok ->
+                    OpTimeout = default_timeout(operation),
+                    Request = Msg#request{msg = {tunneled,MsgId},
+                                          tref = create_req_timer(OpTimeout, Ref, true)},
+                    State#state{active = Request};
+                {error, closed} ->
+                    gen_tcp:close(State#state.sock),
+                    maybe_enqueue_and_reconnect(Msg, State#state{sock=undefined})
+            end
     end;
 %% Unencoded Request (the normal PB client path)
-send_request(Request, State) when State#state.active =:= undefined ->
-    Pkt = riak_pb_codec:encode(Request#request.msg),
-    Ret = case State#state.test_val of
-              true -> ok;
-              _ -> gen_tcp:send(State#state.sock, Pkt)
-          end,
-    case Ret of
-        ok ->
-            maybe_reply(after_send(Request, State#state{active = Request}));
-        {error, closed} ->
-            gen_tcp:close(State#state.sock),
-            maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
+send_request(#request{ref         = Ref,
+                      tref        = TRef,
+                      timeout     = Timeout,
+                      time_called = TimeCalled} = Request, State)
+  when State#state.active =:= undefined ->
+    cancel_req_timer(TRef),
+    case has_op_expired(TimeCalled, Timeout) of
+        true -> % too late
+            dequeue_request(maybe_reply(on_timeout(Request, State#state{active = Request})));
+        false -> % do it
+
+            SentFun =
+                fun() ->
+                        OpTimeout = default_timeout(operation),
+                        {ok, Request#request{tref = create_req_timer(OpTimeout, Ref, true)}}
+                end,
+
+            {SendResult, Request2} =
+                case State#state.test_val of
+                    true -> SentFun();
+                    _ ->
+                        Pkt = riak_pb_codec:encode(Request#request.msg),
+                        Ret1 = gen_tcp:send(State#state.sock, Pkt),
+                        case Ret1 of
+                            ok    -> SentFun();
+                            Error -> {Error, Request}
+                        end
+                end,
+            case SendResult of
+                ok ->
+                    maybe_reply(after_send(Request2, State#state{active = Request2}));
+
+                {error, closed} ->
+                    gen_tcp:close(State#state.sock),
+                    maybe_enqueue_and_reconnect(Request2, State#state{sock=undefined})
+            end
     end.
+
+has_op_expired(_TimeCalled, infinity) -> false;
+has_op_expired(TimeCalled,   Timeout) -> (ms_time() - TimeCalled - Timeout) > 0.
 
 %% If the socket was closed, see if we can enqueue the request and
 %% trigger a reconnect. Otherwise, return an error to the requestor.
@@ -1763,31 +1841,31 @@ enqueue_or_reply_error(Request, State) ->
 queue_request(Request, #state{queue_len = QLen,
                               queue = Q} = State) ->
     State#state{queue_len = QLen + 1,
-                queue = queue:in(Request, Q)}.
+                queue = queue_in(Request, Q)}.
 
 %% Try and dequeue request and send onto the server if one is waiting
 %% @private
 dequeue_request(#state{queue_len = QLen} = State) ->
-    case queue:out(State#state.queue) of
+    case queue_out(State#state.queue) of
         {empty, _} ->
-            State;
+            State#state{active = undefined};
         {{value, Request}, Q2} ->
-            send_request(Request, State#state{queue_len = QLen - 1,
-                                              queue = Q2})
+            send_request(Request, State#state{active    = undefined,
+                                              queue_len = QLen - 1,
+                                              queue     = Q2})
     end.
 
 %% Remove a queued request by reference - returns same queue if ref not present
 %% @private
-remove_queued_request(Ref, #state{queue_len = QLen} = State) ->
-    L = queue:to_list(State#state.queue),
-    case lists:keytake(Ref, #request.ref, L) of
+remove_queued_request(Ref, #state{queue_len = QLen, queue = Q} = State) ->
+    case queue_take(Ref, Q) of
         false -> % Ref not queued up
             State;
-        {value, Req, L2} ->
+        {value, Req, Q2} ->
             {reply, Reply, NewState} = on_timeout(Req, State),
-            _ = send_caller(Reply, Req),
+            send_caller(Reply, Req),
             NewState#state{queue_len = QLen - 1,
-                           queue = queue:from_list(L2)}
+                           queue     = Q2}
     end.
 
 %% @private
@@ -1912,6 +1990,57 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
             [{error, Error}]
     end.
 
+ms_time() ->
+    {Meg, Sec, Mic} = os:timestamp(),
+    (Meg * 1000000000) + (Sec * 1000) + (Mic div 1000).
+
+queue_new() ->
+    #queue{queue1 = queue:new(),
+            queue2 = queue:new()}.
+
+queue_in(#request{priority = 1} = Request, #queue{queue1 = Q1} = Q) ->
+    Q#queue{queue1 = queue:in(Request, Q1)};
+queue_in(#request{priority = 2} = Request, #queue{queue2 = Q2} = Q) ->
+    Q#queue{queue2 = queue:in(Request, Q2)}.
+
+queue_out(#queue{queue1 = Q1, queue2 = Q2} = Q) ->
+    Res1 = queue:out(Q1),
+    Res2 = queue:out(Q2),
+    case {Res1, Res2} of
+        {{empty, _}, {empty, _}} ->
+            {empty, Q};
+        {{empty, _}, {{value, Request}, NewQ2}} ->
+            {{value, Request}, Q#queue{queue2 = NewQ2}};
+        {{{value, Request}, NewQ1}, {empty, _}} ->
+            {{value, Request}, Q#queue{queue1 = NewQ1}};
+        {{{value, Request1}, NewQ1}, {{value, Request2}, NewQ2}} ->
+            case Request1#request.time_called =< Request2#request.time_called of
+                true  -> {{value, Request1}, Q#queue{queue1 = NewQ1}};
+                false -> {{value, Request2}, Q#queue{queue2 = NewQ2}}
+            end
+    end.
+
+queue_take(Ref, #queue{queue1 = Q1, queue2 = Q2} = Q) ->
+    % L1 = queue:to_list(Q1),
+    % L2 = queue:to_list(Q2),
+    % case {lists:keytake(Ref, #request.ref, L1), lists:keytake(Ref, #request.ref, L2)} of
+    %         {false, false} -> false; % Ref not queued up
+    %         {{value, Req, NL1}, false} ->
+    %             {value, Req, Q#queue{queue1 = queue:from_list(NL1)}};
+    %         {false, {value, Req, NL2}} ->
+    %             {value, Req, Q#queue{queue2 = queue:from_list(NL2)}}
+    %
+    Res1 = queue:out(Q1),
+    Res2 = queue:out(Q2),
+    case {Res1, Res2} of
+        {{{value, #request{ref = Ref} = Req}, NewQ1}, _} ->
+            {value, Req, Q#queue{queue1 = NewQ1}};
+        {_, {{value, #request{ref = Ref} = Req}, NewQ2}} ->
+            {value, Req, Q#queue{queue2 = NewQ2}};
+        _ -> false
+             %
+    end.
+
 %% ====================================================================
 %% unit tests
 %% ====================================================================
@@ -1922,6 +2051,15 @@ decode_mapred_resp(Data, <<"application/x-erlang-binary">>) ->
 -ifdef(TEST).
 -compile(export_all).
 -include_lib("eunit/include/eunit.hrl").
+
+belfast() ->
+    application:set_env(riakc, get1_timeout, 1000),
+    application:set_env(riakc, get2_timeout, 500),
+    application:set_env(riakc, put_timeout, 2000),
+    application:set_env(riakc, operation, 100),
+    os:putenv("RIAK_TEST_PB_HOST", "192.168.0.5"),
+    os:putenv("RIAK_TEST_PBC_1",   "8087"),
+    os:putenv("RIAK_TEST_NODE_1",  "riak@belfast").
 
 %% Get the test host - check env RIAK_TEST_PB_HOST then env 'RIAK_TEST_HOST_1'
 %% falling back to 127.0.0.1
@@ -2095,7 +2233,7 @@ maybe_start_network() ->
 
 bad_connect_test() ->
     %% Start with an unlikely port number
-    ?assertEqual({error, {tcp, econnrefused}}, start({127,0,0,1}, 65535)).
+    ?assertEqual({error, normal}, start({127,0,0,1}, 65535)).
 
 queue_disconnected_test() ->
     %% Start with an unlikely port number
@@ -2962,70 +3100,229 @@ live_node_tests() ->
 
 queue_test() ->
     {ok, Pid} = start_link(test_ip(), test_port()),
+    application:set_env(riakc, operation, 5000),
 
     set_max_queue_len(Pid, 5),
     gen_server:call(Pid, {set_test_val, true}),
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q01} = gen_server:call(Pid,get_state),
     ?assertEqual(0, Q01), % Queued
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q02} = gen_server:call(Pid,get_state),
     ?assertEqual(1, Q02), % Queued
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q03} = gen_server:call(Pid,get_state),
     ?assertEqual(2, Q03), % Queued
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q04} = gen_server:call(Pid,get_state),
     ?assertEqual(3, Q04), % Queued
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q05} = gen_server:call(Pid,get_state),
     ?assertEqual(4, Q05), % Queued
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q06} = gen_server:call(Pid,get_state),
     ?assertEqual(5, Q06), % Queued
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q07} = gen_server:call(Pid,get_state),
     ?assertEqual(5, Q07), % Discarded
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q08} = gen_server:call(Pid,get_state),
     ?assertEqual(5, Q08), % Discarded
 
     spawn(?MODULE, put, [Pid, riakc_obj:new(<<"qwer">>, <<"qwer">>, <<"qwer">>)]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q09} = gen_server:call(Pid,get_state),
     ?assertEqual(6, Q09), % Queued
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q10} = gen_server:call(Pid,get_state),
     ?assertEqual(6, Q10), % Discarded
 
     spawn(?MODULE, get2, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q11} = gen_server:call(Pid,get_state),
     ?assertEqual(6, Q11), % Discarded
 
     spawn(?MODULE, get1, [Pid, <<"qwer">>, <<"qwer">>]),
-    timer:sleep(100),
+    timer:sleep(10),
     #state{queue_len = Q12} = gen_server:call(Pid,get_state),
     ?assertEqual(7, Q12), % Queued
 
+    application:set_env(riakc, operation, 100),
     stop(Pid).
+
+timeout_no_conn_test() ->
+    {ok, Pid} = start_link(test_ip(), 65225, [auto_reconnect, queue_if_disconnected]),
+
+    application:set_env(riakc, p1_timeout, 150),
+    application:set_env(riakc, p2_timeout, 100),
+    application:set_env(riakc, operation,  10),
+
+    Self = self(),
+
+    REQ = fun(Func) ->
+                  erlang:spawn(fun() ->
+                                       {T,Info} = (catch timer:tc(?MODULE, Func,
+                                                                  [Pid, <<"qwer">>, <<"qwer">>])),
+                                       Self ! {self(), {T div 1000, Info}}
+                               end)
+          end,
+
+    RES = fun(RPid) ->
+                  receive
+                      {RPid, Result} -> Result
+                  after
+                      3000 -> error
+                  end
+          end,
+
+    P1 = REQ(get1), timer:sleep(1),
+    P2 = REQ(get2), timer:sleep(1),
+    P3 = REQ(get1), timer:sleep(1),
+    P4 = REQ(get2), timer:sleep(1),
+    P5 = REQ(get1), timer:sleep(1),
+    P6 = REQ(get2), timer:sleep(1),
+    P7 = REQ(get1), timer:sleep(1),
+    P8 = REQ(get2), timer:sleep(1),
+    P9 = REQ(get1),
+
+    {T1, {error, timeout}} = RES(P1),
+    {T2, {error, timeout}} = RES(P2),
+    {T3, {error, timeout}} = RES(P3),
+    {T4, {error, timeout}} = RES(P4),
+    {T5, {error, timeout}} = RES(P5),
+    {T6, {error, timeout}} = RES(P6),
+    {T7, {error, timeout}} = RES(P7),
+    {T8, {error, timeout}} = RES(P8),
+    {T9, {error, timeout}} = RES(P9),
+
+    io:format(user, "~nTIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p~n", [T1,T2,T3,T4,T5,T6,T7,T8,T9]),
+    lists:foreach(fun(T) -> true = T > 145, true = T < 155 end, [T1,T3,T5,T7,T9]),
+    lists:foreach(fun(T) -> true = T > 95,  true = T < 105 end, [T2,T4,T6,T8]),
+
+    application:set_env(riakc, p1_timeout, 1500),
+    application:set_env(riakc, p2_timeout, 1000),
+    application:set_env(riakc, operation,  100),
+
+    stop(Pid).
+
+timeout_conn_test() ->
+    %% Set up a dummy socket to send requests on
+    {ok, DummyServerPid, Port} = dummy_server(),
+    {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected]),
+    erlang:monitor(process, DummyServerPid),
+
+    application:set_env(riakc, p1_timeout, 150),
+    application:set_env(riakc, p2_timeout, 100),
+    application:set_env(riakc, operation,  20),
+
+    Self = self(),
+
+    REQ = fun(Func) ->
+                  erlang:spawn(fun() ->
+                                       {T,Info} = (catch timer:tc(?MODULE, Func,
+                                                                  [Pid, <<"qwer">>, <<"qwer">>])),
+                                       Self ! {self(), {T div 1000, Info}}
+                               end)
+          end,
+
+    RES = fun(RPid) ->
+                  receive
+                      {RPid, Result} -> Result
+                  after
+                      3000 -> error
+                  end
+          end,
+
+    P01 = REQ(get2), timer:sleep(1),
+    P02 = REQ(get2), timer:sleep(1),
+    P03 = REQ(get2), timer:sleep(1),
+    P04 = REQ(get2), timer:sleep(1),
+    P05 = REQ(get2), timer:sleep(1),
+    P06 = REQ(get2), timer:sleep(1),
+    P07 = REQ(get2), timer:sleep(1),
+    P08 = REQ(get2), timer:sleep(1),
+    P09 = REQ(get2), timer:sleep(1),
+    P10 = REQ(get2),
+
+    {T01, {error, timeout}} = RES(P01),
+    {T02, {error, timeout}} = RES(P02),
+    {T03, {error, timeout}} = RES(P03),
+    {T04, {error, timeout}} = RES(P04),
+    {T05, {error, timeout}} = RES(P05),
+    {T06, {error, timeout}} = RES(P06),
+    {T07, {error, timeout}} = RES(P07),
+    {T08, {error, timeout}} = RES(P08),
+    {T09, {error, timeout}} = RES(P09),
+    {T10, {error, timeout}} = RES(P10),
+
+    io:format(user, "~nTIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p~n",
+              [T01,T02,T03,T04,T05,T06,T07,T08,T09,T10]),
+    true = T01 > 15, true = T01 < 25,
+    true = T02 > 35, true = T02 < 45,
+    true = T03 > 55, true = T03 < 65,
+    true = T04 > 75, true = T04 < 85,
+    true = T05 > 95, true = T05 < 105,
+    lists:foreach(fun(T) -> true = T > 100, true = T < 120 end, [T06,T07,T08,T09,T10]),
+
+    application:set_env(riakc, p1_timeout, 1500),
+    application:set_env(riakc, p2_timeout, 1000),
+    application:set_env(riakc, operation,  100),
+
+    catch DummyServerPid ! stop,
+    timer:sleep(10),
+    receive _Msg -> ok % io:format(user, "~nMSG: ~p", [_Msg])
+    after 1 -> ok % io:format(user, "~nNO MSG: ~p", [process_info(DummyServerPid, messages)])
+    end,
+
+    stop(Pid).
+
+dummy_server() ->
+    {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, true}]),
+    {ok, Port} = inet:port(Listen),
+    Pid = spawn(?MODULE, dummy_server, [{Listen, no_conn}]),
+    {ok, Pid, Port}.
+
+dummy_server({Listen, no_conn}) ->
+    {ok, Sock} = gen_tcp:accept(Listen),
+    dummy_server({Listen, Sock});
+dummy_server({Listen, Sock}) ->
+    receive
+        stop -> ok;
+        {tcp_closed, Sock} -> dummy_server({Listen, no_conn});
+        _Data              -> dummy_server({Listen, Sock}) % ignore requests, let them timeout
+    end.
+
+all_tests() ->
+    belfast(),
+    lists:foreach(
+      fun(TestFun) -> ok = apply(?MODULE, TestFun, []) end,
+      [bad_connect_test,
+       queue_disconnected_test,
+       auto_reconnect_bad_connect_test,
+       server_closes_socket_test,
+       auto_reconnect_server_closes_socket_test,
+       dead_socket_pid_returns_to_caller_test,
+       increase_reconnect_interval_test,
+       queue_test,
+       timeout_conn_test,
+       timeout_no_conn_test]).
 
 -endif.
