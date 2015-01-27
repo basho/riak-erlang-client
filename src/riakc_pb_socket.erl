@@ -1194,8 +1194,10 @@ update_type(Pid, BucketAndType, Key, {Type, Op, Context}, Options) ->
 -spec modify_type(pid(), fun((riakc_datatype:datatype()) -> riakc_datatype:datatype()),
                   {BucketType::binary(), Bucket::binary()}, Key::binary(), [proplists:property()]) ->
                          ok | {ok, riakc_datatype:datatype()} | {error, term()}.
-modify_type(Pid, Fun, BucketAndType, Key, Options) ->
-    Create = proplists:get_value(create, Options, true),
+modify_type(Pid, Fun, BucketAndType, Key, ModifyOptions) ->
+    Create = proplists:get_value(create, ModifyOptions, true),
+    Options = proplists:delete(create, ModifyOptions),
+
     case fetch_type(Pid, BucketAndType, Key, Options) of
         {ok, Data} ->
             NewData = Fun(Data),
