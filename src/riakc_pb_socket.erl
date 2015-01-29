@@ -211,7 +211,7 @@ queue_len(Pid) ->
     gen_server:call(Pid, {check, queue_len}, infinity).
 
 set_max_queue_len(Pid, MQL) when is_integer(MQL); MQL == infinity ->
-    gen_server:call(Pid, {set_max_queue_len, MQL}, infinity).
+    gen_server:cast(Pid, {set_max_queue_len, MQL}).
 
 %% @doc Get the client id for this connection
 %% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
@@ -1079,8 +1079,6 @@ handle_call({req, Msg, Timeout, TimeCalled, Prio}, From, State) ->
 handle_call({req, Msg, Timeout, Ctx, TimeCalled, Prio}, From, State) ->
     {noreply, send_request(
                 new_request(Msg, From, Timeout, TimeCalled, Ctx, Prio, false), State)};
-handle_call({set_max_queue_len, MQL}, _From, State) ->
-    {reply, ok, State#state{max_queue_len = MQL}};
 handle_call({check, queue_len}, _From, #state{queue_len = QueueLen} = State) ->
     {reply, QueueLen, State};
 handle_call({set_test_val, Val}, _From, State) ->
@@ -1166,6 +1164,8 @@ handle_info(_, State) ->
     {noreply, State}.
 
 %% @private
+handle_cast({set_max_queue_len, MQL}, State) ->
+    {noreply, State#state{max_queue_len = MQL}};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
