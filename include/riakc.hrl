@@ -69,7 +69,6 @@
                       {n_val, pos_integer()} |
                       {sloppy_quorum, boolean()}.
 
-
 %% Valid request options for get requests. When `if_modified' is
 %% specified with a vclock, the request will fail if the object has
 %% not changed. When `head' is specified, only the metadata will be
@@ -191,3 +190,9 @@
 -type search_schema() :: [{name, binary()} |
                          {content, binary()}].
 
+-record(preflist_item, {
+          partition :: non_neg_integer(),
+          node      :: binary(),
+          primary   :: boolean()
+         }).
+-type preflist() :: [#preflist_item{}].

@@ -69,7 +69,8 @@
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
          cs_bucket_fold/3,
          default_timeout/1,
-         tunnel/4]).
+         tunnel/4,
+         get_preflist/3, get_preflist/4]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -1210,6 +1211,22 @@ modify_type(Pid, Fun, BucketAndType, Key, Options) ->
             {error, Reason}
     end.
 
+%% @doc Get active preflist.
+%% @equiv get_preflist(Pid, Bucket, Key, default_timeout(get_preflist_timeout))
+-spec get_preflist(pid(), bucket(), key()) -> {ok, preflist()}
+                                                 | {error, term()}.
+get_preflist(Pid, Bucket, Key) ->
+    get_preflist(Pid, Bucket, Key, default_timeout(get_preflist_timeout)).
+
+%% @doc Get active preflist specifying a server side timeout.
+%% @equiv get_preflist(Pid, Bucket, Key, default_timeout(get_preflist_timeout))
+-spec get_preflist(pid(), bucket(), key(), timeout()) -> {ok, preflist()}
+                                                            | {error, term()}.
+get_preflist(Pid, Bucket, Key, Timeout) ->
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = #rpbgetbucketkeypreflistreq{type = T, bucket = B, key = Key},
+    call_infinity(Pid, {req, Req, Timeout}).
+
 
 %% ====================================================================
 %% gen_server callbacks
@@ -1817,6 +1834,14 @@ process_response(#request{msg = #rpbyokozunaindexgetreq{}},
 process_response(#request{msg = #rpbyokozunaschemagetreq{}},
                  #rpbyokozunaschemagetresp{schema=Schema}, State) ->
     Result = [{name,Schema#rpbyokozunaschema.name}, {content,Schema#rpbyokozunaschema.content}],
+    {reply, {ok, Result}, State};
+
+process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
+                 #rpbgetbucketkeypreflistresp{preflist=Preflist}, State) ->
+    Result = [#preflist_item{partition=T#rpbbucketkeypreflistitem.partition,
+                             node=T#rpbbucketkeypreflistitem.node,
+                             primary=T#rpbbucketkeypreflistitem.primary}
+              || T <- Preflist],
     {reply, {ok, Result}, State};
 
 process_response(Request, Reply, State) ->
@@ -3805,6 +3830,22 @@ live_node_tests() ->
 
                     ?assert(lists:member(<<"Z">>, L1)),
                     ?assertEqual(length(L1), 1)
+                end)},
+     {"get preflist test",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 {ok, Preflist} = get_preflist(Pid, <<"b">>, <<"f">>),
+                 ?assertEqual([#preflist_item{partition = 52,
+                                              node = <<"riak@127.0.0.1">>,
+                                              primary = true},
+                               #preflist_item{partition = 53,
+                                              node = <<"riak@127.0.0.1">>,
+                                              primary = true},
+                               #preflist_item{partition = 54,
+                                              node = <<"riak@127.0.0.1">>,
+                                              primary = true}],
+                              Preflist)
              end)}
      ].
 
