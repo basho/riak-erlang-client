@@ -481,7 +481,7 @@ Updating maps involves both specifying the map field that you wish to update (by
                             fun(R) -> riakc_register:set(<<"foo">>, R) end,
                             Map).
 
-For more detailed instructions on maps, see the [Using Data Types](http://docs.basho.com/riak/2.0.0pre20/dev/using/data-types/#Maps) documentation.
+For more detailed instructions on maps, see the [Using Data Types](http://docs.basho.com/riak/latest/dev/using/data-types/#Maps) documentation.
 
 Links
 =====
