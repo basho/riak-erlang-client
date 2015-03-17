@@ -896,15 +896,15 @@ create_search_index(Pid, Index, SchemaName, Timeout)
 create_search_index(Pid, Index, SchemaName, Opts) ->
     Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
     NVal = proplists:get_value(n_val, Opts),
-    Req = set_search_req_nval(NVal, Index, SchemaName),
-    Req1 = set_search_req_timeout(Timeout, Req),
+    Req = set_index_create_req_nval(NVal, Index, SchemaName),
+    Req1 = set_index_create_req_timeout(Timeout, Req),
 
     Timeout1 = if
                    is_integer(Timeout) ->
                        %% Add an extra 500ms to the create_search_index timeout
                        %% and use that for the socket timeout.
-                       %% This should give the creation to throw back a proper
-                       %% response.
+                       %% This should give the creation process time to throw
+                       %% back a proper response.
                        Timeout + 500;
                    true ->
                        Timeout
@@ -2307,30 +2307,30 @@ maybe_make_bucket_type(Type, Bucket) ->
 
 %% @private
 %% @doc Create/Set record based on NVal value or throw an error.
--spec set_search_req_nval(pos_integer()|undefined, binary(), binary()) ->
+-spec set_index_create_req_nval(pos_integer()|undefined, binary(), binary()) ->
                                  #rpbyokozunaindexputreq{}.
-set_search_req_nval(NVal, Index, SchemaName) when is_integer(NVal) ->
+set_index_create_req_nval(NVal, Index, SchemaName) when is_integer(NVal) ->
     #rpbyokozunaindexputreq{index = #rpbyokozunaindex{
                                        name = Index,
                                        schema = SchemaName,
                                        n_val = NVal}};
-set_search_req_nval(NVal, Index, SchemaName) when NVal =:= undefined ->
+set_index_create_req_nval(NVal, Index, SchemaName) when NVal =:= undefined ->
     #rpbyokozunaindexputreq{index = #rpbyokozunaindex{
                                        name = Index,
                                        schema = SchemaName}};
-set_search_req_nval(NVal, _Index, _SchemaName)
+set_index_create_req_nval(NVal, _Index, _SchemaName)
   when not is_integer(NVal); NVal =/= undefined ->
     erlang:error(badarg).
 
 %% @private
 %% @doc Set record based on Timeout value or throw an error.
--spec set_search_req_timeout(timeout(), #rpbyokozunaindexputreq{}) ->
+-spec set_index_create_req_timeout(timeout(), #rpbyokozunaindexputreq{}) ->
                                     #rpbyokozunaindexputreq{}.
-set_search_req_timeout(Timeout, Req) when is_integer(Timeout) ->
+set_index_create_req_timeout(Timeout, Req) when is_integer(Timeout) ->
     Req#rpbyokozunaindexputreq{timeout = Timeout};
-set_search_req_timeout(Timeout, Req) when Timeout =:= infinity ->
+set_index_create_req_timeout(Timeout, Req) when Timeout =:= infinity ->
     Req;
-set_search_req_timeout(Timeout, _Req) when not is_integer(Timeout) ->
+set_index_create_req_timeout(Timeout, _Req) when not is_integer(Timeout) ->
     erlang:error(badarg).
 
 
