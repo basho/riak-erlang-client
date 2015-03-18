@@ -886,18 +886,30 @@ create_search_index(Pid, Index) ->
     create_search_index(Pid, Index, <<>>, []).
 
 %% @doc Create a search index.
--spec create_search_index(pid(), binary(), binary(), search_admin_opts()) ->
-                    ok | {error, term()}.
+
+-spec create_search_index(pid(), binary(), binary(),
+                          timeout()|search_admin_opts()) ->
+                                 ok | {error, term()}.
+create_search_index(Pid, Index, SchemaName, Timeout)
+  when is_integer(Timeout); Timeout =:= infinity  ->
+    create_search_index(Pid, Index, SchemaName, [{timeout, Timeout}]);
 create_search_index(Pid, Index, SchemaName, Opts) ->
     Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
     NVal = proplists:get_value(n_val, Opts),
-    Req = #rpbyokozunaindexputreq{
-        index = #rpbyokozunaindex{name = Index,
-                                  schema = SchemaName,
-                                  n_val = NVal}
-    },
-    call_infinity(Pid, {req, Req, Timeout}).
+    Req = set_index_create_req_nval(NVal, Index, SchemaName),
+    Req1 = set_index_create_req_timeout(Timeout, Req),
 
+    Timeout1 = if
+                   is_integer(Timeout) ->
+                       %% Add an extra 500ms to the create_search_index timeout
+                       %% and use that for the socket timeout.
+                       %% This should give the creation process time to throw
+                       %% back a proper response.
+                       Timeout + 500;
+                   true ->
+                       Timeout
+               end,
+    call_infinity(Pid, {req, Req1, Timeout1}).
 
 %% @doc Delete a search index.
 -spec delete_search_index(pid(), binary()) ->
@@ -2293,6 +2305,35 @@ maybe_make_bucket_type(undefined, Bucket) ->
 maybe_make_bucket_type(Type, Bucket) ->
     {Type, Bucket}.
 
+%% @private
+%% @doc Create/Set record based on NVal value or throw an error.
+-spec set_index_create_req_nval(pos_integer()|undefined, binary(), binary()) ->
+                                 #rpbyokozunaindexputreq{}.
+set_index_create_req_nval(NVal, Index, SchemaName) when is_integer(NVal) ->
+    #rpbyokozunaindexputreq{index = #rpbyokozunaindex{
+                                       name = Index,
+                                       schema = SchemaName,
+                                       n_val = NVal}};
+set_index_create_req_nval(NVal, Index, SchemaName) when NVal =:= undefined ->
+    #rpbyokozunaindexputreq{index = #rpbyokozunaindex{
+                                       name = Index,
+                                       schema = SchemaName}};
+set_index_create_req_nval(NVal, _Index, _SchemaName)
+  when not is_integer(NVal); NVal =/= undefined ->
+    erlang:error(badarg).
+
+%% @private
+%% @doc Set record based on Timeout value or throw an error.
+-spec set_index_create_req_timeout(timeout(), #rpbyokozunaindexputreq{}) ->
+                                    #rpbyokozunaindexputreq{}.
+set_index_create_req_timeout(Timeout, Req) when is_integer(Timeout) ->
+    Req#rpbyokozunaindexputreq{timeout = Timeout};
+set_index_create_req_timeout(Timeout, Req) when Timeout =:= infinity ->
+    Req;
+set_index_create_req_timeout(Timeout, _Req) when not is_integer(Timeout) ->
+    erlang:error(badarg).
+
+
 %% ====================================================================
 %% unit tests
 %% ====================================================================
@@ -3378,7 +3419,7 @@ live_node_tests() ->
                  ok = ?MODULE:counter_incr(Pid, Bucket, Key, -5, [{w, quorum}, {pw, one}, {dw, all}]),
                  ?assertEqual({ok, 5}, ?MODULE:counter_val(Pid, Bucket, Key, [{pr, one}]))
              end)},
-     {"create a search index / get / list / delete",
+     {"create a search index / get / list / delete with default timeout",
      {timeout, 30, ?_test(begin
                 reset_riak(),
                 {ok, Pid} = start_link(test_ip(), test_port()),
@@ -3390,22 +3431,45 @@ live_node_tests() ->
                                                 Index,
                                                 SchemaName,
                                                 [{n_val,2}])),
-                wait_until( fun() ->
                     case ?MODULE:get_search_index(Pid, Index) of
                         {ok, IndexData} ->
-                            proplists:get_value(index, IndexData) == Index andalso
-                            proplists:get_value(schema, IndexData) == SchemaName andalso
-                            proplists:get_value(n_val, IndexData) == 2;
+                            ?assertEqual(proplists:get_value(
+                                         index, IndexData), Index),
+                            ?assertEqual(proplists:get_value(
+                                         schema, IndexData), SchemaName),
+                            ?assertEqual(proplists:get_value(
+                                         n_val, IndexData), 2);
                         {error, <<"notfound">>} ->
                             false
-                    end
-                end, 20, 1000 ),
+                    end,
                 ?assertEqual({ok, [[{index,Index},
                                     {schema,SchemaName},
                                     {n_val,2}]]},
                              ?MODULE:list_search_indexes(Pid)),
                 ?assertEqual(ok, ?MODULE:delete_search_index(Pid, Index))
-         end)}},
+             end)}},
+     {"create a search index / get with user-set timeout",
+     {timeout, 30, ?_test(begin
+                reset_riak(),
+                {ok, Pid} = start_link(test_ip(), test_port()),
+                reset_solr(Pid),
+                Index = <<"indexwithintimeouttest">>,
+                SchemaName = <<"_yz_default">>,
+                ?assertEqual(ok,
+                    ?MODULE:create_search_index(Pid,
+                                                Index,
+                                                SchemaName,
+                                                20000)),
+                    case ?MODULE:get_search_index(Pid, Index) of
+                        {ok, IndexData} ->
+                            ?assertEqual(proplists:get_value(
+                                         index, IndexData), Index),
+                            ?assertEqual(proplists:get_value(
+                                         schema, IndexData), SchemaName);
+                        {error, <<"notfound">>} ->
+                            false
+                    end
+             end)}},
      {"create a search schema / get",
       {timeout, 30, ?_test(begin
                 reset_riak(),
@@ -3460,14 +3524,6 @@ live_node_tests() ->
                 Index = <<"myindex">>,
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
-                wait_until( fun() ->
-                    case ?MODULE:get_search_index(Pid, Index) of
-                        {ok, IndexData} ->
-                            proplists:get_value(index, IndexData) == Index;
-                        {error, <<"notfound">>} ->
-                            false
-                    end
-                end, 20, 1000 ),
                 ok = ?MODULE:set_search_index(Pid, Bucket, Index),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"Freddy\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
@@ -3484,14 +3540,6 @@ live_node_tests() ->
                 Index = <<"myindex">>,
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
-                wait_until( fun() ->
-                    case ?MODULE:get_search_index(Pid, Index) of
-                        {ok, IndexData} ->
-                            proplists:get_value(index, IndexData) == Index;
-                        {error, <<"notfound">>} ->
-                            false
-                    end
-                end, 20, 1000 ),
                 ok = ?MODULE:set_search_index(Pid, Bucket, Index),
                 PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"בָּרָא\"}">>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
