@@ -67,7 +67,8 @@
          clear_links/1,
          delete_links/2,
          set_link/2,
-         add_link/2
+         add_link/2,
+         is_riakc_obj/1
         ]).
 %% Internal library use only
 -export([new_obj/4,index_id_to_bin/1]).
@@ -574,6 +575,9 @@ add_link(MD, [{T, IdList} | Rest]) ->
             MD2 = dict:store(?MD_LINKS, NewList, MD),
             add_link(MD2, Rest)
     end.
+
+is_riakc_obj(#riakc_obj{}) -> true;
+is_riakc_obj(_)            -> false.
 
 %% @doc  INTERNAL USE ONLY.  Set the contents of riakc_obj to the
 %%       {Metadata, Value} pairs in MVs. Normal clients should use the
