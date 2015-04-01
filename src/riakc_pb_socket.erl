@@ -82,7 +82,7 @@
 
 %% Yokozuna admin commands
 -export([list_search_indexes/1, list_search_indexes/2,
-         create_search_index/2, create_search_index/4,
+         create_search_index/2, create_search_index/3, create_search_index/4,
          get_search_index/2, get_search_index/3,
          delete_search_index/2, delete_search_index/3,
          set_search_index/3,
@@ -886,7 +886,13 @@ create_search_schema(Pid, SchemaName, Content, Opts) ->
 create_search_index(Pid, Index) ->
     create_search_index(Pid, Index, <<>>, []).
 
-%% @doc Create a search index.
+-spec create_search_index(pid(), binary(), timeout() | search_admin_opts()) ->
+                                 ok | {error, term()}.
+create_search_index(Pid, Index, Timeout)
+  when is_integer(Timeout); Timeout =:= infinity ->
+    create_search_index(Pid, Index, <<>>, [{timeout, Timeout}]);
+create_search_index(Pid, Index, Opts) ->
+    create_search_index(Pid, Index, <<>>, Opts).
 
 -spec create_search_index(pid(), binary(), binary(),
                           timeout()|search_admin_opts()) ->
