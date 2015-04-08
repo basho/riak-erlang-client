@@ -4016,7 +4016,6 @@ dummy_server({Listen, Sock}) ->
     end.
 
 all_tests() ->
-    % acer(),
     lists:foreach(
       fun(TestFun) -> ok = apply(?MODULE, TestFun, []) end,
       [bad_connect_test,
