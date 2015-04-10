@@ -43,6 +43,7 @@
          is_connected/1, is_connected/2,
          ping/1, ping/2,
          queue_len/1,
+         stats_peek/1, stats_take/1, stats_change_level/2, merge_stats/2,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
@@ -129,7 +130,7 @@
 %% of the same name on the `riakc' application, for example:
 %% `application:set_env(riakc, ping_timeout, 5000).'
 -record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
-                  tref :: reference() | undefined }).
+                  tref :: reference() | undefined, timestamp}).
 
 -type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
 -type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
@@ -155,6 +156,7 @@
                                % certificate authentication
                 ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
                                % documentation.
+                stats,
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 %% @private Like `gen_server:call/3', but with the timeout hardcoded
@@ -236,6 +238,15 @@ ping(Pid, Timeout) ->
 
 queue_len(Pid) ->
     call_infinity(Pid, {check, queue_len}).
+
+stats_peek(Pid) ->
+    stats_format(call_infinity(Pid, stats_peek)).
+
+stats_take(Pid) ->
+    stats_format(call_infinity(Pid, stats_take)).
+
+stats_change_level(Pid, NewLevel) ->
+    stats_format(call_infinity(Pid, {stats_change_level, NewLevel})).
 
 %% @doc Get the client id for this connection
 %% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
@@ -1276,6 +1287,12 @@ handle_call({set_options, Options}, _From, State) ->
     {reply, ok, parse_options(Options, State)};
 handle_call({check, queue_len}, _From, #state{queue_len = QueueLen} = State) ->
     {reply, QueueLen, State};
+handle_call(stats_peek, _From, #state{stats = Stats} = State) ->
+    {reply, Stats, State};
+handle_call(stats_take, _From, #state{stats = Stats} = State) ->
+    {reply, Stats, State#state{stats = init_stats(Stats)}};
+handle_call({stats_change_level, NewLevel}, _From, #state{stats = Stats} = State) ->
+    {reply, Stats, State#state{stats = init_stats(NewLevel)}};
 handle_call(stop, _From, State) ->
     disconnect(State, false),
     {stop, normal, ok, State};
@@ -1302,8 +1319,9 @@ handle_info({ssl_closed, _Socket}, State) ->
 %% Make sure the two Sock's match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
 %% it should drop through and be ignored.
-handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
+handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active, stats = Stats0})
         when Proto == tcp; Proto == ssl ->
+    Stats1 = record_stat(recv, iolist_size(Data), Stats0),
     <<MsgCode:8, MsgData/binary>> = Data,
     Resp = case Active#request.msg of
         {tunneled, _MsgID} ->
@@ -1314,16 +1332,18 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
     end,
     NewState = case Resp of
         #rpberrorresp{} ->
-            NewState1 = maybe_reply(on_error(Active, Resp, State)),
+            NewState1 = maybe_reply(on_error(Active, Resp, State#state{stats = Stats1})),
             dequeue_request(NewState1#state{active = undefined});
         _ ->
-            case process_response(Active, Resp, State) of
-                {reply, Response, NewState0} ->
+            case process_response(Active, Resp, State#state{stats = Stats1}) of
+                {reply, Response, NewState0 = #state{stats = Stats2}} ->
                     %% Send reply and get ready for the next request - send the next request
                     %% if one is queued up
                     cancel_req_timer(Active#request.tref),
                     send_caller(Response, NewState0#state.active),
-                    dequeue_request(NewState0#state{active = undefined});
+                    Stats3 = record_stat({service_time, op_timeout(Active#request.timeout), op_type(Active#request.msg)},
+                                         timer:now_diff(os:timestamp(), Active#request.timestamp), Stats2),
+                    dequeue_request(NewState0#state{active = undefined, stats = Stats3});
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
                     NewActive = restart_req_timer(Active),
                     NewState0#state{active = NewActive}
@@ -1336,13 +1356,14 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
             ok = ssl:setopts(Sock, [{active, once}])
     end,
     {noreply, NewState};
-handle_info({TimeoutTag, Ref}, #state{active = #request{ref = Ref}} = State)
+handle_info({TimeoutTag, Ref}, #state{active = #request{ref = Ref, msg = Msg, timeout = Timeout}, stats = Stats0} = State)
   when TimeoutTag == op_timeout; TimeoutTag == req_timeout ->
-    NewState = maybe_reply(on_timeout(State#state.active, State)),
+    NewState = maybe_reply(on_timeout(State#state.active,
+                                      State#state{stats = record_cntr({TimeoutTag, op_timeout(Timeout), op_type(Msg)}, Stats0)})),
     disconnect(NewState#state{active = undefined}, false);
 handle_info({TimeoutTag, Ref}, State)
   when TimeoutTag == q_timeout; TimeoutTag == req_timeout ->
-    {noreply, remove_queued_request(Ref, State)};
+    {noreply, remove_queued_request(Ref, State, TimeoutTag)};
 handle_info(reconnect, State) ->
     case connect(State) of
         {ok, NewState} ->
@@ -1371,14 +1392,18 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% @private
 %% Parse options
-parse_options([], State) ->
+parse_options([], #state{stats=Stats0} = State) ->
+    Stats1 = case Stats0 of
+                 undefined -> init_stats(0);
+                 _ -> Stats0
+             end,
     %% Once all options are parsed, make sure auto_reconnect is enabled
     %% if queue_if_disconnected is enabled.
     case State#state.queue_if_disconnected of
         true ->
-            State#state{auto_reconnect = true};
+            State#state{auto_reconnect = true, stats = Stats1};
         _ ->
-            State
+            State#state{stats = Stats1}
     end;
 parse_options([{connect_timeout, T}|Options], State) when is_integer(T) ->
     parse_options(Options, State#state{connect_timeout = T});
@@ -1405,7 +1430,9 @@ parse_options([{cacertfile, File}|Options], State) ->
 parse_options([{keyfile, File}|Options], State) ->
     parse_options(Options, State#state{keyfile=File});
 parse_options([{ssl_opts, Opts}|Options], State) ->
-    parse_options(Options, State#state{ssl_opts=Opts}).
+    parse_options(Options, State#state{ssl_opts=Opts});
+parse_options([{stats, Level}|Options], State) ->
+    parse_options(Options, State#state{stats=init_stats(Level)}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -1960,14 +1987,17 @@ restart_req_timer(Request) ->
 %% @private
 %% Connect the socket if disconnected
 connect(State) when State#state.sock =:= undefined ->
-    #state{address = Address, port = Port, connects = Connects} = State,
+    #state{address = Address, port = Port, connects = Connects, stats = Stats0} = State,
+    TS0 = os:timestamp(),
     case gen_tcp:connect(Address, Port,
                          [binary, {active, once}, {packet, 4},
                           {keepalive, State#state.keepalive}],
                          State#state.connect_timeout) of
         {ok, Sock} ->
+            TS1 = os:timestamp(),
             State1 = State#state{sock = Sock, connects = Connects+1,
-                                 reconnect_interval = ?FIRST_RECONNECT_INTERVAL},
+                                 reconnect_interval = ?FIRST_RECONNECT_INTERVAL,
+                                 stats = record_stat(connect, timer:now_diff(TS1, TS0), Stats0)},
             case State#state.credentials of
                 undefined ->
                     {ok, State1};
@@ -2085,9 +2115,11 @@ increase_reconnect_interval(State) ->
 %% @private
 send_request(#request{ref     = Ref,
                       tref    = TRef,
-                      timeout = Timeout} = Request0, State)
+                      timeout = Timeout} = Request0,
+             State = #state{stats = Stats0})
   when State#state.active =:= undefined ->
-    {Request1, Pkt} = encode_request_message(Request0),
+    {Request1, Pkt} = encode_request_message(Request0#request{timestamp = os:timestamp()}),
+    Stats1 = record_stat(send, iolist_size(Pkt), Stats0),
     Transport = State#state.transport,
     case Transport:send(State#state.sock, Pkt) of
         ok ->
@@ -2095,14 +2127,14 @@ send_request(#request{ref     = Ref,
                 {_,Msecs} ->
                     cancel_req_timer(TRef),
                     Request2 = Request1#request{tref = erlang:send_after(Msecs, self(), {op_timeout, Ref})},
-                    maybe_reply(after_send(Request2, State#state{active = Request2}));
+                    maybe_reply(after_send(Request2, State#state{active = Request2, stats = Stats1}));
                 _ ->
-                    maybe_reply(after_send(Request1, State#state{active = Request1}))
+                    maybe_reply(after_send(Request1, State#state{active = Request1, stats = Stats1}))
             end;
         {error, Reason} ->
             error_logger:warning_msg("Socket error while sending riakc request: ~p.", [Reason]),
             Transport:close(State#state.sock),
-            maybe_enqueue_and_reconnect(Request1, State#state{sock=undefined})
+            maybe_enqueue_and_reconnect(Request1, State#state{sock=undefined, stats = Stats1})
     end.
 
 %% Already encoded (for tunneled messages), but must provide Message Id
@@ -2139,32 +2171,39 @@ enqueue_or_reply_error(Request, State) ->
 %% @private
 queue_request(Request, State)      -> queue_request(Request, State, in).
 queue_request_head(Request, State) -> queue_request(Request, State, in_r).
-queue_request(Request, #state{queue_len = QLen, queue = Q} = State, Infunc) ->
-    State#state{queue_len = QLen + 1, queue = queue:Infunc(Request, Q)}.
+queue_request(Request0, #state{queue_len = QLen, queue = Q, stats = Stats0} = State, Infunc) ->
+    Request1 = Request0#request{timestamp = os:timestamp()},
+    Stats1 = record_stat(queue_len, QLen + 1, Stats0),
+    State#state{queue_len = QLen + 1, queue = queue:Infunc(Request1, Q), stats = Stats1}.
 
 %% Try and dequeue request and send onto the server if one is waiting
 %% @private
-dequeue_request(#state{queue_len = QLen} = State) ->
+dequeue_request(#state{queue_len = QLen, stats = Stats0} = State) ->
     case queue:out(State#state.queue) of
         {empty, _} ->
             State#state{active = undefined};
-        {{value, Request}, Q2} ->
-            send_request(Request, State#state{active    = undefined,
-                                              queue_len = QLen - 1,
-                                              queue     = Q2})
+        {{value, #request{timestamp = TS0, timeout = Timeout} = Request}, Q2} ->
+            Now = os:timestamp(),
+            Stats1 = record_stat({queue_time, q_timeout(Timeout)}, timer:now_diff(Now, TS0), Stats0),
+            send_request(Request#request{timestamp = Now},
+                         State#state{active    = undefined,
+                                     queue_len = QLen - 1,
+                                     queue     = Q2,
+                                     stats     = Stats1})
     end.
 
 %% Remove a queued request by reference - returns same queue if ref not present
 %% @private
-remove_queued_request(Ref, #state{queue_len = QLen, queue = Q} = State) ->
+remove_queued_request(Ref, #state{queue_len = QLen, queue = Q, stats = Stats0} = State, TimeoutTag) ->
     case lists:keytake(Ref, #request.ref, queue:to_list(Q)) of
         false -> % Ref not queued up
-           State;
-        {value, Req, L2} ->
+            State;
+        {value, #request{timeout = Timeout} = Req, L2} ->
             {reply, Reply, NewState} = on_timeout(Req, State),
             send_caller(Reply, Req),
             NewState#state{queue_len = QLen - 1,
-                           queue     = queue:from_list(L2)}
+                           queue     = queue:from_list(L2),
+                           stats     = record_cntr({TimeoutTag, q_timeout(Timeout)}, Stats0)}
     end.
 
 %% @private
@@ -2298,6 +2337,186 @@ maybe_make_bucket_type(undefined, Bucket) ->
     Bucket;
 maybe_make_bucket_type(Type, Bucket) ->
     {Type, Bucket}.
+
+%% ====================================================================
+%% stats
+%% ====================================================================
+
+-record(stats, {timestamp, level, dict}).
+
+record_cntr(_Key, #stats{level = 0} = Stats) ->
+    Stats;
+record_cntr(Key, #stats{dict = D} = Stats) ->
+    Stats#stats{dict = dict:update_counter({count, Key}, 1, D)}.
+
+record_stat(_Key, _Val, #stats{level = 0} = Stats) ->
+    Stats;
+record_stat(Key, Val, #stats{dict = Dict0, level = 1} = Stats) ->
+    Dict1 = dict:update_counter({count, Key}, 1, Dict0),
+    Stats#stats{dict = dict:update_counter({total, Key}, Val, Dict1)};
+record_stat(Key, Val, #stats{dict = Dict0, level = 2} = Stats) ->
+    Dict1 = dict:update_counter({count, Key}, 1, Dict0),
+    Dict2 = dict:update_counter({total, Key}, Val, Dict1),
+    Stats#stats{dict = dict:update_counter({histogram, granulate(Val), Key}, 1, Dict2)}.
+
+init_stats(#stats{level = Level}) ->
+    init_stats(Level);
+init_stats(Level) ->
+    #stats{timestamp = os:timestamp(), level = Level, dict = dict:new()}.
+
+stats_format(#stats{timestamp = TS0, level = Level, dict = Dict}) ->
+    TS1 = os:timestamp(),
+    TDiff = timer:now_diff(TS1, TS0),
+    {Cntrs, Hists} = stats_format(
+                       Level, lists:sort(dict:to_list(Dict)), [],
+                       [{key, count, total, lists:reverse(steps(Level))}]),
+    {TDiff, Cntrs, Hists}.
+
+stats_format(_Level, [], CAcc, HAcc) -> {CAcc, HAcc};
+stats_format(Level, [{{count, Key}, CVal} | List], CAcc, HAcc) ->
+    case lists:keytake({total, Key}, 1, List) of
+        false -> stats_format(Level, List, [{Key, CVal} | CAcc], HAcc);
+        {value, {{total, Key}, TVal}, NewList} ->
+            {OutList, Histogram} =
+                lists:foldl(fun(I, {LAcc, XAcc}) ->
+                                    case lists:keytake({histogram, I, Key}, 1, LAcc) of
+                                        false -> {LAcc, [0 | XAcc]};
+                                        {value, {{_, _, Key}, HVal}, LAcc2} -> {LAcc2, [HVal | XAcc]}
+                                    end
+                            end, {NewList, []}, steps(Level)),
+            stats_format(Level, OutList, CAcc, [{Key, CVal, TVal, Histogram} | HAcc])
+    end.
+
+granulate(0)                     -> 0;
+granulate(1)                     -> 1;
+granulate(2)                     -> 2;
+granulate(N) when N =< 4         -> 4;
+granulate(N) when N =< 7         -> 7;
+granulate(N) when N =< 10        -> 10;
+granulate(N) when N =< 20        -> 20;
+granulate(N) when N =< 40        -> 40;
+granulate(N) when N =< 70        -> 70;
+granulate(N) when N =< 100       -> 100;
+granulate(N) when N =< 200       -> 200;
+granulate(N) when N =< 400       -> 400;
+granulate(N) when N =< 700       -> 700;
+granulate(N) when N =< 1000      -> 1000;
+granulate(N) when N =< 2000      -> 2000;
+granulate(N) when N =< 4000      -> 4000;
+granulate(N) when N =< 7000      -> 7000;
+granulate(N) when N =< 10000     -> 10000;
+granulate(N) when N =< 20000     -> 20000;
+granulate(N) when N =< 40000     -> 40000;
+granulate(N) when N =< 70000     -> 70000;
+granulate(N) when N =< 100000    -> 100000;
+granulate(N) when N =< 200000    -> 200000;
+granulate(N) when N =< 400000    -> 400000;
+granulate(N) when N =< 700000    -> 700000;
+granulate(N) when N =< 1000000   -> 1000000;
+granulate(N) when N =< 2000000   -> 2000000;
+granulate(N) when N =< 4000000   -> 4000000;
+granulate(N) when N =< 7000000   -> 7000000;
+granulate(N) when N =< 10000000  -> 10000000;
+granulate(N) when N =< 20000000  -> 20000000;
+granulate(N) when N =< 40000000  -> 40000000;
+granulate(N) when N =< 70000000  -> 70000000;
+granulate(N) when N =< 100000000 -> 100000000;
+granulate(N) when N =< 200000000 -> 200000000;
+granulate(N) when N =< 400000000 -> 400000000;
+granulate(N) when N =< 700000000 -> 700000000;
+granulate(_)                     -> 1000000000.
+
+steps(2) ->
+    [1000000000,
+     700000000, 400000000, 200000000, 100000000,
+     70000000, 40000000, 20000000, 10000000,
+     7000000, 4000000, 2000000, 1000000,
+     700000, 400000, 200000, 100000,
+     70000, 40000, 20000, 10000,
+     7000, 4000, 2000, 1000,
+     700, 400, 200, 100,
+     70, 40, 20, 10,
+     7, 4, 2, 1,
+     0];
+steps(_) -> [].
+
+op_type(rpbpingreq                  ) -> ping;
+op_type(rpbgetclientidreq           ) -> get_client_id;
+op_type(rpbgetserverinforeq         ) -> get_server_info;
+op_type({tunneled,_}                ) -> tunneled;
+op_type(#dtfetchreq{}               ) -> dt_fetch;
+op_type(#dtupdatereq{}              ) -> dt_update;
+op_type(#rpbcountergetreq{}         ) -> counter_get;
+op_type(#rpbcounterupdatereq{}      ) -> counter_update;
+op_type(#rpbcsbucketreq{}           ) -> cs_bucket;
+op_type(#rpbdelreq{}                ) -> del;
+op_type(#rpbgetbucketreq{}          ) -> get_bucket;
+op_type(#rpbgetbuckettypereq{}      ) -> get_bucket_type;
+op_type(#rpbgetreq{}                ) -> get;
+op_type(#rpbindexreq{}              ) -> index;
+op_type(#rpblistbucketsreq{}        ) -> list_buckets;
+op_type(#rpblistkeysreq{}           ) -> list_keys;
+op_type(#rpbmapredreq{}             ) -> mapred;
+op_type(#rpbputreq{}                ) -> put;
+op_type(#rpbresetbucketreq{}        ) -> reset_bucket;
+op_type(#rpbsearchqueryreq{}        ) -> search_query;
+op_type(#rpbsetbucketreq{}          ) -> set_bucket;
+op_type(#rpbsetbuckettypereq{}      ) -> set_bucket_type;
+op_type(#rpbsetclientidreq{}        ) -> set_client_id;
+op_type(#rpbyokozunaindexdeletereq{}) -> yokozuna_index_delete;
+op_type(#rpbyokozunaindexgetreq{}   ) -> yokozuna_index_get;
+op_type(#rpbyokozunaindexputreq{}   ) -> yokozuna_index_put;
+op_type(#rpbyokozunaschemagetreq{}  ) -> yokozuna_schema_get;
+op_type(#rpbyokozunaschemaputreq{}  ) -> yokozuna_schema_put;
+op_type(_                           ) -> unknown_op.
+
+op_timeout({_,OPTimeout}) -> OPTimeout;
+op_timeout(Timeout) -> Timeout.
+
+q_timeout({QTimeout,_}) -> QTimeout;
+q_timeout(Timeout) -> Timeout.
+
+merge_stats({T1, Cntrs1, HistG1}, {T2, Cntrs2, HistG2}) ->
+    T3 =
+        case {T1, T2} of
+            {{TimeTtl1, Cnt1}, {TimeTtl2, Cnt2}} ->
+                {TimeTtl1 + TimeTtl2, Cnt1 + Cnt2};
+            {{TimeTtl1, Cnt1}, TimeTtl2} ->
+                {TimeTtl1 + TimeTtl2, Cnt1 + 1};
+            {TimeTtl1, {TimeTtl2, Cnt2}} ->
+                {TimeTtl1 + TimeTtl2, Cnt2 + 1};
+            {TimeTtl1, TimeTtl2} ->
+                {TimeTtl1 + TimeTtl2, 2}
+        end,
+    {T3, add_cntrs(Cntrs1, Cntrs2, []), add_hists(HistG1, HistG2, [])}.
+
+add_cntrs([], [], Acc) -> Acc;
+add_cntrs([], Cntrs2, Acc) -> lists:append([Cntrs2, Acc]);
+add_cntrs(Cntrs1, [], Acc) -> lists:append([Cntrs1, Acc]);
+add_cntrs([{Cntr, Val1} = Cntr1 | Cntrs1], Cntrs2, Acc) ->
+    case lists:keytake(Cntr, 1, Cntrs2) of
+        false ->
+            add_cntrs(Cntrs1, Cntrs2, [Cntr1 | Acc]);
+        {value, {Cntr, Val2}, NewCntrs2} ->
+            add_cntrs(Cntrs1, NewCntrs2, [{Cntr, Val1 + Val2} | Acc])
+    end.
+
+add_hists([], [], Acc) -> Acc;
+add_hists([], Hists2, Acc) -> lists:append([Hists2, Acc]);
+add_hists(Hists1, [], Acc) -> lists:append([Hists1, Acc]);
+add_hists([{key, _, _, _} = HistRec | Hists1], Hists2, Acc) ->
+    add_hists(Hists1, lists:keydelete(key, 1, Hists2), [HistRec | Acc]);
+add_hists([{Key, Cntr1, Ttl1, Hist1} = HistRec1 | Hists1], Hists2, Acc) ->
+    case lists:keytake(Key, 1, Hists2) of
+        false ->
+            add_hists(Hists1, Hists2, [HistRec1 | Acc]);
+        {value, {Key, Cntr2, Ttl2, Hist2}, NewHists2} ->
+            add_hists(Hists1, NewHists2, [{Key, Cntr1 + Cntr2, Ttl1 + Ttl2, add_hist(Hist1, Hist2, [])} | Acc])
+    end.
+
+add_hist([], [], Acc) -> lists:reverse(Acc);
+add_hist([H1 | Hist1], [H2 | Hist2], Acc) ->
+    add_hist(Hist1, Hist2, [H1 + H2 | Acc]).
 
 %% ====================================================================
 %% unit tests
@@ -2498,6 +2717,8 @@ maybe_start_network() ->
             erlang:set_cookie(test_riak_node(), test_cookie()),
             ok;
         {error, {already_started, _}} ->
+            ok;
+        {error, {{already_started, _}, _}} ->
             ok;
         X ->
             X
@@ -3848,6 +4069,7 @@ timeout_no_conn_test() ->
                   erlang:spawn(fun() ->
                                        {T,Info} = (catch timer:tc(?MODULE, Func,
                                                                   [Pid, <<"qwer">>, <<"qwer">>, [], TO])),
+                                       % io:format(user, "RES: ~p~n", [{T,Info}]),
                                        Self ! {self(), {T div 1000, Info}}
                                end)
           end,
@@ -3874,7 +4096,8 @@ timeout_no_conn_test() ->
     P12 = REQ(get, 60),       timer:sleep(1),
     P13 = REQ(get, 80),       timer:sleep(1),
     P14 = REQ(get, 20),       timer:sleep(1),
-    P15 = REQ(get, 100),      timer:sleep(250), 0 = queue_len(Pid),
+    P15 = REQ(get, 100),      timer:sleep(250),
+    0 = queue_len(Pid),
     P16 = REQ(get, {20,100}), timer:sleep(1),
     P17 = REQ(get, {20,100}),
 
@@ -3896,25 +4119,25 @@ timeout_no_conn_test() ->
     {T16, {error, timeout}} = RES(P16),
     {T17, {error, timeout}} = RES(P17),
 
-    io:format(user, "~n150 TIMES: ~p ~p ~p ~p ~p~n", [T01,T03,T05,T07,T09]),
-    io:format(user, "~n100 TIMES: ~p ~p ~p ~p~n", [T02,T04,T06,T08]),
+    io:format(user, "  150 TIMES: ~p ~p ~p ~p ~p~n", [T01,T03,T05,T07,T09]),
+    io:format(user, "  100 TIMES: ~p ~p ~p ~p~n", [T02,T04,T06,T08]),
     lists:foreach(fun(T) -> true = T > 145, true = T < 155 end, [T01,T03,T05,T07,T09]),
     lists:foreach(fun(T) -> true = T > 95,  true = T < 105 end, [T02,T04,T06,T08]),
-    io:format(user, "~nTIMES: ~p ~p ~p ~p ~p ~p ~p ~p~n", [T10,T11,T12,T13,T14,T15,T16,T17]),
-    true = T10 > 19, true = T10 < 24,
-    true = T11 > 39, true = T11 < 44,
-    true = T12 > 59, true = T12 < 64,
-    true = T13 > 79, true = T13 < 84,
-    true = T14 > 19, true = T14 < 24,
-    true = T15 > 99, true = T15 < 104,
-    true = T16 > 19, true = T16 < 24,
-    true = T17 > 19, true = T17 < 24,
+    io:format(user, "  TIMES: ~p ~p ~p ~p ~p ~p ~p ~p~n", [T10,T11,T12,T13,T14,T15,T16,T17]),
+    true = T10 > 18, true = T10 < 24,
+    true = T11 > 38, true = T11 < 44,
+    true = T12 > 58, true = T12 < 64,
+    true = T13 > 78, true = T13 < 84,
+    true = T14 > 18, true = T14 < 24,
+    true = T15 > 98, true = T15 < 104,
+    true = T16 > 18, true = T16 < 24,
+    true = T17 > 18, true = T17 < 24,
 
     stop(Pid).
 
 timeout_conn_test() ->
     %% Set up a dummy socket to send requests on
-    {ok, DummyServerPid, Port} = dummy_server(),
+    {ok, DummyServerPid, Port} = dummy_server(noreply),
     {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected]),
     erlang:monitor(process, DummyServerPid),
 
@@ -3974,50 +4197,223 @@ timeout_conn_test() ->
     {T17, {error, timeout}} = RES(P17),
     {T18, {error, timeout}} = RES(P18),
 
-    io:format(user, "~nTIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p~n",
+    io:format(user, "  TIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p~n",
               [T01,T02,T03,T04,T05,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15,T16,T17,T18]),
-    true = T01 > 19, true = T01 < 24,
-    true = T02 > 39, true = T02 < 47,
-    true = T03 > 59, true = T03 < 70,
-    true = T04 > 79, true = T04 < 93,
-    true = T05 > 99, true = T05 < 117,
-    lists:foreach(fun(T) -> true = T > 99, true = T < 125 end, [T06,T07,T08,T09,T10]),
-    true = T11 > 19, true = T11 < 24,
-    true = T12 > 39, true = T12 < 44,
-    true = T13 > 59, true = T13 < 64,
-    true = T14 > 79, true = T14 < 84,
-    true = T15 > 19, true = T15 < 24,
-    true = T16 > 99, true = T16 < 104,
-    true = T17 > 99, true = T17 < 104,
-    true = T18 > 19, true = T18 < 24,
+    true = T01 > 18, true = T01 < 24,
+    true = T02 > 38, true = T02 < 47,
+    true = T03 > 58, true = T03 < 70,
+    true = T04 > 78, true = T04 < 93,
+    true = T05 > 98, true = T05 < 117,
+    lists:foreach(fun(T) -> true = T > 98, true = T < 125 end, [T06,T07,T08,T09,T10]),
+    true = T11 > 18, true = T11 < 24,
+    true = T12 > 38, true = T12 < 44,
+    true = T13 > 58, true = T13 < 64,
+    true = T14 > 78, true = T14 < 84,
+    true = T15 > 18, true = T15 < 24,
+    true = T16 > 98, true = T16 < 104,
+    true = T17 > 98, true = T17 < 104,
+    true = T18 > 18, true = T18 < 24,
 
     catch DummyServerPid ! stop,
     timer:sleep(10),
-    receive _Msg -> ok % io:format(user, "~nMSG: ~p", [_Msg])
-    after 1 -> ok % io:format(user, "~nNO MSG: ~p", [process_info(DummyServerPid, messages)])
+    receive _Msg -> ok % io:format(user, "MSG: ~p~n", [_Msg])
+    after 1 -> ok % io:format(user, "NO MSG: ~p~n", [process_info(DummyServerPid, messages)])
     end,
 
     stop(Pid).
 
-dummy_server() ->
+stats_test() ->
+    reset_riak(),
+    {ok, Pid} = start_link(test_ip(), test_port(), [auto_reconnect, queue_if_disconnected]),
+    Self = self(),
+
+    REQ = fun(Func, TO) ->
+                  erlang:spawn(fun() ->
+                                       {T,Info} = (catch timer:tc(?MODULE, Func,
+                                                                  [Pid, <<"qwer">>, <<"qwer">>, [], TO])),
+                                       % io:format(user, "RES: ~p~n", [{T,Info}]),
+                                       Self ! {self(), {T div 1000, Info}}
+                               end)
+          end,
+
+    RES = fun(RPid) ->
+                  receive
+                      {RPid, Result} -> Result
+                  after
+                      3000 -> error
+                  end
+          end,
+
+    Traffic = fun() ->
+                      P01 = REQ(get, {100, 20}),
+                      P02 = REQ(get, {100, 20}),
+                      P03 = REQ(get, {100, 20}),
+                      P04 = REQ(get, {100, 20}),
+                      P05 = REQ(get, {100, 20}),
+                      P06 = REQ(get, {100, 20}),
+                      P07 = REQ(get, {100, 20}),
+                      P08 = REQ(get, {100, 20}),
+                      P09 = REQ(get, {100, 20}),
+                      P10 = REQ(get, {100, 20}),
+                      P11 = REQ(get, 20),
+                      P12 = REQ(get, 40),
+                      P13 = REQ(get, 60),
+                      P14 = REQ(get, 80),
+                      P15 = REQ(get, 20),
+                      P16 = REQ(get, 100),
+                      P17 = REQ(get, {20, 100}),
+                      P18 = REQ(get, {20, 100}),
+                      
+                      lists:foreach(
+                        fun(P) -> RES(P) end,
+                        [P01,P02,P03,P04,P05,P06,P07,P08,P09,P10,
+                         P11,P12,P13,P14,P15,P16,P17,P18])
+              end,
+
+    Traffic(),
+    {_,[],[_]} = stats_take(Pid),
+
+    stats_change_level(Pid, 1),
+    Traffic(),
+    {_,CL1,HL1} = stats_take(Pid),
+
+    stats_change_level(Pid, 2),
+    Traffic(),
+    {_,CL2,HL2} = stats_take(Pid),
+
+    true = length(CL1) >= 2,
+    true = length(CL2) >= 2,
+    true = length(HL1) >= 2,
+    true = length(HL2) >= 2,
+    
+    lists:foreach(fun({_,_,_,[]}) -> ok end, HL1),
+    lists:foreach(fun({_,_,_,L}) -> true = length(L) == length(steps(2)) end, HL2),
+    
+    % io:format(user, "~n~n~p ~p~n~n", [HL2, HL1]),
+    
+    stop(Pid).
+
+
+overload_test() ->
+    {ok, DummyServerPid, Port} = dummy_server({50, <<10>>}),
+    {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected, {stats,1}]),
+    timer:sleep(50),
+    erlang:monitor(process, DummyServerPid),
+
+    Self = self(),
+
+    REQ = fun(Func, TO) ->
+                  erlang:spawn(fun() ->
+                                       Info = (catch apply(?MODULE, Func,
+                                                           [Pid, <<"qwer">>, <<"qwer">>, [], TO])),
+                                       Self ! {self(), Info}
+                               end)
+          end,
+
+    RES = fun(RPid) ->
+                  receive
+                      {RPid, Result} -> Result
+                  after
+                      4000 -> error
+                  end
+          end,
+
+    TEST = fun(TO) ->
+                   
+                   P01 = REQ(get, TO), timer:sleep(45),
+                   P02 = REQ(get, TO), timer:sleep(45),
+                   P03 = REQ(get, TO), timer:sleep(45),
+                   P04 = REQ(get, TO), timer:sleep(45),
+                   P05 = REQ(get, TO), timer:sleep(45),
+                   P06 = REQ(get, TO), timer:sleep(45),
+                   P07 = REQ(get, TO), timer:sleep(45),
+                   P08 = REQ(get, TO), timer:sleep(45),
+                   P09 = REQ(get, TO), timer:sleep(45),
+                   P10 = REQ(get, TO), timer:sleep(45),
+                   P11 = REQ(get, TO), timer:sleep(45),
+                   P12 = REQ(get, TO), timer:sleep(45),
+                   P13 = REQ(get, TO), timer:sleep(45),
+                   P14 = REQ(get, TO), timer:sleep(45),
+                   P15 = REQ(get, TO), timer:sleep(45),
+                   P16 = REQ(get, TO), timer:sleep(45),
+                   P17 = REQ(get, TO), timer:sleep(45),
+                   P18 = REQ(get, TO), timer:sleep(100),
+
+                   {_,_,KL} = stats_take(Pid),
+                   Reconns = case lists:keyfind(connect, 1, KL) of
+                                 false -> 0;
+                                 {_,V,_,_} -> V
+                             end,
+                   Replies = lists:foldl(
+                               fun({error,Reply},Acc) ->
+                                       case lists:keyfind(Reply, 1, Acc) of
+                                           false -> [{Reply, 1} | Acc];
+                                           {Reply, C} ->
+                                               lists:keyreplace(Reply, 1, Acc, {Reply, C+1})
+                                       end
+                               end, [],
+                               [RES(P01), RES(P02), RES(P03), RES(P04), RES(P05), RES(P06),
+                                RES(P07), RES(P08), RES(P09), RES(P10), RES(P11), RES(P12),
+                                RES(P13), RES(P14), RES(P15), RES(P16), RES(P17), RES(P18)]),
+                   TimeOuts = case lists:keyfind(timeout, 1, Replies) of
+                                  {_,TOV} -> TOV;
+                                  false -> 0
+                              end,
+                   NotFounds = case lists:keyfind(notfound, 1, Replies) of
+                                   {_,NFV} -> NFV;
+                                   false -> 0
+                               end,
+
+                   io:format(user, "  With timeout: ~p we got ~p reconnections, ~p timeouts and ~p replies~n",
+                             [TO, Reconns, TimeOuts, NotFounds])
+           
+           end,
+
+    stats_take(Pid),
+    TEST(60),
+    TEST({5,55}),
+
+    catch DummyServerPid ! stop,
+    timer:sleep(10),
+    receive _Msg -> ok % io:format(user, "MSG: ~p~n", [_Msg])
+    after 1 -> ok % io:format(user, "NO MSG: ~p~n", [process_info(DummyServerPid, messages)])
+    end,
+
+    stop(Pid).
+
+dummy_server(Directive) ->
     {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, true}]),
     {ok, Port} = inet:port(Listen),
-    Pid = spawn(?MODULE, dummy_server, [{Listen, no_conn}]),
+    Pid = spawn(?MODULE, dummy_server_loop, [{Listen, no_conn, Directive}]),
     {ok, Pid, Port}.
 
-dummy_server({Listen, no_conn}) ->
+dummy_server_loop({Listen, no_conn, Directive}) ->
+    case Directive of
+        {SleepMs, _} -> timer:sleep(SleepMs div 2);
+        _ -> ok
+    end,
     {ok, Sock} = gen_tcp:accept(Listen),
-    dummy_server({Listen, Sock});
-dummy_server({Listen, Sock}) ->
+    dummy_server_loop({Listen, Sock, Directive});
+dummy_server_loop({Listen, Sock, Directive}) ->
     receive
         stop -> ok;
-        {tcp_closed, Sock} -> dummy_server({Listen, no_conn});
-        _Data              -> dummy_server({Listen, Sock}) % ignore requests, let them timeout
+        {tcp_closed, Sock} -> dummy_server_loop({Listen, no_conn, Directive});
+        _Data ->
+            case Directive of
+                noreply -> dummy_server_loop({Listen, Sock, Directive}); % ignore requests, let them timeout
+                {SleepMs, Reply} ->
+                    spawn(fun() -> timer:sleep(SleepMs), gen_tcp:send(Sock, Reply) end),
+                    dummy_server_loop({Listen, Sock, Directive})
+            end
     end.
 
 all_tests() ->
+    erlang:set_cookie(node(),riak),
     lists:foreach(
-      fun(TestFun) -> ok = apply(?MODULE, TestFun, []) end,
+      fun(TestFun) ->
+              io:format(user, "TEST: ~p~n", [TestFun]),
+              ok = apply(?MODULE, TestFun, [])
+      end,
       [bad_connect_test,
        queue_disconnected_test,
        auto_reconnect_bad_connect_test,
@@ -4026,7 +4422,9 @@ all_tests() ->
        dead_socket_pid_returns_to_caller_test,
        increase_reconnect_interval_test,
        timeout_conn_test,
-       timeout_no_conn_test
+       timeout_no_conn_test,
+       stats_test,
+       overload_test
       ]).
 
 -endif.
