@@ -4319,25 +4319,16 @@ overload_test() ->
           end,
 
     TEST = fun(TO) ->
+
+                   PidList = lists:foldl(fun(_,Acc) ->
+                                                 timer:sleep(45),
+                                                 [REQ(get, TO) | Acc]
+                                         end, [], lists:seq(1,200)),
+                   timer:sleep(100),
                    
-                   P01 = REQ(get, TO), timer:sleep(45),
-                   P02 = REQ(get, TO), timer:sleep(45),
-                   P03 = REQ(get, TO), timer:sleep(45),
-                   P04 = REQ(get, TO), timer:sleep(45),
-                   P05 = REQ(get, TO), timer:sleep(45),
-                   P06 = REQ(get, TO), timer:sleep(45),
-                   P07 = REQ(get, TO), timer:sleep(45),
-                   P08 = REQ(get, TO), timer:sleep(45),
-                   P09 = REQ(get, TO), timer:sleep(45),
-                   P10 = REQ(get, TO), timer:sleep(45),
-                   P11 = REQ(get, TO), timer:sleep(45),
-                   P12 = REQ(get, TO), timer:sleep(45),
-                   P13 = REQ(get, TO), timer:sleep(45),
-                   P14 = REQ(get, TO), timer:sleep(45),
-                   P15 = REQ(get, TO), timer:sleep(45),
-                   P16 = REQ(get, TO), timer:sleep(45),
-                   P17 = REQ(get, TO), timer:sleep(45),
-                   P18 = REQ(get, TO), timer:sleep(100),
+                   ReplyList = lists:foldl(fun(RPid,Acc) ->
+                                                   [RES(RPid) | Acc]
+                                           end, [], PidList),
 
                    {_,_,KL} = stats_take(Pid),
                    Reconns = case lists:keyfind(connect, 1, KL) of
@@ -4351,10 +4342,7 @@ overload_test() ->
                                            {Reply, C} ->
                                                lists:keyreplace(Reply, 1, Acc, {Reply, C+1})
                                        end
-                               end, [],
-                               [RES(P01), RES(P02), RES(P03), RES(P04), RES(P05), RES(P06),
-                                RES(P07), RES(P08), RES(P09), RES(P10), RES(P11), RES(P12),
-                                RES(P13), RES(P14), RES(P15), RES(P16), RES(P17), RES(P18)]),
+                               end, [], ReplyList),
                    TimeOuts = case lists:keyfind(timeout, 1, Replies) of
                                   {_,TOV} -> TOV;
                                   false -> 0
