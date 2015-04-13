@@ -33,7 +33,8 @@
 -include_lib("riak_pb/include/riak_search_pb.hrl").
 -include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
 -include_lib("riak_pb/include/riak_dt_pb.hrl").
--include("riakc.hrl").
+%% @headerfile "riakc.hrl"
+-include_lib("riakc/include/riakc.hrl").
 -behaviour(gen_server).
 
 -export([start_link/2, start_link/3,
