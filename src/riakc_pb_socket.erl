@@ -33,7 +33,7 @@
 -include_lib("riak_pb/include/riak_search_pb.hrl").
 -include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
 -include_lib("riak_pb/include/riak_dt_pb.hrl").
--include("riakc.hrl").
+-include_lib("riakc/include/riakc.hrl").
 -behaviour(gen_server).
 
 -export([start_link/2, start_link/3,
@@ -295,6 +295,8 @@ get(Pid, Bucket, Key) ->
 %% @equiv get(Pid, Bucket, Key, Options, Timeout)
 -spec get(pid(), bucket(), key(), TimeoutOrOptions::timeout2() |  get_options()) ->
                  {ok, riakc_obj()} | {error, term()} | unchanged.
+get(Pid, Bucket, Key, {T1,T2} = Timeout) when is_integer(T1), is_integer(T2); Timeout =:= infinity ->
+    get(Pid, Bucket, Key, [], Timeout);
 get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get(Pid, Bucket, Key, [], Timeout);
 get(Pid, Bucket, Key, Options) ->
@@ -325,6 +327,8 @@ put(Pid, Obj) ->
 -spec put(pid(), riakc_obj(), TimeoutOrOptions::timeout2() | put_options()) ->
                  ok | {ok, riakc_obj()} |  riakc_obj() | {ok, key()} | {error, term()}.
 put(Pid, Obj, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    put(Pid, Obj, [], Timeout);
+put(Pid, Obj, {T1, T2} = Timeout) when is_integer(T1), is_integer(T2); Timeout =:= infinity ->
     put(Pid, Obj, [], Timeout);
 put(Pid, Obj, Options) ->
     put(Pid, Obj, Options, default_timeout(put_timeout)).
@@ -364,6 +368,8 @@ delete(Pid, Bucket, Key) ->
 -spec delete(pid(), bucket(), key(), TimeoutOrOptions::timeout2() | delete_options()) ->
                     ok | {error, term()}.
 delete(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    delete(Pid, Bucket, Key, [], Timeout);
+delete(Pid, Bucket, Key, {T1,T2} = Timeout) when is_integer(T1), is_integer(T2); Timeout =:= infinity ->
     delete(Pid, Bucket, Key, [], Timeout);
 delete(Pid, Bucket, Key, Options) ->
     delete(Pid, Bucket, Key, Options, default_timeout(delete_timeout)).
@@ -1464,6 +1470,8 @@ get_options([{pr, PR} | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{pr = riak_pb_kv_codec:encode_quorum(PR)});
 get_options([{timeout, T} | Rest], Req) when is_integer(T)->
     get_options(Rest, Req#rpbgetreq{timeout = T});
+get_options([{timeout, {T1,T2}} | Rest], Req) when is_integer(T1), is_integer(T2) ->
+    get_options(Rest, Req#rpbgetreq{timeout = T2});
 get_options([{timeout, _T} | _Rest], _Req) ->
     erlang:error(badarg);
 get_options([{if_modified, VClock} | Rest], Req) ->
@@ -1491,6 +1499,8 @@ put_options([{pw, PW} | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{pw = riak_pb_kv_codec:encode_quorum(PW)});
 put_options([{timeout, T} | Rest], Req) when is_integer(T) ->
     put_options(Rest, Req#rpbputreq{timeout = T});
+put_options([{timeout, {T1,T2}} | Rest], Req) when is_integer(T1), is_integer(T2) ->
+    put_options(Rest, Req#rpbputreq{timeout = T2});
 put_options([{timeout, _T} | _Rest], _Req) ->
     erlang:error(badarg);
 put_options([return_body | Rest], Req) ->
@@ -1531,6 +1541,8 @@ delete_options([{dw, DW} | Rest], Req) ->
     delete_options(Rest, Req#rpbdelreq{dw = riak_pb_kv_codec:encode_quorum(DW)});
 delete_options([{timeout, T} | Rest], Req) when is_integer(T) ->
     delete_options(Rest, Req#rpbdelreq{timeout = T});
+delete_options([{timeout, {T1,T2}} | Rest], Req) when is_integer(T1), is_integer(T2) ->
+    put_options(Rest, Req#rpbdelreq{timeout = T2});
 delete_options([{timeout, _T} | _Rest], _Req) ->
     erlang:error(badarg);
 delete_options([{n_val, N} | Rest], Req)
@@ -2370,7 +2382,7 @@ stats_format(#stats{timestamp = TS0, level = Level, dict = Dict}) ->
     {Cntrs, Hists} = stats_format(
                        Level, lists:sort(dict:to_list(Dict)), [],
                        [{key, count, total, lists:reverse(steps(Level))}]),
-    {TDiff, Cntrs, Hists}.
+    {{TDiff, 1}, Cntrs, Hists}.
 
 stats_format(_Level, [], CAcc, HAcc) -> {CAcc, HAcc};
 stats_format(Level, [{{count, Key}, CVal} | List], CAcc, HAcc) ->
@@ -2476,19 +2488,8 @@ op_timeout(Timeout) -> Timeout.
 q_timeout({QTimeout,_}) -> QTimeout;
 q_timeout(Timeout) -> Timeout.
 
-merge_stats({T1, Cntrs1, HistG1}, {T2, Cntrs2, HistG2}) ->
-    T3 =
-        case {T1, T2} of
-            {{TimeTtl1, Cnt1}, {TimeTtl2, Cnt2}} ->
-                {TimeTtl1 + TimeTtl2, Cnt1 + Cnt2};
-            {{TimeTtl1, Cnt1}, TimeTtl2} ->
-                {TimeTtl1 + TimeTtl2, Cnt1 + 1};
-            {TimeTtl1, {TimeTtl2, Cnt2}} ->
-                {TimeTtl1 + TimeTtl2, Cnt2 + 1};
-            {TimeTtl1, TimeTtl2} ->
-                {TimeTtl1 + TimeTtl2, 2}
-        end,
-    {T3, add_cntrs(Cntrs1, Cntrs2, []), add_hists(HistG1, HistG2, [])}.
+merge_stats({{TAcc1, TCnt1}, Cntrs1, HistG1}, {{TAcc2, TCnt2}, Cntrs2, HistG2}) ->
+    {{TAcc1 + TAcc2, TCnt1 + TCnt2}, add_cntrs(Cntrs1, Cntrs2, []), add_hists(HistG1, HistG2, [])}.
 
 add_cntrs([], [], Acc) -> Acc;
 add_cntrs([], Cntrs2, Acc) -> lists:append([Cntrs2, Acc]);
@@ -4325,7 +4326,7 @@ overload_test() ->
                                                  [REQ(get, TO) | Acc]
                                          end, [], lists:seq(1,200)),
                    timer:sleep(100),
-                   
+
                    ReplyList = lists:foldl(fun(RPid,Acc) ->
                                                    [RES(RPid) | Acc]
                                            end, [], PidList),
@@ -4352,9 +4353,10 @@ overload_test() ->
                                    false -> 0
                                end,
 
+                   % io:format(user, "~nSTATS: ~p~n", [Stats])
                    io:format(user, "  With timeout: ~p we got ~p reconnections, ~p timeouts and ~p replies~n",
                              [TO, Reconns, TimeOuts, NotFounds])
-           
+
            end,
 
     stats_take(Pid),
