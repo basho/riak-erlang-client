@@ -205,4 +205,5 @@
          }).
 -type api_entry_point() :: #api_entry_point{}.
 -type api_entry_points_options() :: [{bkey, {bucket(), key()}} |
-                                     {force_update, boolean()}].
+                                     {force_update, boolean()} |
+                                     {check_key_exist, boolean()}].

@@ -1261,7 +1261,8 @@ get_api_entry_points(Pid, Proto, Options) ->
 get_api_entry_points(Pid, Proto, Options, Timeout) ->
     {Bucket, Key} = proplists:get_value(bkey, Options, {<<>>, <<>>}),
     Req = #rpbapiepreq{proto = Proto, bucket = Bucket, key = Key,
-                       force_update = proplists:get_value(force_update, Options, false)},
+                       force_update = proplists:get_value(force_update, Options, false),
+                       check_key_exist = proplists:get_value(check_key_exist, Options, true)},
     call_infinity(Pid, {req, Req, Timeout}).
 
 
