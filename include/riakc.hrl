@@ -196,3 +196,14 @@
           primary   :: boolean()
          }).
 -type preflist() :: [#preflist_item{}].
+
+-type proto() :: http|pbc.
+-record(api_entry_point, {
+          addr :: inet:ip_address() | not_routed,
+          port :: inet:port_number(),
+          last_checked :: {integer(), integer(), integer()}
+         }).
+-type api_entry_point() :: #api_entry_point{}.
+-type api_entry_points_options() :: [{bkey, {bucket(), key()}} |
+                                     {force_update, boolean()} |
+                                     {check_key_exist, boolean()}].

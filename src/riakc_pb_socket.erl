@@ -70,7 +70,8 @@
          cs_bucket_fold/3,
          default_timeout/1,
          tunnel/4,
-         get_preflist/3, get_preflist/4]).
+         get_preflist/3, get_preflist/4,
+         get_api_entry_points/3, get_api_entry_points/4]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -1246,6 +1247,25 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
     call_infinity(Pid, {req, Req, Timeout}).
 
 
+%% @doc Get API entry points.
+%% @equiv get_api_entry_points(Pid, Proto, Options, default_timeout(get_api_entry_points))
+-spec get_api_entry_points(pid(), proto(), api_entry_points_options()) ->
+    {ok, [api_entry_point()]} | {error, term()}.
+get_api_entry_points(Pid, Proto, Options) ->
+    get_api_entry_points(Pid, Proto, Options,
+                         default_timeout(get_api_entry_points_timeout)).
+
+%% @doc Get API entry points, with timeout.
+-spec get_api_entry_points(pid(), proto(), api_entry_points_options(), timeout()) ->
+    {ok, [api_entry_point()]} | {error, term()}.
+get_api_entry_points(Pid, Proto, Options, Timeout) ->
+    {Bucket, Key} = proplists:get_value(bkey, Options, {<<>>, <<>>}),
+    Req = #rpbapiepreq{proto = Proto, bucket = Bucket, key = Key,
+                       force_update = proplists:get_value(force_update, Options, false),
+                       check_key_exist = proplists:get_value(check_key_exist, Options, true)},
+    call_infinity(Pid, {req, Req, Timeout}).
+
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -1860,6 +1880,13 @@ process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
                              node=T#rpbbucketkeypreflistitem.node,
                              primary=T#rpbbucketkeypreflistitem.primary}
               || T <- Preflist],
+    {reply, {ok, Result}, State};
+
+process_response(#request{msg = #rpbapiepreq{}},
+                 #rpbapiepresp{eplist = EPList}, State) ->
+    Result = [{Addr, Port, LastChecked} ||
+                 #rpbapiep{addr = Addr, port = Port,
+                           last_checked = LastChecked} <- EPList],
     {reply, {ok, Result}, State};
 
 process_response(Request, Reply, State) ->
