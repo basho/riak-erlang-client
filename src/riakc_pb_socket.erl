@@ -59,6 +59,8 @@
          get_bucket_type/2, get_bucket_type/3,
          set_bucket/3, set_bucket/4, set_bucket/5,
          set_bucket_type/3, set_bucket_type/4,
+         create_bucket_type/3, create_bucket_type/4,
+         activate_bucket_type/2, activate_bucket_type/3,
          reset_bucket/2, reset_bucket/3, reset_bucket/4,
          mapred/3, mapred/4, mapred/5,
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
@@ -586,6 +588,21 @@ set_bucket_type(Pid, BucketType, BucketProps) ->
 set_bucket_type(Pid, BucketType, BucketProps, Timeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbuckettypereq{type = BucketType, props = PbProps},
+    call_infinity(Pid, {req, Req, Timeout}).
+
+create_bucket_type(Pid, BucketType, BucketProps) ->
+    create_bucket_type(Pid, BucketType, BucketProps, default_timeout(create_bucket_timeout)).
+
+create_bucket_type(Pid, BucketType, BucketProps, Timeout) ->
+    PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
+    Req = #rpbcreatebuckettypereq{type = BucketType, props = PbProps},
+    call_infinity(Pid, {req, Req, Timeout}).
+
+activate_bucket_type(Pid, BucketType) ->
+    activate_bucket_type(Pid, BucketType, default_timeout(activate_bucket_timeout)).
+
+activate_bucket_type(Pid, BucketType, Timeout) ->
+    Req = #rpbactivatebuckettypereq{type = BucketType},
     call_infinity(Pid, {req, Req, Timeout}).
 
 %% @doc Reset bucket properties back to the defaults.
@@ -1703,7 +1720,11 @@ process_response(#request{msg = #rpbsetbucketreq{}},
                  rpbsetbucketresp, State) ->
     {reply, ok, State};
 
-process_response(#request{msg = #rpbsetbuckettypereq{}},
+process_response(#request{msg = #rpbcreatebuckettypereq{}},
+                 rpbsetbucketresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #rpbactivatebuckettypereq{}},
                  rpbsetbucketresp, State) ->
     {reply, ok, State};
 
@@ -3900,6 +3921,15 @@ live_node_tests() ->
                                               node = <<"riak@127.0.0.1">>,
                                               primary = true}],
                               Preflist)
+             end)},
+    {"creat bucket type",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 create_bucket_type(Pid, <<"b2">>, [{n_val, 5}]),
+                 activate_bucket_type(Pid, <<"b2">>),
+                 {ok, Props} = get_bucket_type(Pid, <<"b2">>),
+                 ?assertEqual(5, proplists:get_value(n_val, Props))
              end)}
      ].
 
