@@ -1721,11 +1721,11 @@ process_response(#request{msg = #rpbsetbucketreq{}},
     {reply, ok, State};
 
 process_response(#request{msg = #rpbcreatebuckettypereq{}},
-                 rpbsetbucketresp, State) ->
+                 rpbcreatebuckettyperesp, State) ->
     {reply, ok, State};
 
 process_response(#request{msg = #rpbactivatebuckettypereq{}},
-                 rpbsetbucketresp, State) ->
+                 rpbactivatebuckettyperesp, State) ->
     {reply, ok, State};
 
 process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Request,
