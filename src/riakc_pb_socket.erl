@@ -3922,7 +3922,7 @@ live_node_tests() ->
                                               primary = true}],
                               Preflist)
              end)},
-    {"creat bucket type",
+    {"create bucket type",
       ?_test(begin
                  reset_riak(),
                  {ok, Pid} = start_link(test_ip(), test_port()),
