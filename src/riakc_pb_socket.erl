@@ -295,7 +295,7 @@ get(Pid, Bucket, Key) ->
 %% @equiv get(Pid, Bucket, Key, Options, Timeout)
 -spec get(pid(), bucket(), key(), TimeoutOrOptions::timeout2() |  get_options()) ->
                  {ok, riakc_obj()} | {error, term()} | unchanged.
-get(Pid, Bucket, Key, {T1,T2} = Timeout) when is_integer(T1), is_integer(T2); Timeout =:= infinity ->
+get(Pid, Bucket, Key, {T1, T2} = Timeout) when is_integer(T1), is_integer(T2) ->
     get(Pid, Bucket, Key, [], Timeout);
 get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get(Pid, Bucket, Key, [], Timeout);
@@ -1957,11 +1957,13 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
 new_request(Msg, From, Timeout) ->
     Ref = make_ref(),
     #request{ref = Ref, msg = Msg, from = From, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
+             tref = create_req_timer(Timeout, Ref),
+             timestamp = os:timestamp()}.
 new_request(Msg, From, Timeout, Context) ->
     Ref = make_ref(),
     #request{ref =Ref, msg = Msg, from = From, ctx = Context, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
+             tref = create_req_timer(Timeout, Ref),
+             timestamp = os:timestamp()}.
 
 %% @private
 %% Create a request timer if desired, otherwise return undefined.
@@ -4074,7 +4076,7 @@ timeout_no_conn_test() ->
                                        Self ! {self(), {T div 1000, Info}}
                                end)
           end,
-    
+
     RES = fun(RPid) ->
                   receive
                       {RPid, Result} -> Result
@@ -4097,10 +4099,9 @@ timeout_no_conn_test() ->
     P12 = REQ(get, 60),       timer:sleep(1),
     P13 = REQ(get, 80),       timer:sleep(1),
     P14 = REQ(get, 20),       timer:sleep(1),
-    P15 = REQ(get, 100),      timer:sleep(250),
-    0 = queue_len(Pid),
+    P15 = REQ(get, 100),      timer:sleep(250), 0 = queue_len(Pid),
     P16 = REQ(get, {20,100}), timer:sleep(1),
-    P17 = REQ(get, {20,100}),
+    P17 = REQ(get, {20,100}), timer:sleep(1),
 
     {T01, {error, timeout}} = RES(P01),
     {T02, {error, timeout}} = RES(P02),
@@ -4122,17 +4123,17 @@ timeout_no_conn_test() ->
 
     io:format(user, "  150 TIMES: ~p ~p ~p ~p ~p~n", [T01,T03,T05,T07,T09]),
     io:format(user, "  100 TIMES: ~p ~p ~p ~p~n", [T02,T04,T06,T08]),
-    lists:foreach(fun(T) -> true = T > 145, true = T < 155 end, [T01,T03,T05,T07,T09]),
-    lists:foreach(fun(T) -> true = T > 95,  true = T < 105 end, [T02,T04,T06,T08]),
+    lists:foreach(fun(T) -> true = T > 145, true = T < 159 end, [T01,T03,T05,T07,T09]),
+    lists:foreach(fun(T) -> true = T > 95,  true = T < 109 end, [T02,T04,T06,T08]),
     io:format(user, "  TIMES: ~p ~p ~p ~p ~p ~p ~p ~p~n", [T10,T11,T12,T13,T14,T15,T16,T17]),
-    true = T10 > 18, true = T10 < 24,
-    true = T11 > 38, true = T11 < 44,
-    true = T12 > 58, true = T12 < 64,
-    true = T13 > 78, true = T13 < 84,
-    true = T14 > 18, true = T14 < 24,
-    true = T15 > 98, true = T15 < 104,
-    true = T16 > 18, true = T16 < 24,
-    true = T17 > 18, true = T17 < 24,
+    true = T10 > 18, true = T10 < 25,
+    true = T11 > 37, true = T11 < 45,
+    true = T12 > 55, true = T12 < 65,
+    true = T13 > 73, true = T13 < 85,
+    true = T14 > 18, true = T14 < 25,
+    true = T15 > 98, true = T15 < 105,
+    true = T16 > 18, true = T16 < 25,
+    true = T17 > 18, true = T17 < 25,
 
     stop(Pid).
 
@@ -4200,20 +4201,20 @@ timeout_conn_test() ->
 
     io:format(user, "  TIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p~n",
               [T01,T02,T03,T04,T05,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15,T16,T17,T18]),
-    true = T01 > 18, true = T01 < 24,
-    true = T02 > 38, true = T02 < 47,
-    true = T03 > 58, true = T03 < 70,
-    true = T04 > 78, true = T04 < 93,
-    true = T05 > 98, true = T05 < 117,
+    true = T01 > 19, true = T01 < 26,
+    true = T02 > 37, true = T02 < 49,
+    true = T03 > 55, true = T03 < 70,
+    true = T04 > 73, true = T04 < 90,
+    true = T05 > 91, true = T05 < 117,
     lists:foreach(fun(T) -> true = T > 98, true = T < 125 end, [T06,T07,T08,T09,T10]),
-    true = T11 > 18, true = T11 < 24,
-    true = T12 > 38, true = T12 < 44,
-    true = T13 > 58, true = T13 < 64,
-    true = T14 > 78, true = T14 < 84,
-    true = T15 > 18, true = T15 < 24,
-    true = T16 > 98, true = T16 < 104,
-    true = T17 > 98, true = T17 < 104,
-    true = T18 > 18, true = T18 < 24,
+    true = T11 > 18, true = T11 < 25,
+    true = T12 > 38, true = T12 < 48,
+    true = T13 > 58, true = T13 < 70,
+    true = T14 > 78, true = T14 < 90,
+    true = T15 > 18, true = T15 < 26,
+    true = T16 > 98, true = T16 < 106,
+    true = T17 > 98, true = T17 < 106,
+    true = T18 > 18, true = T18 < 26,
 
     catch DummyServerPid ! stop,
     timer:sleep(10),
@@ -4224,7 +4225,6 @@ timeout_conn_test() ->
     stop(Pid).
 
 stats_test() ->
-    reset_riak(),
     {ok, Pid} = start_link(test_ip(), test_port(), [auto_reconnect, queue_if_disconnected]),
     Self = self(),
 
@@ -4264,7 +4264,7 @@ stats_test() ->
                       P16 = REQ(get, 100),
                       P17 = REQ(get, {20, 100}),
                       P18 = REQ(get, {20, 100}),
-                      
+
                       lists:foreach(
                         fun(P) -> RES(P) end,
                         [P01,P02,P03,P04,P05,P06,P07,P08,P09,P10,
@@ -4286,12 +4286,12 @@ stats_test() ->
     true = length(CL2) >= 2,
     true = length(HL1) >= 2,
     true = length(HL2) >= 2,
-    
+
     lists:foreach(fun({_,_,_,[]}) -> ok end, HL1),
     lists:foreach(fun({_,_,_,L}) -> true = length(L) == length(steps(2)) end, HL2),
-    
+
     % io:format(user, "~n~n~p ~p~n~n", [HL2, HL1]),
-    
+
     stop(Pid).
 
 
@@ -4360,8 +4360,8 @@ overload_test() ->
            end,
 
     stats_take(Pid),
-    TEST(60),
-    TEST({5,55}),
+    TEST(80),
+    TEST({15,55}),
 
     catch DummyServerPid ! stop,
     timer:sleep(10),
@@ -4378,10 +4378,10 @@ dummy_server(Directive) ->
     {ok, Pid, Port}.
 
 dummy_server_loop({Listen, no_conn, Directive}) ->
-    case Directive of
-        {SleepMs, _} -> timer:sleep(SleepMs div 2);
-        _ -> ok
-    end,
+    % case Directive of
+    %         {SleepMs, _} -> timer:sleep(SleepMs div 2);
+    %         _ -> ok
+    %  end,
     {ok, Sock} = gen_tcp:accept(Listen),
     dummy_server_loop({Listen, Sock, Directive});
 dummy_server_loop({Listen, Sock, Directive}) ->
