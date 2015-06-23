@@ -1012,6 +1012,7 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1021,6 +1022,7 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
                        pagination_sort=PgSort,
                        stream=Stream,
                        continuation=Continuation,
+                       cover_context=Cover,
                        timeout=Timeout},
     Call = case Stream of
                true ->
@@ -1063,6 +1065,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1075,6 +1078,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        pagination_sort = PgSort,
                        stream=Stream,
                        continuation=Continuation,
+                       cover_context=Cover,
                        timeout=Timeout},
     Call = case Stream of
                true ->
