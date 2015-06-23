@@ -70,7 +70,8 @@
          cs_bucket_fold/3,
          default_timeout/1,
          tunnel/4,
-         get_preflist/3, get_preflist/4]).
+         get_preflist/3, get_preflist/4,
+         get_coverage/2, get_coverage/3]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -1245,6 +1246,21 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
     Req = #rpbgetbucketkeypreflistreq{type = T, bucket = B, key = Key},
     call_infinity(Pid, {req, Req, Timeout}).
 
+%% @doc Get coverage plan for parallel queries
+%% @equiv get_coverage(Pid, Bucket, default_timeout(get_coverage_timeout))
+-spec get_coverage(pid(), bucket()) -> {ok, term()}
+                                           | {error, term()}.
+get_coverage(Pid, Bucket) ->
+    get_coverage(Pid, Bucket, default_timeout(get_coverage_timeout)).
+
+%% @doc Get coverage plan for parallel queries specifying timeout
+-spec get_coverage(pid(), bucket(), timeout()) -> {ok, term()}
+                                                 | {error, term()}.
+get_coverage(Pid, Bucket, Timeout) ->
+    {T, B} = maybe_bucket_type(Bucket),
+    call_infinity(Pid,
+                  {req, #rpbcoveragereq{type=T, bucket=B},
+                   Timeout}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -1861,6 +1877,10 @@ process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
                              primary=T#rpbbucketkeypreflistitem.primary}
               || T <- Preflist],
     {reply, {ok, Result}, State};
+
+process_response(#request{msg = #rpbcoveragereq{}},
+                 #rpbcoverageresp{entries=E}, State) ->
+    {reply, {ok, E}, State};
 
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
