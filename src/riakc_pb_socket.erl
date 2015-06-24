@@ -1347,7 +1347,7 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active, stat
                     %% if one is queued up
                     cancel_req_timer(Active#request.tref),
                     send_caller(Response, NewState0#state.active),
-                    Stats3 = record_stat({service_time, op_timeout(Active#request.timeout), op_type(Active#request.msg)},
+                    Stats3 = record_stat({service_time, op_timeout(Active#request.timeout), op_type(Active#request.msg), bucket_name(Active)},
                                          timer:now_diff(os:timestamp(), Active#request.timestamp), Stats2),
                     dequeue_request(NewState0#state{active = undefined, stats = Stats3});
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
@@ -1365,7 +1365,7 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active, stat
 handle_info({TimeoutTag, Ref}, #state{active = #request{ref = Ref, msg = Msg, timeout = Timeout}, stats = Stats0} = State)
   when TimeoutTag == op_timeout; TimeoutTag == req_timeout ->
     NewState = maybe_reply(on_timeout(State#state.active,
-                                      State#state{stats = record_cntr({TimeoutTag, op_timeout(Timeout), op_type(Msg)}, Stats0)})),
+                                      State#state{stats = record_cntr({TimeoutTag, op_timeout(Timeout), op_type(Msg), bucket_name(State#state.active)}, Stats0)})),
     disconnect(NewState#state{active = undefined}, false);
 handle_info({TimeoutTag, Ref}, State)
   when TimeoutTag == q_timeout; TimeoutTag == req_timeout ->
@@ -2187,7 +2187,7 @@ queue_request(Request, State)      -> queue_request(Request, State, in).
 queue_request_head(Request, State) -> queue_request(Request, State, in_r).
 queue_request(Request0, #state{queue_len = QLen, queue = Q, stats = Stats0} = State, Infunc) ->
     Request1 = Request0#request{timestamp = os:timestamp()},
-    Stats1 = record_stat(queue_len, QLen + 1, Stats0),
+    Stats1 = record_cntr({queue_len, granulate(QLen + 1)}, Stats0),
     State#state{queue_len = QLen + 1, queue = queue:Infunc(Request1, Q), stats = Stats1}.
 
 %% Try and dequeue request and send onto the server if one is waiting
@@ -2217,7 +2217,7 @@ remove_queued_request(Ref, #state{queue_len = QLen, queue = Q, stats = Stats0} =
             send_caller(Reply, Req),
             NewState#state{queue_len = QLen - 1,
                            queue     = queue:from_list(L2),
-                           stats     = record_cntr({TimeoutTag, q_timeout(Timeout)}, Stats0)}
+                           stats     = record_cntr({TimeoutTag, q_timeout(Timeout), bucket_name(Req)}, Stats0)}
     end.
 
 %% @private
@@ -2489,6 +2489,15 @@ op_timeout(Timeout) -> Timeout.
 
 q_timeout({QTimeout,_}) -> QTimeout;
 q_timeout(Timeout) -> Timeout.
+
+bucket_name(Req) ->
+    case Req#request.msg of
+        #rpbgetreq{bucket = B} -> B;
+        #rpbputreq{bucket = B} -> B;
+        #rpbdelreq{bucket = B} -> B;
+        rpbpingreq -> ping;
+        _ -> other_bucket
+    end.
 
 merge_stats({{TAcc1, TCnt1}, Cntrs1, HistG1}, {{TAcc2, TCnt2}, Cntrs2, HistG2}) ->
     {{TAcc1 + TAcc2, TCnt1 + TCnt2}, add_cntrs(Cntrs1, Cntrs2, []), add_hists(HistG1, HistG2, [])}.
@@ -4290,7 +4299,7 @@ stats_test() ->
     lists:foreach(fun({_,_,_,[]}) -> ok end, HL1),
     lists:foreach(fun({_,_,_,L}) -> true = length(L) == length(steps(2)) end, HL2),
 
-    % io:format(user, "~n~n~p ~p~n~n", [HL2, HL1]),
+    % io:format(user, "~n~n~p~n~n~p~n~n", [HL2, HL1]),
 
     stop(Pid).
 
@@ -4360,8 +4369,8 @@ overload_test() ->
            end,
 
     stats_take(Pid),
-    TEST(80),
-    TEST({15,55}),
+    TEST(60),
+    TEST({5,55}),
 
     catch DummyServerPid ! stop,
     timer:sleep(10),
@@ -4396,6 +4405,67 @@ dummy_server_loop({Listen, Sock, Directive}) ->
                     dummy_server_loop({Listen, Sock, Directive})
             end
     end.
+
+
+stats_test2() ->
+    {ok, Pid} = start_link(test_ip(), test_port(), [auto_reconnect, queue_if_disconnected, {stats, 2}]),
+
+    GREQ = fun(Bkt, TO) ->
+                   erlang:spawn(fun() ->
+                                        get(Pid, Bkt,
+                                            crypto:rand_bytes(1),
+                                            [], TO)
+                                end)
+           end,
+
+    PREQ = fun(Bkt, TO) ->
+                   erlang:spawn(fun() ->
+                                        put(Pid,
+                                            riakc_obj:new(Bkt,
+                                                          crypto:rand_bytes(1),
+                                                          crypto:rand_bytes(10)),
+                                            TO)
+                                end)
+           end,
+
+    Traffic = fun() ->
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt1">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt1">>, {100, 20}),
+                      GREQ(<<"bkt2">>, {100, 20}),
+                      PREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt1">>, {100, 20}),
+                      GREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt1">>, {100, 20}),
+                      GREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt1">>, {100, 20}),
+                      PREQ(<<"bkt2">>, {100, 20}),
+                      GREQ(<<"bkt1">>, {100, 20}),
+                      GREQ(<<"bkt2">>, {100, 20})
+              end,
+
+    Traffic(),
+    timer:sleep(500),
+    Stats = call_infinity(Pid, stats_peek),
+    io:format(user, "~n~n~p~n~n", [lists:sort(dict:to_list(Stats#stats.dict))]),
+
+    stop(Pid).
+
 
 all_tests() ->
     erlang:set_cookie(node(),riak),
