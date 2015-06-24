@@ -903,7 +903,12 @@ create_search_index(Pid, Index, SchemaName, Opts) ->
     Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
     NVal = proplists:get_value(n_val, Opts),
     Req = set_index_create_req_nval(NVal, Index, SchemaName),
-    Req1 = set_index_create_req_timeout(Timeout, Req),
+    Req1 = case proplists:is_defined(timeout, Opts) of
+               true ->
+                   set_index_create_req_timeout(Timeout, Req);
+               _ ->
+                   Req
+           end,
 
     Timeout1 = if
                    is_integer(Timeout) ->
