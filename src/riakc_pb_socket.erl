@@ -4407,8 +4407,11 @@ dummy_server_loop({Listen, Sock, Directive}) ->
     end.
 
 
-stats_test2() ->
-    {ok, Pid} = start_link(test_ip(), test_port(), [auto_reconnect, queue_if_disconnected, {stats, 2}]),
+stats_demo() ->
+    {ok, DummyServerPid, Port} = dummy_server({5, <<10>>}),
+    {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected, {stats,2}]),
+    timer:sleep(50),
+    erlang:monitor(process, DummyServerPid),
 
     GREQ = fun(Bkt, TO) ->
                    erlang:spawn(fun() ->
@@ -4460,12 +4463,19 @@ stats_test2() ->
               end,
 
     Traffic(),
+    Traffic(),
+    Traffic(),
     timer:sleep(500),
     Stats = call_infinity(Pid, stats_peek),
     io:format(user, "~n~n~p~n~n", [lists:sort(dict:to_list(Stats#stats.dict))]),
 
-    stop(Pid).
+    catch DummyServerPid ! stop,
+    timer:sleep(10),
+    receive _Msg -> ok % io:format(user, "MSG: ~p~n", [_Msg])
+    after 1 -> ok % io:format(user, "NO MSG: ~p~n", [process_info(DummyServerPid, messages)])
+    end,
 
+    stop(Pid).
 
 all_tests() ->
     erlang:set_cookie(node(),riak),
