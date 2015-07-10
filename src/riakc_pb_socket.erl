@@ -71,7 +71,8 @@
          default_timeout/1,
          tunnel/4,
          get_preflist/3, get_preflist/4,
-         get_coverage/2, get_coverage/3]).
+         get_coverage/2, get_coverage/3,
+         replace_coverage/3, replace_coverage/4]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -1107,6 +1108,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
     StartIncl = proplists:get_value(start_incl, Opts, true),
     EndIncl = proplists:get_value(end_incl, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1117,6 +1119,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
                           end_incl=EndIncl,
                           max_results=MaxResults,
                           continuation=Continuation,
+                          cover_context=Cover,
                           timeout=Timeout},
     ReqId = mk_reqid(),
     Call = {req, Req, Timeout, {ReqId, self()}},
@@ -1255,16 +1258,28 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
 -spec get_coverage(pid(), bucket()) -> {ok, term()}
                                            | {error, term()}.
 get_coverage(Pid, Bucket) ->
-    get_coverage(Pid, Bucket, default_timeout(get_coverage_timeout)).
+    get_coverage(Pid, Bucket, undefined).
 
 %% @doc Get coverage plan for parallel queries specifying timeout
--spec get_coverage(pid(), bucket(), timeout()) -> {ok, term()}
+-spec get_coverage(pid(), bucket(), undefined | non_neg_integer()) -> {ok, term()}
                                                  | {error, term()}.
-get_coverage(Pid, Bucket, Timeout) ->
+get_coverage(Pid, Bucket, MinPartitions) ->
+    Timeout = default_timeout(get_coverage_timeout),
     {T, B} = maybe_bucket_type(Bucket),
     call_infinity(Pid,
-                  {req, #rpbcoveragereq{type=T, bucket=B},
+                  {req, #rpbcoveragereq{type=T, bucket=B, min_partitions=MinPartitions},
                    Timeout}).
+
+replace_coverage(Pid, Bucket, Cover) ->
+    replace_coverage(Pid, Bucket, Cover, []).
+
+replace_coverage(Pid, Bucket, Cover, Other) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {T, B} = maybe_bucket_type(Bucket),
+    call_infinity(Pid,
+                  {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
+                   Timeout}).
+
 
 %% ====================================================================
 %% gen_server callbacks
