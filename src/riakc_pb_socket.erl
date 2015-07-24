@@ -1014,6 +1014,7 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
     Cover = proplists:get_value(cover_context, Opts),
+    ReturnBody = proplists:get_value(return_body, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1024,6 +1025,7 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
                        stream=Stream,
                        continuation=Continuation,
                        cover_context=Cover,
+                       return_body=ReturnBody,
                        timeout=Timeout},
     Call = case Stream of
                true ->
@@ -1067,6 +1069,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
     Cover = proplists:get_value(cover_context, Opts),
+    ReturnBody = proplists:get_value(return_body, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1080,6 +1083,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        stream=Stream,
                        continuation=Continuation,
                        cover_context=Cover,
+                       return_body=ReturnBody,
                        timeout=Timeout},
     Call = case Stream of
                true ->
