@@ -68,6 +68,8 @@
          get_index/4, get_index/5, get_index/6, get_index/7, %% @deprecated
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
          cs_bucket_fold/3,
+         cs_bucket_count/3,
+         cs_bucket_count_read_stream/1,
          default_timeout/1,
          tunnel/4,
          get_preflist/3, get_preflist/4]).
@@ -1117,6 +1119,42 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
     Call = {req, Req, Timeout, {ReqId, self()}},
     call_infinity(Pid, Call).
 
+cs_bucket_count(Pid, Bucket, Opts) ->
+    {ok, Ref} = riakc_pb_socket:cs_bucket_fold(Pid, Bucket, Opts),
+    case timer:tc(?MODULE, cs_bucket_count_read_stream, [Ref]) of
+        {_, {error, Err}} ->
+            {error, Err};
+        {Time, {TotalCount, TotalSize}} ->
+            Megs = TotalSize / (1024 * 1024),
+            Secs = Time / 1000000,
+            MbSecs = Megs / Secs,
+            io:format("Read ~.2f Mb in ~p seconds (~.2f Mb/Sec, ~p objects)\n",
+                      [Megs, Secs, MbSecs, TotalCount])
+    end.
+
+cs_bucket_count_read_stream(Ref) ->
+    cs_bucket_count_read_stream(Ref, {0, 0}).
+
+cs_bucket_count_read_stream(Ref, {Count, Size}) ->
+    receive
+        {Ref, {ok, {BCount, BSize}}} ->
+            Count1 = Count + BCount,
+            Size1 = Size + BSize,
+            case (Size div 10000000) /= (Size1 div 10000000) of
+                true ->
+                    io:format("~.2f Mb (~p objects)\n",
+                              [Size1 / (1024 * 1024), Count1]);
+                false ->
+                    ok
+            end,
+            cs_bucket_count_read_stream(Ref, {Count1, Size1});
+        {Ref, {done, _}} ->
+            {Count, Size}
+    after
+        10000 ->
+            {error, timeout}
+    end.
+
 %% @doc Return the default timeout for an operation if none is provided.
 %%      Falls back to the default timeout.
 -spec default_timeout(timeout_name()) -> timeout().
@@ -1302,6 +1340,27 @@ handle_call(stop, _From, State) ->
     _ = disconnect(State),
     {stop, normal, ok, State}.
 
+hacky_decode(41, <<10, _/binary>> = Data) ->
+    hacky_decode_csbucket_value(Data, {0, 0});
+hacky_decode(MsgCode, MsgData) ->
+    riak_pb_codec:decode(MsgCode, MsgData).
+
+hacky_decode_csbucket_value(<<>>, Acc) ->
+    {hacky_csbucket_resp, Acc};
+hacky_decode_csbucket_value(<<10, Rest/binary>>, {Count, Size}) ->
+    {_, <<10, Rest1/binary>>} = protobuffs:decode_varint(Rest),
+    {Klen, Rest1b} = protobuffs:decode_varint(Rest1),
+    <<_:Klen/binary, 18, Rest2/binary>> = Rest1b,
+    {_, Rest2b} = protobuffs:decode_varint(Rest2),
+    <<18, Rest3/binary>> = Rest2b,
+    {Vclen, Rest3b} = protobuffs:decode_varint(Rest3),
+    <<_:Vclen/binary, 10, Rest4/binary>> = Rest3b,
+    {_, Rest4b} = protobuffs:decode_varint(Rest4),
+    <<10, Rest5/binary>> = Rest4b,
+    {Vlen, Rest5b} = protobuffs:decode_varint(Rest5),
+    <<_:Vlen/binary, Rest6/binary>> = Rest5b,
+    hacky_decode_csbucket_value(Rest6, {Count+1, Size+ Vlen}).
+
 %% @private
 handle_info({tcp_error, _Socket, Reason}, State) ->
     error_logger:error_msg("PBC client TCP error for ~p:~p - ~p\n",
@@ -1330,7 +1389,11 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
             %% don't decode tunneled replies, we may not recognize the msgid
             {MsgCode, MsgData};
         _ ->
-            riak_pb_codec:decode(MsgCode, MsgData)
+            dyntrace:p(1,1),
+            %%Decoded = riak_pb_codec:decode(MsgCode, MsgData),
+            Decoded = hacky_decode(MsgCode, MsgData),
+            dyntrace:p(1,2),
+            Decoded
     end,
     NewState = case Resp of
         #rpberrorresp{} ->
@@ -1742,18 +1805,24 @@ process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp
     {reply, {ok, RegularResponseWithContinuation}, State};
 process_response(#request{msg = #rpbcsbucketreq{}}, rpbcsbucketresp, State) ->
     {pending, State};
+process_response(#request{msg = #rpbcsbucketreq{}}=Request,
+                 {hacky_csbucket_resp, Size}, State) ->
+    _ = send_caller({ok, Size}, Request),
+    {pending, State};
 process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsbucketresp{objects=Objects, done=Done, continuation=Cont}, State) ->
     %% TEMP - cs specific message for fold_objects
     ToSend =  case Objects of
                   undefined -> {ok, []};
                   _ ->
                       %% make client objects
+                      dyntrace:p(2, 1),
                       CObjects = lists:foldr(fun(#rpbindexobject{key=Key,
                                                                  object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
                                                      DContents = riak_pb_kv_codec:decode_contents(Contents),
                                                      [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
                                              [],
                                              Objects),
+                      dyntrace:p(2, 2),
                       {ok, CObjects}
               end,
     _ = send_caller(ToSend, Request),
