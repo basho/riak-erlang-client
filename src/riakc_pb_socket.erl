@@ -1765,17 +1765,17 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     Results = ?INDEX_RESULTS{keys=[], continuation=undefined},
     {reply, {ok, Results}, State};
-process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
+process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms, return_body=Body}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
-    ToSend = process_index_response(Terms, Keys, Results),
+    ToSend = process_index_response(not just_keys(Terms, Body), Keys, Results),
     _ = send_caller(ToSend, Request),
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
                 true -> DoneResponse;
                 _ -> {pending, State}
     end;
-process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
-    StreamResponse = process_index_response(Terms, Keys, Results),
+process_response(#request{msg = #rpbindexreq{return_terms=Terms, return_body=Body}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
+    StreamResponse = process_index_response(not just_keys(Terms, Body), Keys, Results),
     RegularResponse = index_stream_result_to_index_result(StreamResponse),
     RegularResponseWithContinuation = RegularResponse?INDEX_RESULTS{continuation=Cont},
     {reply, {ok, RegularResponseWithContinuation}, State};
@@ -1908,6 +1908,17 @@ process_response(#request{msg = #rpbcoveragereq{}},
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
+
+%% Equate undefined as false when figuring out whether
+%% `process_index_response' should be handling simple keys or complex
+%% objects via return_terms and return_body
+just_keys(true, _) ->
+    false;
+just_keys(_, true) ->
+    false;
+just_keys(_, _) ->
+    true.
+
 
 %% Helper for index responses
 -spec process_index_response(undefined | boolean(), list(), list()) ->
