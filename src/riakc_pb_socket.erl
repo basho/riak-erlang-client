@@ -1923,10 +1923,8 @@ just_keys(_, _) ->
 
 
 %% Helper for index responses
--spec process_index_response(undefined | boolean(), list(), list()) ->
+-spec process_index_response(boolean(), list(), list()) ->
     index_stream_result().
-process_index_response(undefined, Keys, _) ->
-    ?INDEX_STREAM_RESULT{keys=Keys};
 process_index_response(false, Keys, _) ->
     ?INDEX_STREAM_RESULT{keys=Keys};
 process_index_response(true, [], Results) ->
