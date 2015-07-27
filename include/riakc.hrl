@@ -144,6 +144,7 @@
 -type keys() :: [binary()] | 'undefined'.
 -type index_terms() :: [{index_term(), binary()}] | 'undefined'.
 
+%% `terms' is used for key/value pairs if `return_body' is specified
 -record(index_results_v1, {
         keys :: keys(),
         terms :: index_terms(),
