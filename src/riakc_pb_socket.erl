@@ -1257,14 +1257,14 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
     Req = #rpbgetbucketkeypreflistreq{type = T, bucket = B, key = Key},
     call_infinity(Pid, {req, Req, Timeout}).
 
-%% @doc Get coverage plan for parallel queries
-%% @equiv get_coverage(Pid, Bucket, default_timeout(get_coverage_timeout))
+%% @doc Get minimal coverage plan
+%% @equiv get_coverage(Pid, Bucket, undefined)
 -spec get_coverage(pid(), bucket()) -> {ok, term()}
                                            | {error, term()}.
 get_coverage(Pid, Bucket) ->
     get_coverage(Pid, Bucket, undefined).
 
-%% @doc Get coverage plan for parallel queries specifying timeout
+%% @doc Get parallel coverage plan if 3rd argument is >= 0
 -spec get_coverage(pid(), bucket(), undefined | non_neg_integer()) -> {ok, term()}
                                                  | {error, term()}.
 get_coverage(Pid, Bucket, MinPartitions) ->
