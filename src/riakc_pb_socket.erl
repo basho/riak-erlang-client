@@ -1769,7 +1769,7 @@ process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     {reply, {ok, Results}, State};
 process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms, return_body=Body}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
-    ToSend = process_index_response(not just_keys(Terms, Body), Keys, Results),
+    ToSend = process_index_response(response_type(Terms, Body), Keys, Results),
     _ = send_caller(ToSend, Request),
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
@@ -1777,7 +1777,7 @@ process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms, re
                 _ -> {pending, State}
     end;
 process_response(#request{msg = #rpbindexreq{return_terms=Terms, return_body=Body}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
-    StreamResponse = process_index_response(not just_keys(Terms, Body), Keys, Results),
+    StreamResponse = process_index_response(response_type(Terms, Body), Keys, Results),
     RegularResponse = index_stream_result_to_index_result(StreamResponse),
     RegularResponseWithContinuation = RegularResponse?INDEX_RESULTS{continuation=Cont},
     {reply, {ok, RegularResponseWithContinuation}, State};
@@ -1911,23 +1911,22 @@ process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
 
-%% Equate undefined as false when figuring out whether
-%% `process_index_response' should be handling simple keys or complex
-%% objects via return_terms and return_body
-just_keys(true, _) ->
-    false;
-just_keys(_, true) ->
-    false;
-just_keys(_, _) ->
-    true.
+%% Return `keys', `terms', or `objects' depending on the value of
+%% `return_terms' and `return_body'
+response_type(_, true) ->
+    objects;
+response_type(true, false) ->
+    terms;
+response_type(_, _) ->
+    keys.
 
 
 %% Helper for index responses
--spec process_index_response(boolean(), list(), list()) ->
+-spec process_index_response('keys'|'terms'|'objects', list(), list()) ->
     index_stream_result().
-process_index_response(false, Keys, _) ->
+process_index_response(keys, Keys, _) ->
     ?INDEX_STREAM_RESULT{keys=Keys};
-process_index_response(true, [], Results) ->
+process_index_response(_, [], Results) ->
     %% If return_terms is true and return_body is false, rpbpair is
     %% abused to send Value,Key pairs as Key, Value pairs in a 2i
     %% query the 'key' is the index value and the 'value' the indexed
@@ -1937,7 +1936,7 @@ process_index_response(true, [], Results) ->
     %% this code works fine despite the backwards binding names
     Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Results],
     ?INDEX_STREAM_RESULT{terms=Res};
-process_index_response(true, Keys, []) ->
+process_index_response(_, Keys, []) ->
     ?INDEX_STREAM_RESULT{keys=Keys}.
 
 -spec index_stream_result_to_index_result(index_stream_result()) ->
