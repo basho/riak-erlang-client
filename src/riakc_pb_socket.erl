@@ -1915,7 +1915,7 @@ process_response(Request, Reply, State) ->
 %% `return_terms' and `return_body'
 response_type(_, true) ->
     objects;
-response_type(true, false) ->
+response_type(true, _) ->
     terms;
 response_type(_, _) ->
     keys.
