@@ -1912,12 +1912,13 @@ process_response(Request, Reply, State) ->
     {reply, {error, {unknown_response, Request, Reply}}, State}.
 
 %% Return `keys', `terms', or `objects' depending on the value of
-%% `return_terms' and `return_body'
-response_type(_, true) ->
+%% `return_terms' and `return_body'. Values can be true, false, or
+%% undefined.
+response_type(_ReturnTerms, true) ->
     objects;
-response_type(true, _) ->
+response_type(true, _ReturnBody) ->
     terms;
-response_type(_, _) ->
+response_type(_ReturnTerms, _ReturnBody) ->
     keys.
 
 
