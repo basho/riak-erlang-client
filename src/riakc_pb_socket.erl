@@ -74,8 +74,6 @@
          get_coverage/2, get_coverage/3,
          replace_coverage/3, replace_coverage/4]).
 
--export([t2c/1, c2t/1]). %% XXX LEAVE THIS OUT
-
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
 %% with options
@@ -3962,21 +3960,3 @@ live_node_tests() ->
      ].
 
 -endif.
-
-%% XXX DO NOT CHECK THIS IN
-t2c(C) ->
-    Csum = erlang:adler32(term_to_binary(C)),
-    term_to_binary({Csum, C}).
-
-c2t(C) ->
-    verify_checksum_tuple(binary_to_term(C)).
-
-verify_checksum_tuple({Csum, Term}) ->
-    case Csum =:= erlang:adler32(term_to_binary(Term)) of
-        true ->
-            {ok, Term};
-        false ->
-            {error, invalid_checksum}
-    end;
-verify_checksum_tuple(_) ->
-    {error, invalid_structure}.
