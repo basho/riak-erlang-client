@@ -10,3 +10,4 @@ ebin/*
 /current_counterexample.eqc
 .local_dialyzer_plt
 _build/*
+rebar.lock
