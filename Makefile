@@ -1,18 +1,18 @@
-.PHONY: all clean compile deps distclean
+.PHONY: all clean compile upgrade-deps distclean
 
-all: deps compile
+all: compile
 
-compile: deps
-	./rebar compile
+compile:
+	./rebar3 compile
 
-deps:
-	./rebar get-deps
+upgrade-deps:
+	./rebar3 upgrade
 
 clean:
-	./rebar clean
+	./rebar3 clean
 
 distclean: clean
-	./rebar delete-deps
+	./rebar3 clean --all
 
 
 DIALYZER_APPS = kernel stdlib sasl erts eunit ssl tools crypto \
