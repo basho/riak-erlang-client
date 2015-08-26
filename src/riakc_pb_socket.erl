@@ -141,7 +141,7 @@
                 keepalive = false :: boolean(), % if true, enabled TCP keepalive for the socket
                 transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
-                queue :: queue:queue(#request{}) | undefined,      % queue of pending requests
+                queue :: queue:queue(#request{}) | undefined, % pending requests
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
