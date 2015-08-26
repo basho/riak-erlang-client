@@ -1262,6 +1262,7 @@ init([Address, Port, Options]) ->
         {error, Reason} when State#state.auto_reconnect /= true ->
             {stop, {tcp, Reason}};
         {error, _Reason} ->
+            erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {ok, State};
         Ok ->
             Ok
