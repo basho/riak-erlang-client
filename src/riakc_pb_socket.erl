@@ -141,7 +141,7 @@
                 keepalive = false :: boolean(), % if true, enabled TCP keepalive for the socket
                 transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
-                queue :: queue() | undefined,      % queue of pending requests
+                queue :: queue:queue(#request{}) | undefined, % pending requests
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
@@ -1188,7 +1188,8 @@ fetch_type(Pid, BucketAndType, Key, Options) ->
 
 %% @doc Updates the convergent datatype in Riak with local
 %% modifications stored in the container type.
--spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(), Update::riakc_datatype:update(term())) ->
+-spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary() | undefined,
+                  Update::riakc_datatype:update(term())) ->
                          ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
                          {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
 update_type(Pid, BucketAndType, Key, Update) ->
@@ -1197,7 +1198,7 @@ update_type(Pid, BucketAndType, Key, Update) ->
 %% @doc Updates the convergent datatype in Riak with local
 %% modifications stored in the container type, using the given request
 %% options.
--spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary(),
+-spec update_type(pid(), {BucketType::binary(), Bucket::binary()}, Key::binary() | undefined,
                   Update::riakc_datatype:update(term()), [proplists:property()]) ->
                          ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
                          {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
@@ -2181,7 +2182,7 @@ remove_queued_request(Ref, State) ->
     end.
 
 %% @private
-mk_reqid() -> erlang:phash2(erlang:now()). % only has to be unique per-pid
+mk_reqid() -> erlang:phash2({self(), os:timestamp()}). % only has to be unique per-pid
 
 %% @private
 wait_for_list(ReqId) ->

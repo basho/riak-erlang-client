@@ -41,7 +41,7 @@
 %% server if the connection fails or is lost.
 -type client_options() :: [client_option()]. %% A list of client options.
 -type client_id() :: binary(). %% A client identifier, used for differentiating client processes
--type bucket() :: binary(). %% A bucket name.
+-type bucket() :: binary() | {binary(), binary()}. %% A bucket name (and optionally type).
 -type key() :: binary(). %% A key name.
 -type riakc_obj() :: riakc_obj:riakc_obj(). %% An object (bucket, key, metadata, value) stored in Riak.
 -type req_id() :: non_neg_integer(). %% Request identifier for streaming requests.
