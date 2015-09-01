@@ -130,6 +130,12 @@
 -record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
                   tref :: reference() | undefined }).
 
+-ifdef(namespaced_types).
+-type request_queue_t() :: queue:queue(#request{}).
+-else.
+-type request_queue_t() :: queue().
+-endif.
+
 -type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
 -type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
 -record(state, {address :: address(),    % address to connect to
@@ -141,7 +147,7 @@
                 keepalive = false :: boolean(), % if true, enabled TCP keepalive for the socket
                 transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
-                queue :: queue() | undefined,      % queue of pending requests
+                queue :: request_queue_t() | undefined,      % queue of pending requests
                 connects=0 :: non_neg_integer(), % number of successful connects
                 failed=[] :: [connection_failure()],  % breakdown of failed connects
                 connect_timeout=infinity :: timeout(), % timeout of TCP connection
