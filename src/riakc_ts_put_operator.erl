@@ -36,7 +36,7 @@ row_for([], SerializedCells) ->
     #tsrow{cells = lists:reverse(SerializedCells)};
 row_for([Cell|RemainingCells], SerializedCells) ->
     row_for(RemainingCells,
-            [cell_for(Cell), SerializedCells]).
+            [cell_for(Cell) | SerializedCells]).
 
 cell_for(Measure) when is_binary(Measure) ->
     #tscell{binary_value = Measure};
