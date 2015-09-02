@@ -1,4 +1,4 @@
--module(riakc_timeseries).
+-module(riakc_ts_operator).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
