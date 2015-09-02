@@ -161,6 +161,8 @@
                                % documentation.
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
+-export_type([address/0, portnum/0]).
+
 %% @private Like `gen_server:call/3', but with the timeout hardcoded
 %% to `infinity'.
 call_infinity(Pid, Msg) ->
