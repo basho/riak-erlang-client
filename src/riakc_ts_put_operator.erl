@@ -3,7 +3,8 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 
--export([serialize/3]).
+-export([serialize/3,
+         deserialize/1]).
 
 serialize(TableName, Columns, Measurements) ->
     SerializedColumns = columns_for(Columns),
@@ -12,6 +13,8 @@ serialize(TableName, Columns, Measurements) ->
               columns = SerializedColumns,
               rows = SerializedRows}.
 
+deserialize(Response) ->
+    Response.
 
 %% TODO: actually support column specifiers
 columns_for(_Columns) ->

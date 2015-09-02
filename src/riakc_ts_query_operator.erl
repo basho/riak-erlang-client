@@ -3,8 +3,7 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 
--export([
-         serialize/2,
+-export([serialize/2,
          deserialize/1]).
 
 serialize(QueryText, Interpolations) ->
@@ -22,3 +21,6 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
                          SerializedInterps) ->
     UpdatedInterps = [#rpbpair{key=Key, value=Value} | SerializedInterps],
     serialize_interpolations(RemainingInterps, UpdatedInterps).
+
+deserialize(Response) ->
+    Response.
