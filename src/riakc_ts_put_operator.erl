@@ -1,42 +1,17 @@
--module(riakc_ts_serializer).
+-module(riakc_ts_put_operator).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 
--export([
-         serialize_query/1,
-         serialize_query/2,
-         serialize_put/2,
-         serialize_put/3]).
+-export([serialize/3]).
 
-serialize_query(QueryText) ->
-    serialize_query(QueryText, []).
-
-serialize_query(QueryText, Interpolations) ->
-    Content = #tsinterpolation{
-                 base = QueryText,
-                 interpolations = serialize_interpolations(Interpolations)},
-    #tsqueryreq{query = Content}.
-
-serialize_put(TableName, Measurements) ->
-    serialize_put(TableName, undefined, Measurements).
-
-serialize_put(TableName, Columns, Measurements) ->
+serialize(TableName, Columns, Measurements) ->
     SerializedColumns = columns_for(Columns),
     SerializedRows = rows_for(Measurements),
     #tsputreq{table = TableName,
               columns = SerializedColumns,
               rows = SerializedRows}.
 
-serialize_interpolations(Interpolations) ->
-    serialize_interpolations(Interpolations, []).
-
-serialize_interpolations([], SerializedInterps) ->
-    SerializedInterps;
-serialize_interpolations([{Key, Value} | RemainingInterps],
-                         SerializedInterps) ->
-    UpdatedInterps = [#rpbpair{key=Key, value=Value} | SerializedInterps],
-    serialize_interpolations(RemainingInterps, UpdatedInterps).
 
 %% TODO: actually support column specifiers
 columns_for(_Columns) ->
