@@ -1,4 +1,4 @@
--module(riakc_timeseries).
+-module(riakc_ts).
 
 -export([query/2,
          query/3,

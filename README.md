@@ -617,7 +617,7 @@ Timeseries
 
 ```erlang
 {ok, Pid} = riakc_pb_socket:start_link("pancake", 10017).
-riakc_timeseries:query(Pid, "select * from asdf").
+riakc_ts:query(Pid, "select * from asdf").
 ```
 
 ### Put
@@ -629,7 +629,7 @@ you'll be submitting.
 
 ```erlang
 {ok, Pid} = riakc_pb_socket:start_link("pancake", 10017).
-riakc_timeseries:put(Pid, "asdf", [[{time, 12345}, 2, 3], [{time, 23456}, 5, 6]]).
+riakc_ts:put(Pid, "asdf", [[{time, 12345}, 2, 3], [{time, 23456}, 5, 6]]).
 ```
 
 Troubleshooting
