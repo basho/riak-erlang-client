@@ -6,8 +6,8 @@
 [![Build Status](https://secure.travis-ci.org/basho/riak-erlang-client.png?branch=master)](http://travis-ci.org/basho/riak-erlang-client)
 
 This document assumes that you have already started your Riak cluster.
-For instructions on that prerequisite, refer to
-[Quick Start](http://docs.basho.com/riak/latest/quickstart/)
+For instructions on that prerequisite, refer to the
+[Quick Start](http://docs.basho.com/riak/latest/quickstart/) guide
 in the [Basho Docs](https://docs.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
 
 Dependencies
