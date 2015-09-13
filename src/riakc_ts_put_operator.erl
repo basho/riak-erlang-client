@@ -48,8 +48,8 @@ row_for([Cell|RemainingCells], SerializedCells) ->
 cell_for(Measure) when is_binary(Measure) ->
     #tscell{binary_value = Measure};
 cell_for(Measure) when is_integer(Measure),
-                       (SINT64_MIN <= Measure),
-                       (Measure <= SINT64_MAX)  ->
+                       (?SINT64_MIN =< Measure),
+                       (Measure =< ?SINT64_MAX)  ->
     #tscell{integer_value = Measure};
 cell_for(Measure) when is_integer(Measure) ->
     #tscell{numeric_value = integer_to_list(Measure)};
