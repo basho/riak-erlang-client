@@ -38,7 +38,7 @@ query(Pid, QueryText, Interpolations) ->
     riakc_ts_query_operator:deserialize(Response).
 
 put(Pid, TableName, Measurements) ->
-    put(Pid, TableName, undefined, Measurements).
+    put(Pid, TableName, [], Measurements).
 
 put(Pid, TableName, Columns, Measurements) ->
     Message = riakc_ts_put_operator:serialize(TableName, Columns, Measurements),
