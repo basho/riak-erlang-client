@@ -70,7 +70,9 @@
          cs_bucket_fold/3,
          default_timeout/1,
          tunnel/4,
-         get_preflist/3, get_preflist/4]).
+         get_preflist/3, get_preflist/4,
+         get_coverage/2, get_coverage/3,
+         replace_coverage/3, replace_coverage/4]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -1011,6 +1013,8 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
+    ReturnBody = proplists:get_value(return_body, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1020,6 +1024,8 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
                        pagination_sort=PgSort,
                        stream=Stream,
                        continuation=Continuation,
+                       cover_context=Cover,
+                       return_body=ReturnBody,
                        timeout=Timeout},
     Call = case Stream of
                true ->
@@ -1062,6 +1068,8 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
+    ReturnBody = proplists:get_value(return_body, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1074,6 +1082,8 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        pagination_sort = PgSort,
                        stream=Stream,
                        continuation=Continuation,
+                       cover_context=Cover,
+                       return_body=ReturnBody,
                        timeout=Timeout},
     Call = case Stream of
                true ->
@@ -1102,6 +1112,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
     StartIncl = proplists:get_value(start_incl, Opts, true),
     EndIncl = proplists:get_value(end_incl, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1112,6 +1123,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
                           end_incl=EndIncl,
                           max_results=MaxResults,
                           continuation=Continuation,
+                          cover_context=Cover,
                           timeout=Timeout},
     ReqId = mk_reqid(),
     Call = {req, Req, Timeout, {ReqId, self()}},
@@ -1244,6 +1256,33 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = #rpbgetbucketkeypreflistreq{type = T, bucket = B, key = Key},
     call_infinity(Pid, {req, Req, Timeout}).
+
+%% @doc Get minimal coverage plan
+%% @equiv get_coverage(Pid, Bucket, undefined)
+-spec get_coverage(pid(), bucket()) -> {ok, term()}
+                                           | {error, term()}.
+get_coverage(Pid, Bucket) ->
+    get_coverage(Pid, Bucket, undefined).
+
+%% @doc Get parallel coverage plan if 3rd argument is >= 0
+-spec get_coverage(pid(), bucket(), undefined | non_neg_integer()) -> {ok, term()}
+                                                 | {error, term()}.
+get_coverage(Pid, Bucket, MinPartitions) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {T, B} = maybe_bucket_type(Bucket),
+    call_infinity(Pid,
+                  {req, #rpbcoveragereq{type=T, bucket=B, min_partitions=MinPartitions},
+                   Timeout}).
+
+replace_coverage(Pid, Bucket, Cover) ->
+    replace_coverage(Pid, Bucket, Cover, []).
+
+replace_coverage(Pid, Bucket, Cover, Other) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {T, B} = maybe_bucket_type(Bucket),
+    call_infinity(Pid,
+                  {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
+                   Timeout}).
 
 
 %% ====================================================================
@@ -1727,17 +1766,17 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     Results = ?INDEX_RESULTS{keys=[], continuation=undefined},
     {reply, {ok, Results}, State};
-process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
+process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms, return_body=Body}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
-    ToSend = process_index_response(Terms, Keys, Results),
+    ToSend = process_index_response(response_type(Terms, Body), Keys, Results),
     _ = send_caller(ToSend, Request),
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
                 true -> DoneResponse;
                 _ -> {pending, State}
     end;
-process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
-    StreamResponse = process_index_response(Terms, Keys, Results),
+process_response(#request{msg = #rpbindexreq{return_terms=Terms, return_body=Body}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
+    StreamResponse = process_index_response(response_type(Terms, Body), Keys, Results),
     RegularResponse = index_stream_result_to_index_result(StreamResponse),
     RegularResponseWithContinuation = RegularResponse?INDEX_RESULTS{continuation=Cont},
     {reply, {ok, RegularResponseWithContinuation}, State};
@@ -1872,24 +1911,41 @@ process_response(#request{msg = #tsqueryreq{}},
                  State) ->
     {reply, Result, State};
 
+process_response(#request{msg = #rpbcoveragereq{}},
+                 #rpbcoverageresp{entries=E}, State) ->
+    {reply, {ok, E}, State};
+
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
 
+%% Return `keys', `terms', or `objects' depending on the value of
+%% `return_terms' and `return_body'. Values can be true, false, or
+%% undefined.
+response_type(_ReturnTerms, true) ->
+    objects;
+response_type(true, _ReturnBody) ->
+    terms;
+response_type(_ReturnTerms, _ReturnBody) ->
+    keys.
+
+
 %% Helper for index responses
--spec process_index_response(undefined | boolean(), list(), list()) ->
+-spec process_index_response('keys'|'terms'|'objects', list(), list()) ->
     index_stream_result().
-process_index_response(undefined, Keys, _) ->
+process_index_response(keys, Keys, _) ->
     ?INDEX_STREAM_RESULT{keys=Keys};
-process_index_response(false, Keys, _) ->
-    ?INDEX_STREAM_RESULT{keys=Keys};
-process_index_response(true, [], Results) ->
-    %% rpbpair is abused to send Value,Key pairs as Key, Value pairs
-    %% in a 2i query the 'key' is the index value and the 'value'
-    %% the indexed objects primary key
+process_index_response(_, [], Results) ->
+    %% If return_terms is true and return_body is false, rpbpair is
+    %% abused to send Value,Key pairs as Key, Value pairs in a 2i
+    %% query the 'key' is the index value and the 'value' the indexed
+    %% objects primary key.
+    %%
+    %% If return_body is true, then rpbpair is used as intended, and
+    %% this code works fine despite the backwards binding names
     Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Results],
     ?INDEX_STREAM_RESULT{terms=Res};
-process_index_response(true, Keys, []) ->
+process_index_response(_, Keys, []) ->
     ?INDEX_STREAM_RESULT{keys=Keys}.
 
 -spec index_stream_result_to_index_result(index_stream_result()) ->
