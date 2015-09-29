@@ -49,4 +49,6 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
 deserialize(#tsqueryresp{columns = Columns_, rows = Rows_}) ->
     Columns = [C || #tscolumndescription{name = C} <- Columns_],
     Rows = riak_pb_ts_codec:decode_rows(Rows_),
-    {Columns, Rows}.
+    {Columns, Rows};
+deserialize(Error) ->
+    Error.
