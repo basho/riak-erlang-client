@@ -1780,6 +1780,43 @@ process_response(#request{msg = #rpbindexreq{return_terms=Terms, return_body=Bod
     RegularResponse = index_stream_result_to_index_result(StreamResponse),
     RegularResponseWithContinuation = RegularResponse?INDEX_RESULTS{continuation=Cont},
     {reply, {ok, RegularResponseWithContinuation}, State};
+process_response(#request{msg = #rpbindexreq{stream=true, bucket=Bucket}}=Request,
+                 #rpbindexbodyresp{objects=Objects, done=Done, continuation=Cont}, State) ->
+    ToSend =
+        case Objects of
+            undefined -> [];
+            _ ->
+                %% make client objects
+                lists:foldr(fun(#rpbindexobject{key=Key,
+                                                object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
+                                    DContents = riak_pb_kv_codec:decode_contents(Contents),
+                                    [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
+                            [],
+                            Objects)
+        end,
+    _ = send_caller({ok,
+                     ?INDEX_STREAM_BODY_RESULT{objects = ToSend}},
+                    Request),
+    DoneResponse = {reply, {done, Cont}, State},
+    case Done of
+        true -> DoneResponse;
+        _ -> {pending, State}
+    end;
+process_response(#request{msg = #rpbindexreq{bucket=Bucket}},
+                 #rpbindexbodyresp{objects=Objects, continuation=Cont}, State) ->
+    ToSend =
+        case Objects of
+            undefined -> [];
+            _ ->
+                %% make client objects
+                lists:foldr(fun(#rpbindexobject{key=Key,
+                                                object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
+                                    DContents = riak_pb_kv_codec:decode_contents(Contents),
+                                    [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
+                            [],
+                            Objects)
+        end,
+    {reply, {ok, ?INDEX_BODY_RESULTS{objects=ToSend, continuation=Cont}}, State};
 process_response(#request{msg = #rpbcsbucketreq{}}, rpbcsbucketresp, State) ->
     {pending, State};
 process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsbucketresp{objects=Objects, done=Done, continuation=Cont}, State) ->
@@ -1940,9 +1977,6 @@ process_index_response(_, [], Results) ->
     %% abused to send Value,Key pairs as Key, Value pairs in a 2i
     %% query the 'key' is the index value and the 'value' the indexed
     %% objects primary key.
-    %%
-    %% If return_body is true, then rpbpair is used as intended, and
-    %% this code works fine despite the backwards binding names
     Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Results],
     ?INDEX_STREAM_RESULT{terms=Res};
 process_index_response(_, Keys, []) ->
