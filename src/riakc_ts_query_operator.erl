@@ -46,6 +46,8 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
     UpdatedInterps = [#rpbpair{key=Key, value=Value} | SerializedInterps],
     serialize_interpolations(RemainingInterps, UpdatedInterps).
 
+deserialize({error, Message}) -> {error, Message};
+
 deserialize(#tsqueryresp{columns = Columns_, rows = Rows_}) ->
     Columns = [C || #tscolumndescription{name = C} <- Columns_],
     Rows = riak_pb_ts_codec:decode_rows(Rows_),
