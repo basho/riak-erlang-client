@@ -1863,6 +1863,19 @@ process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
               || T <- Preflist],
     {reply, {ok, Result}, State};
 
+process_response(#request{msg = #tsputreq{}},
+                 tsputresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #tsqueryreq{}},
+                 tsqueryresp, State) ->
+    {reply, #tsqueryresp{}, State};
+
+process_response(#request{msg = #tsqueryreq{}},
+                 Result = #tsqueryresp{},
+                 State) ->
+    {reply, Result, State};
+
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.

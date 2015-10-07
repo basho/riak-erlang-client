@@ -612,6 +612,26 @@ Create a qfun that returns the size of the record and feed this into the existin
 
  As expected, total size of data is 15 bytes.
 
+Timeseries
+==========
+
+```erlang
+{ok, Pid} = riakc_pb_socket:start_link("pancake", 10017).
+riakc_ts:query(Pid, "select * from asdf").
+```
+
+### Put
+
+Put requests don't serialize column descriptions yet. There's probably a more
+advanced serialization/deserialization codepath that needs to be written. If
+your measurement columns line up with how the table was defined that's what
+you'll be submitting.
+
+```erlang
+{ok, Pid} = riakc_pb_socket:start_link("pancake", 10017).
+riakc_ts:put(Pid, "asdf", [[{time, 12345}, 2, 3], [{time, 23456}, 5, 6]]).
+```
+
 Troubleshooting
 ==================
 
