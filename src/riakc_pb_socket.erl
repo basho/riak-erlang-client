@@ -1868,6 +1868,10 @@ process_response(#request{msg = #tsputreq{}},
     {reply, ok, State};
 
 process_response(#request{msg = #tsqueryreq{}},
+                 tsqueryresp, State) ->
+    {reply, #tsqueryresp{}, State};
+
+process_response(#request{msg = #tsqueryreq{}},
                  Result = #tsqueryresp{},
                  State) ->
     {reply, Result, State};
