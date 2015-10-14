@@ -1,13 +1,21 @@
 %% -*- erlang -*-
 {application, riakc,
  [{description, "Riak Client"},
-  {vsn, git},
+  {vsn, "2.0"},
   {applications, [
                   kernel,
                   stdlib,
                   riak_pb
                  ]},
   {registered, []},
+  {modules, [riakc_counter,
+             riakc_datatype,
+             riakc_flag,
+             riakc_map,
+             riakc_obj,
+             riakc_pb_socket,
+             riakc_register,
+             riakc_set]},
   {env, [
          %% Set default timeout for operations.
          %% Individual operation timeouts can be supplied,

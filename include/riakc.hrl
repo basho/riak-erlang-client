@@ -24,7 +24,7 @@
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
 -define(DEFAULT_PB_TIMEOUT, 60000).
--define(FIRST_RECONNECT_INTERVAL, 100).
+-define(FIRST_RECONNECT_INTERVAL, 10).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
 -type client_option()  :: queue_if_disconnected |
@@ -33,7 +33,8 @@
                           auto_reconnect |
                           {auto_reconnect, boolean()} |
                           keepalive |
-                          {keepalive, boolean()}.
+                          {keepalive, boolean()} |
+                          {stats, non_neg_integer()}.
 %% Options for starting or modifying the connection:
 %% `queue_if_disconnected' when present or true will cause requests to
 %% be queued while the connection is down. `auto_reconnect' when
