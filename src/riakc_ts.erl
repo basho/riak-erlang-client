@@ -27,7 +27,9 @@
 -export([query/2,
          query/3,
          put/3,
-         put/4]).
+         put/4,
+         delete/4]).
+
 
 query(Pid, QueryText) ->
     query(Pid, QueryText, []).
@@ -44,6 +46,11 @@ put(Pid, TableName, Columns, Measurements) ->
     Message = riakc_ts_put_operator:serialize(TableName, Columns, Measurements),
     Response = server_call(Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
+
+delete(Pid, TableName, Key, Options)
+  when is_list(Key) ->
+    Message = riak_pb_ts_codec:encode_tsdelreq(TableName, Key, Options),
+    _Response = server_call(Pid, Message).
 
 server_call(Pid, Message) ->
     gen_server:call(Pid,
