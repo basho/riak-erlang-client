@@ -1960,6 +1960,15 @@ process_response(#request{msg = #rpbcoveragereq{}},
                  #rpbcoverageresp{entries=E}, State) ->
     {reply, {ok, E}, State};
 
+process_response(#request{msg = #tsgetreq{}},
+                 tsgetresp, State) ->
+    {reply, #tsgetresp{}, State};
+
+process_response(#request{msg = #tsgetreq{}},
+                 Result = #tsgetresp{},
+                 State) ->
+    {reply, Result, State};
+
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.

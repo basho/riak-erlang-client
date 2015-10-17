@@ -28,6 +28,7 @@
          query/3,
          put/3,
          put/4,
+         get/4,
          delete/4]).
 
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -68,6 +69,18 @@ delete(Pid, TableName, Key, Options)
   when is_list(Key) ->
     Message = riak_pb_ts_codec:encode_tsdelreq(TableName, Key, Options),
     _Response = server_call(Pid, Message).
+
+
+-spec get(pid(), table_name(), [ts_value()], proplists:proplist()) ->
+                 [[ts_value()]].
+get(Pid, TableName, Key, Options) ->
+    Message = riak_pb_ts_codec:encode_tsgetreq(TableName, Key, Options),
+    case server_call(Pid, Message) of
+        {error, {_NotFoundErrCode, <<"notfound">>}} ->
+            [];
+        Response ->
+            [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsgetresp.rows)]
+    end.
 
 
 %% --------------------------------------------
