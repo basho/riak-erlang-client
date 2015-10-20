@@ -1973,10 +1973,6 @@ response_type(_ReturnTerms, _ReturnBody) ->
 process_index_response(keys, Keys, _) ->
     ?INDEX_STREAM_RESULT{keys=Keys};
 process_index_response(_, [], Results) ->
-    %% If return_terms is true and return_body is false, rpbpair is
-    %% abused to send Value,Key pairs as Key, Value pairs in a 2i
-    %% query the 'key' is the index value and the 'value' the indexed
-    %% objects primary key.
     Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Results],
     ?INDEX_STREAM_RESULT{terms=Res};
 process_index_response(_, Keys, []) ->
