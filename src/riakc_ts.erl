@@ -54,6 +54,11 @@ query(Pid, QueryText) ->
 %%      result returned is a tuple containing a list of columns as
 %%      binaries in the first element, and a list of records, each
 %%      represented as a list of values, in the second element.
+%%
+%%      Note that for the 'float' field type, the actual values
+%%      returned will always be of type double (64-bit), even when the
+%%      data were previously inserted (possibly by some other client)
+%%      in `#tscell.float_value`.
 query(Pid, QueryText, Interpolations) ->
     Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
     Response = server_call(Pid, Message),
@@ -115,6 +120,11 @@ delete(Pid, TableName, Key, Options)
 %%      1st element, and a record found as a list of values, further
 %%      as a single element in enclosing list, in its 2nd element. If
 %%      no record is found, the return value is {[], []}.
+%%
+%%      Note that for the 'float' field type, the actual values
+%%      returned will always be of type double (64-bit), even when the
+%%      data were previously inserted (possibly by some other client)
+%%      in `#tscell.float_value`.
 get(Pid, TableName, Key, Options) ->
     Message = riak_pb_ts_codec:encode_tsgetreq(TableName, Key, Options),
     case server_call(Pid, Message) of
