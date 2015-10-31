@@ -72,14 +72,16 @@ delete(Pid, TableName, Key, Options)
 
 
 -spec get(pid(), table_name(), [ts_value()], proplists:proplist()) ->
-                 [[ts_value()]].
+                 {[binary()], [[ts_value()]]}.
 get(Pid, TableName, Key, Options) ->
     Message = riak_pb_ts_codec:encode_tsgetreq(TableName, Key, Options),
     case server_call(Pid, Message) of
         {error, {_NotFoundErrCode, <<"notfound">>}} ->
-            [];
+            {[], []};
         Response ->
-            [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsgetresp.rows)]
+            Columns = [C || #tscolumndescription{name = C} <- Response#tsgetresp.columns],
+            Rows = [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsgetresp.rows)],
+            {Columns, Rows}
     end.
 
 
