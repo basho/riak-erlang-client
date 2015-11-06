@@ -31,7 +31,9 @@
          get/4,
          delete/4]).
 
+-include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_pb.hrl").
 
 -type table_name() :: binary().
 -type ts_value() :: number() | binary().
