@@ -1251,7 +1251,16 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
 %% ====================================================================
 
 %% @private
-init([Address, Port, Options]) ->
+init([Address, Port, InOptions]) ->
+    %% If callback to sent the startup of the child
+    case proplists:get_value(mod_callback, InOptions) of
+        undefined  -> ok;
+        [Mod, Fun] ->
+            Mod:Fun(self(), Address, Port)
+    end,   
+    
+    Options = proplists:delete(mod_callback, InOptions), 
+
     %% Schedule a reconnect as the first action.  If the server is up then
     %% the handle_info(reconnect) will run before any requests can be sent.
     State = parse_options(Options, #state{address = Address,
