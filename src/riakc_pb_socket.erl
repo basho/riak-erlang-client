@@ -136,6 +136,12 @@
 -type request_queue_t() :: queue().
 -endif.
 
+-ifdef(deprecated_now).
+-define(NOW, erlang:system_time(micro_seconds)).
+-else.
+-define(NOW, erlang:now()).
+-endif.
+
 -type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
 -type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
 -record(state, {address :: address(),    % address to connect to
@@ -2187,7 +2193,7 @@ remove_queued_request(Ref, State) ->
     end.
 
 %% @private
-mk_reqid() -> erlang:phash2(erlang:now()). % only has to be unique per-pid
+mk_reqid() -> erlang:phash2(?NOW). % only has to be unique per-pid
 
 %% @private
 wait_for_list(ReqId) ->
