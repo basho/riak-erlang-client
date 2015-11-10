@@ -1252,13 +1252,9 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
 
 %% @private
 init([Address, Port, InOptions]) ->
-    %% If callback to sent the startup of the child
-    case proplists:get_value(mod_callback, InOptions) of
-        undefined  -> ok;
-        [Mod, Fun] ->
-            Mod:Fun(self(), Address, Port)
-    end,   
-    
+    %% If callback then send the startup of the child
+    CallbackMod = proplists:get_value(mod_callback, InOptions),   
+ 
     Options = proplists:delete(mod_callback, InOptions), 
 
     %% Schedule a reconnect as the first action.  If the server is up then
@@ -1273,6 +1269,12 @@ init([Address, Port, InOptions]) ->
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {ok, State};
         Ok ->
+            % Only if ok then Mod:Fun
+            case CallbackMod of
+                undefined  -> ok;
+                [Mod, Fun] -> 
+                    Mod:Fun(self(), Address, Port) 
+            end,
             Ok
     end.
 
