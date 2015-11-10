@@ -86,18 +86,20 @@ The object is now stored in Riak. `put/2` uses default parameters for storing th
     <th>Description</th>
     <tr>
         <td><code>{w, W}</code></td>
-        <td>the minimum number of nodes that must respond with success for the write to be considered successful. The default is currently set on the server at 2</td>
+        <td>the minimum number of nodes that must respond with success for the write to be considered successful. The default is currently set on the server to quorum.</td>
     </tr>
     <tr>
         <td><code>{dw, DW}</code></td>
-        <td>  the minimum number of nodes that must respond with success * *after durably storing* the object for the write to be considered successful. The default is currently set on the server at 0. </td>
+        <td>  the minimum number of nodes that must respond with success * *after durably storing* the object for the write to be considered successful. The default is currently set on the server to quorum.</td>
     </tr>
     <tr>
-        <td><code>return_body </code></td>
-        <td> immediately do a get after the put and return a
-        riakc_obj.</td>
+        <td><code>return_body</code></td>
+        <td>immediately do a get after the put and return a riakc_obj.</td>
     </tr>
 </table>
+
+See [Default Bucket Properties](http://docs.basho.com/riak/latest/ops/advanced/configs/configuration-files/#Default-Bucket-Properties) for more details.
+
 
     6> AnotherObject = riakc_obj:new(<<"my bucket">>, <<"my key">>, <<"my binary data">>).
     7> riakc_pb_socket:put(Pid, AnotherObject, [{w, 2}, {dw, 1}, return_body]).
@@ -144,7 +146,7 @@ Like `put/3`, there is a `get/4` function that takes options.
     <th>Description</th>
     <tr>
         <td><code>{r, R}</code></td>
-        <td>the minimum number of nodes that must respond with success for the read to be considered successfu2</td>
+        <td>the minimum number of nodes that must respond with success for the read to be considered successful</td>
     </tr>
 </table>
 
@@ -290,7 +292,7 @@ User Metadata
 
 User metadata are stored in the object metadata dictionary, and can be manipulated by using the `get_user_metadata_entry/2`, `get_user_metadata_entries/1`, `clear_user_metadata_entries/1`, `delete_user_metadata_entry/2` and `set_user_metadata_entry/2` functions.
 
-These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+These functions act upon the dictionary returned by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
 The following example illustrates setting and getting metadata.
 
@@ -348,7 +350,7 @@ The following example illustrates setting and getting metadata.
 Secondary Indexes
 ==================
 
-Secondary indexes are set through the object metadata dictionary, and can be manipulated by using the `get_secondary_index/2`, `get_secondary_indexes/1`, `clear_secondary_indexes/1`, `delete_secondary_index/2`, `set_secondary_index/2` and `add_secondary_index/2` functions. These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+Secondary indexes are set through the object metadata dictionary, and can be manipulated by using the `get_secondary_index/2`, `get_secondary_indexes/1`, `clear_secondary_indexes/1`, `delete_secondary_index/2`, `set_secondary_index/2` and `add_secondary_index/2` functions. These functions act upon the dictionary returned by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
 When using these functions, secondary indexes are identified by a tuple, `{binary_index, string()}` or `{integer_index, string()}`, where the string is the name of the index. `{integer_index, "id"}` therefore corresponds to the index "id_int". As secondary indexes may have more than one value, the index values are specified as lists of integers or binaries, depending on index type.
 
@@ -393,7 +395,7 @@ The following example illustrates getting and setting secondary indexes.
            <<"John Robert Doe, 25">>}
     20> riakc_pb_socket:put(Pid, Obj2).
 
-In order to query based on secondary indexes, the `riakc_pb_socket:get_index/4`, `riakc_pb_socket:get_index/5`, `riakc_pb_socket:get_index/6` and `riakc_pb_socket:get_index/7` functions can be used. These functions also allows secondary indexes to be specifiued using the tuple described above.
+In order to query based on secondary indexes, the `riakc_pb_socket:get_index/4`, `riakc_pb_socket:get_index/5`, `riakc_pb_socket:get_index/6` and `riakc_pb_socket:get_index/7` functions can be used. These functions also allows secondary indexes to be specified using the tuple described above.
 
 The following example illustrates how to perform exact match as well as range queries based on the record and associated indexes created above.
 
@@ -488,7 +490,7 @@ Links
 
 Links are also stored in the object metadata dictionary, and can be manipulated by using the `get_links/2`, `get_all_links/1`, `clear_links/1`, `delete_links/2`, `set_link/2` and `add_link/2` functions. When using these functions, a link is identified by a tag, and may therefore contain multiple record IDs.
 
-These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+These functions act upon the dictionary returned by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
 The following example illustrates setting and getting links.
 
