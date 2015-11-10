@@ -107,7 +107,10 @@ put(Pid, TableName, Columns, Measurements) ->
 %%      called in order to obtain one.
 delete(Pid, TableName, Key, Options)
   when is_list(Key) ->
-    Message = riak_pb_ts_codec:encode_tsdelreq(TableName, Key, Options),
+    Message = #tsdelreq{table   = TableName,
+                        key     = riak_pb_ts_codec:encode_cells(Key),
+                        vclock  = proplists:get_value(vclock, Options),
+                        timeout = proplists:get_value(timeout, Options)},
     _Response = server_call(Pid, Message).
 
 
@@ -123,7 +126,10 @@ delete(Pid, TableName, Key, Options)
 %%      list, in its 2nd element. If no record is found, the return
 %%      value is {[], []}.
 get(Pid, TableName, Key, Options) ->
-    Message = riak_pb_ts_codec:encode_tsgetreq(TableName, Key, Options),
+    Message = #tsgetreq{table   = TableName,
+                        key     = riak_pb_ts_codec:encode_cells(Key),
+                        timeout = proplists:get_value(timeout, Options)},
+
     case server_call(Pid, Message) of
         {error, {_NotFoundErrCode, <<"notfound">>}} ->
             {[], []};
