@@ -24,12 +24,11 @@
 
 -module(riakc_ts).
 
--export([query/2,
-         query/3,
-         put/3,
-         put/4,
+-export([query/2, query/3,
+         put/3, put/4,
          get/4,
-         delete/4]).
+         delete/4,
+         list_keys/3]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -139,6 +138,31 @@ get(Pid, TableName, Key, Options) ->
             {Columns, Rows}
     end.
 
+
+-spec list_keys(Pid::pid(), Table::table_name(), Options::proplists:proplist()) ->
+                       {ok, Keys::[[riak_pb_ts_codec:ldbvalue()]]} | {error, Reason::term()}.
+%% @doc Lists keys in Table, using client Pid.  Parameter Options is a
+%%      proplist that can include a value for 'timeout'. Returns @{ok,
+%%      Keys@} or @{error, Reason@}.
+list_keys(Pid, TableName, Options) ->
+    Message = #tslistkeysreq{table = TableName,
+                             timeout = proplists:get_value(timeout, Options)},
+    collect_list_keys_chunks(Pid, Message, []).
+
+collect_list_keys_chunks(Pid, Message, Acc0) ->
+    case server_call(Pid, Message) of
+        #tslistkeysresp{keys = Keys,
+                        done = Done} ->
+            Acc = lists:append(
+                    Acc0, [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Keys)]),
+            if Done ->
+                    {ok, Acc};
+                e==e ->
+                    collect_list_keys_chunks(Pid, Message, Acc)
+            end;
+        ErrorReason ->
+            ErrorReason
+    end.
 
 %% --------------------------------------------
 %% local functions

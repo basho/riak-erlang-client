@@ -1948,6 +1948,22 @@ process_response(#request{msg = #tsdelreq{}},
                  tsdelresp, State) ->
     {reply, ok, State};
 
+process_response(#request{msg = #tslistkeysreq{}} = Request,
+                 #tslistkeysresp{done = Done, keys = Keys}, State) ->
+    case Keys of
+        undefined ->
+            ok;
+        _ ->
+            CompoundKeys = riak_pb_ts_codec:decode_rows(Keys),
+            send_caller({keys, CompoundKeys}, Request)
+        end,
+    case Done of
+        true ->
+            {reply, done, State};
+        _ ->
+            {pending, State}
+    end;
+
 process_response(#request{msg = #tsqueryreq{}},
                  tsqueryresp, State) ->
     {reply, #tsqueryresp{}, State};
@@ -2010,6 +2026,8 @@ after_send(#request{msg = #rpblistbucketsreq{}, ctx = {ReqId, _Client}},
            State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #tslistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
