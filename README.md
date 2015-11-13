@@ -729,6 +729,7 @@ This is not a comprehensive list, please see the commit history.
 * [Dave Smith](https://github.com/djsmith42)
 * [Dmitry Demeshchuk](https://github.com/doubleyou)
 * [Drew](https://github.com/drew)
+* [Drew Kerrigan](https://github.com/drewkerrigan)
 * [Eduardo Gurgel](https://github.com/edgurgel)
 * Engel A. Sanchez
 * [Eric Redmond](https://github.com/coderoshi)

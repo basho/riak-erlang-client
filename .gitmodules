@@ -1,5 +1,5 @@
 [submodule "doc"]
-	path = doc
+	path = edoc
 	url = https://github.com/basho/riak-erlang-client.git
 	branch = gh-pages
 [submodule "tools"]
