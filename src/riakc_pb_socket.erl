@@ -141,11 +141,7 @@
                   opts :: proplists:proplist()
                  }).
 
--ifdef(namespaced_types).
 -type request_queue_t() :: queue:queue(#request{}).
--else.
--type request_queue_t() :: queue().
--endif.
 
 -ifdef(deprecated_now).
 -define(NOW, erlang:system_time(micro_seconds)).
@@ -2378,11 +2374,7 @@ remove_queued_request(Ref, State) ->
     end.
 
 %% @private
--ifdef(deprecated_19).
 mk_reqid() -> erlang:phash2(crypto:strong_rand_bytes(10)). % only has to be unique per-pid
--else.
-mk_reqid() -> erlang:phash2(crypto:rand_bytes(10)). % only has to be unique per-pid
--endif.
 
 %% @private
 wait_for_mapred(ReqId, Timeout) ->

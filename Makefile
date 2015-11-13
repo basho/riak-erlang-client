@@ -1,20 +1,23 @@
 .PHONY: all lint clean compile deps distclean release docs
 
+PROJDIR := $(realpath $(CURDIR))
+REBAR ?= $(PROJDIR)/rebar
+
 all: deps compile
 
 lint: xref dialyzer
 
 compile: deps
-	./rebar compile
+	$(REBAR) compile
 
 deps:
-	./rebar get-deps
+	$(REBAR) get-deps
 
 clean:
-	./rebar clean
+	$(REBAR) clean
 
 distclean: clean
-	./rebar delete-deps
+	$(REBAR) delete-deps
 
 release: compile
 ifeq ($(VERSION),)
@@ -23,13 +26,17 @@ endif
 ifeq ($(RELEASE_GPG_KEYNAME),)
 	$(error RELEASE_GPG_KEYNAME must be set to build a release and deploy this package)
 endif
-	@echo "==> Tagging version $(VERSION)"
-	# NB: Erlang client version strings do NOT start with 'v'. Le Sigh.
-	# validate VERSION and allow pre-releases
-	@./tools/build/publish $(VERSION) master validate
-	@git tag --sign -a "$(VERSION)" -m "riak-erlang-client $(VERSION)" --local-user "$(RELEASE_GPG_KEYNAME)"
-	@git push --tags
-	@./tools/build/publish $(VERSION) master 'Riak Erlang Client' 'riak-erlang-client'
+	echo "==> Tagging version $(VERSION)"
+	$(PROJDIR)/tools/build/publish $(VERSION) master validate
+	echo "$(VERSION)" > VERSION
+	git add --force VERSION
+	git commit --message="riak-erlang-client $(VERSION)"
+	git push
+	git tag --sign -a "$(VERSION)" -m "riak-erlang-client $(VERSION)" --local-user "$(RELEASE_GPG_KEYNAME)"
+	git push --tags
+	$(PROJDIR)/tools/build/publish $(VERSION) master 'Riak Erlang Client' 'riak-erlang-client'
+	mix deps.get
+	mix hex.publish
 
 
 DIALYZER_APPS = kernel stdlib sasl erts eunit ssl tools crypto \
