@@ -3980,23 +3980,23 @@ timeout_no_conn_test() ->
                   end
           end,
 
-    P01 = REQ(get, {150,10}), timer:sleep(1), % sleep to ensure that spawned requests
-    P02 = REQ(get, {100,10}), timer:sleep(1), % are actually sent in this order
-    P03 = REQ(get, {150,10}), timer:sleep(1),
-    P04 = REQ(get, {100,10}), timer:sleep(1),
-    P05 = REQ(get, {150,10}), timer:sleep(1),
-    P06 = REQ(get, {100,10}), timer:sleep(1),
-    P07 = REQ(get, {150,10}), timer:sleep(1),
-    P08 = REQ(get, {100,10}), timer:sleep(1),
-    P09 = REQ(get, {150,10}), timer:sleep(1),
-    P10 = REQ(get, 20),       timer:sleep(1),
-    P11 = REQ(get, 40),       timer:sleep(1),
-    P12 = REQ(get, 60),       timer:sleep(1),
-    P13 = REQ(get, 80),       timer:sleep(1),
-    P14 = REQ(get, 20),       timer:sleep(1),
-    P15 = REQ(get, 100),      timer:sleep(250), 0 = queue_len(Pid),
-    P16 = REQ(get, {20,100}), timer:sleep(1),
-    P17 = REQ(get, {20,100}),
+    P01 = REQ(get, {1500,100}), timer:sleep(1), % sleep to ensure that spawned requests
+    P02 = REQ(get, {1000,100}), timer:sleep(1), % are actually sent in this order
+    P03 = REQ(get, {1500,100}), timer:sleep(1),
+    P04 = REQ(get, {1000,100}), timer:sleep(1),
+    P05 = REQ(get, {1500,100}), timer:sleep(1),
+    P06 = REQ(get, {1000,100}), timer:sleep(1),
+    P07 = REQ(get, {1500,100}), timer:sleep(1),
+    P08 = REQ(get, {1000,100}), timer:sleep(1),
+    P09 = REQ(get, {1500,100}), timer:sleep(1),
+    P10 = REQ(get, 200),        timer:sleep(1),
+    P11 = REQ(get, 400),        timer:sleep(1),
+    P12 = REQ(get, 600),        timer:sleep(1),
+    P13 = REQ(get, 800),        timer:sleep(1),
+    P14 = REQ(get, 200),        timer:sleep(1),
+    P15 = REQ(get, 1000),       timer:sleep(2500), 0 = queue_len(Pid),
+    P16 = REQ(get, {200,1000}), timer:sleep(1),
+    P17 = REQ(get, {200,1000}),
 
     {T01, {error, timeout}} = RES(P01),
     {T02, {error, timeout}} = RES(P02),
@@ -4016,26 +4016,26 @@ timeout_no_conn_test() ->
     {T16, {error, timeout}} = RES(P16),
     {T17, {error, timeout}} = RES(P17),
 
-    % All these requests should spend ~150ms in the queue
+    % All these requests should spend ~1500ms in the queue
     io:format(user, "150ms TIMES: ~p ~p ~p ~p ~p~n", [T01,T03,T05,T07,T09]),
-    lists:foreach(fun(T) -> true = T > 145, true = T < 159 end, [T01,T03,T05,T07,T09]),
+    lists:foreach(fun(T) -> true = T > 1490, true = T < 1510 end, [T01,T03,T05,T07,T09]),
 
-    % All these requests should spend ~100ms in the queue
+    % All these requests should spend ~1000ms in the queue
     io:format(user, "100ms TIMES: ~p ~p ~p ~p~n", [T02,T04,T06,T08]),
-    lists:foreach(fun(T) -> true = T > 95,  true = T < 109 end, [T02,T04,T06,T08]),
+    lists:foreach(fun(T) -> true = T > 990,  true = T < 1010 end, [T02,T04,T06,T08]),
 
     % These test the old timeouts
     io:format(user, "TIMES: ~p ~p ~p ~p ~p ~p ~p ~p~n", [T10,T11,T12,T13,T14,T15,T16,T17]),
-    true = T10 > 18, true = T10 < 25,
-    true = T11 > 37, true = T11 < 45,
-    true = T12 > 55, true = T12 < 65,
-    true = T13 > 73, true = T13 < 85,
-    true = T14 > 18, true = T14 < 25,
-    true = T15 > 98, true = T15 < 105,
+    true = T10 > 190, true = T10 < 210,
+    true = T11 > 390, true = T11 < 410,
+    true = T12 > 590, true = T12 < 610,
+    true = T13 > 790, true = T13 < 810,
+    true = T14 > 190, true = T14 < 210,
+    true = T15 > 990, true = T15 < 1010,
 
-    % These 2 requests should spend ~20ms in the queue
-    true = T16 > 18, true = T16 < 25,
-    true = T17 > 18, true = T17 < 25,
+    % These 2 requests should spend ~200ms in the queue
+    true = T16 > 190, true = T16 < 210,
+    true = T17 > 190, true = T17 < 210,
 
     stop(Pid).
 
@@ -4047,7 +4047,7 @@ timeout_conn_test() ->
     % so the test is variable, it may fail the first time but try it again
 
     % Set up a dummy socket to send requests on
-    {ok, DummyServerPid, Port} = dummy_server(),
+    {ok, DummyServerPid, Port} = dummy_server(noreply),
     {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected]),
     erlang:monitor(process, DummyServerPid),
     Self = self(),
@@ -4067,24 +4067,24 @@ timeout_conn_test() ->
                   end
           end,
 
-    P01 = REQ(get, {100, 20}), timer:sleep(1), % sleep to ensure that spawned requests
-    P02 = REQ(get, {100, 20}), timer:sleep(1), % are actually sent in this order
-    P03 = REQ(get, {100, 20}), timer:sleep(1),
-    P04 = REQ(get, {100, 20}), timer:sleep(1),
-    P05 = REQ(get, {100, 20}), timer:sleep(1),
-    P06 = REQ(get, {100, 20}), timer:sleep(1),
-    P07 = REQ(get, {100, 20}), timer:sleep(1),
-    P08 = REQ(get, {100, 20}), timer:sleep(1),
-    P09 = REQ(get, {100, 20}), timer:sleep(1),
-    P10 = REQ(get, {100, 20}), timer:sleep(1),
-    P11 = REQ(get, 20),        timer:sleep(1),
-    P12 = REQ(get, 40),        timer:sleep(1),
-    P13 = REQ(get, 60),        timer:sleep(1),
-    P14 = REQ(get, 80),        timer:sleep(1),
-    P15 = REQ(get, 20),        timer:sleep(1),
-    P16 = REQ(get, 100),       timer:sleep(200), 0 = queue_len(Pid),
-    P17 = REQ(get, {20, 100}), timer:sleep(1),
-    P18 = REQ(get, {20, 100}),
+    P01 = REQ(get, {1000, 200}), timer:sleep(1), % sleep to ensure that spawned requests
+    P02 = REQ(get, {1000, 200}), timer:sleep(1), % are actually sent in this order
+    P03 = REQ(get, {1000, 200}), timer:sleep(1),
+    P04 = REQ(get, {1000, 200}), timer:sleep(1),
+    P05 = REQ(get, {1000, 200}), timer:sleep(1),
+    P06 = REQ(get, {1000, 200}), timer:sleep(1),
+    P07 = REQ(get, {1000, 200}), timer:sleep(1),
+    P08 = REQ(get, {1000, 200}), timer:sleep(1),
+    P09 = REQ(get, {1000, 200}), timer:sleep(1),
+    P10 = REQ(get, {1000, 200}), timer:sleep(1),
+    P11 = REQ(get, 200),         timer:sleep(1),
+    P12 = REQ(get, 400),         timer:sleep(1),
+    P13 = REQ(get, 600),         timer:sleep(1),
+    P14 = REQ(get, 800),         timer:sleep(1),
+    P15 = REQ(get, 200),         timer:sleep(1),
+    P16 = REQ(get, 1000),        timer:sleep(2000), 0 = queue_len(Pid),
+    P17 = REQ(get, {200, 1000}), timer:sleep(1),
+    P18 = REQ(get, {200, 1000}),
 
     {T01, {error, timeout}} = RES(P01),
     {T02, {error, timeout}} = RES(P02),
@@ -4107,25 +4107,28 @@ timeout_conn_test() ->
 
     io:format(user, "TIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p~n",
               [T01,T02,T03,T04,T05,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15,T16,T17,T18]),
-    true = T01 > 18, true = T01 < 26, % This one is serviced right away & should timeout after 20ms
-    true = T02 > 37, true = T02 < 49, % This one is serviced after the 1st one has timed out, ~40ms
-    true = T03 > 55, true = T03 < 70, % This one is serviced after the 1st two have timed out, ~60ms
-    true = T04 > 73, true = T04 < 90, % This one is serviced after the 1st three have timed out, ~80ms
-    true = T05 > 91, true = T05 < 117, % This one might timeout inthe q, or might be serviced
+    true = T01 > 190, true = T01 < 210, % This one is serviced right away & should timeout after 200ms
+    true = T02 > 390, true = T02 < 410, % This one is serviced after the 1st one has timed out, ~400ms
+    true = T03 > 590, true = T03 < 610, % This one is serviced after the 1st two have timed out, ~600ms
+    true = T04 > 790, true = T04 < 810, % This one is serviced after the 1st three have timed out, ~800ms
+    true = T05 > 990, true = T05 < 1010, % This one is serviced after the 1st four have timed out, ~1000ms
 
-    % All these will timeout in the queue
-    lists:foreach(fun(T) -> true = T > 97, true = T < 125 end, [T06,T07,T08,T09,T10]),
+    [HD|TL] = lists:reverse(lists:sort([T06,T07,T08,T09,T10])),
+    % One will have queued & been serviced, ~1200ms
+    true = HD > 1190, true = HD < 1210,
+    % All these will timeout in the queue, ~1000ms
+    lists:foreach(fun(T) -> true = T > 990, true = T < 1010 end, TL),
 
     % These test for backward compatibility
-    true = T11 > 17, true = T11 < 25,
-    true = T12 > 37, true = T12 < 48,
-    true = T13 > 57, true = T13 < 70,
-    true = T14 > 77, true = T14 < 90,
-    true = T15 > 17, true = T15 < 26,
-    true = T16 > 97, true = T16 < 106,
+    true = T11 > 190, true = T11 < 210,
+    true = T12 > 390, true = T12 < 410,
+    true = T13 > 590, true = T13 < 610,
+    true = T14 > 790, true = T14 < 810,
+    true = T15 > 190, true = T15 < 210,
+    true = T16 > 990, true = T16 < 1010,
 
-    true = T17 > 97, true = T17 < 106,  % This one will be serviced right away & timeout after ~100ms
-    true = T18 > 17, true = T18 < 26,   % This one will timeout in the queue waiting for the previous one ~20ms
+    true = T17 > 990, true = T17 < 1010,  % This one will be serviced right away & timeout after ~100ms
+    true = T18 > 190, true = T18 < 210,   % This one will timeout in the queue waiting for the previous one ~20ms
 
     catch DummyServerPid ! stop,
     timer:sleep(10),
