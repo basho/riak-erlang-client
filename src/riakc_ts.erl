@@ -115,15 +115,17 @@ delete(Pid, TableName, Key, Options)
 
 -spec get(Pid::pid(), Table::table_name(), Key::[ts_value()],
           Options::proplists:proplist()) ->
-                 {Columns::[binary()], Record::[ts_value()]}.
+                 {ok, {Columns::[binary()], Record::[ts_value()]}} |
+                 {error, {ErrCode::integer(), ErrMsg::binary()}}.
 %% @doc Get a record, if there is one, having the fields constituting
 %%      the primary key in the Table equal to the composite Key
 %%      (supplied as a list), using client Pid.  Options is a proplist
-%%      which can include a value for 'timeout'.  Returns a tuple with
-%%      a list of column names in its 1st element, and a record found
-%%      as a list of values, further as a single element in enclosing
-%%      list, in its 2nd element. If no record is found, the return
-%%      value is {[], []}.
+%%      which can include a value for 'timeout'.  Returns @{ok,
+%%      @{Columns, Record@}@} where Columns has column names, and
+%%      Record is the record found as a list of values, further as a
+%%      single element in enclosing list. If no record is found, the
+%%      return value is @{ok, @{[], []@}@}. On error, the function
+%%      returns @{error, @{ErrCode, ErrMsg@}@}.
 get(Pid, TableName, Key, Options) ->
     Message = #tsgetreq{table   = TableName,
                         key     = riak_pb_ts_codec:encode_cells(Key),
@@ -131,11 +133,13 @@ get(Pid, TableName, Key, Options) ->
 
     case server_call(Pid, Message) of
         {error, {_NotFoundErrCode, <<"notfound">>}} ->
-            {[], []};
+            {ok, {[], []}};
+        {error, OtherError} ->
+            {error, OtherError};
         Response ->
             Columns = [C || #tscolumndescription{name = C} <- Response#tsgetresp.columns],
             Rows = [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsgetresp.rows)],
-            {Columns, Rows}
+            {ok, {Columns, Rows}}
     end.
 
 
