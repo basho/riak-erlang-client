@@ -62,6 +62,9 @@
          delete_secondary_index/2,
          set_secondary_index/2,
          add_secondary_index/2,
+         get_ttl/1,
+         clear_ttl/1,
+         set_ttl/2,
          get_links/2,
          get_all_links/1,
          clear_links/1,
@@ -103,6 +106,7 @@
 -endif.
 -type tag() :: binary().
 -type link() :: {tag(), [id()]}.
+-type ttl() :: non_neg_integer().
 
 -record(riakc_obj, {
           bucket :: bucket(),
@@ -492,6 +496,26 @@ add_secondary_index(MD, [{Id, BinList} | Rest]) when is_binary(Id) ->
             MD2 = dict:store(?MD_INDEX, NewList, MD),
             add_secondary_index(MD2, Rest)
     end.
+
+%% @doc  Clear TTL entry
+-spec clear_ttl(metadata()) -> metadata().
+clear_ttl(MD) ->
+    dict:erase(?MD_TTL, MD).
+
+%% @doc  Get TTL
+-spec get_ttl(metadata()) -> ttl() | undefined.
+get_ttl(MD) ->
+    case dict:find(?MD_TTL, MD) of
+        {ok, TTL} ->
+            TTL;
+        error ->
+            false
+    end.
+
+%% @doc  Set time to live
+-spec set_ttl(metadata(), ttl()) -> metadata().
+set_ttl(MD, TTL) ->
+    dict:store(?MD_TTL, TTL, MD).
 
 %% @doc  Get links for a specific tag
 -spec get_links(metadata(), tag()) -> [id()] | notfound.
