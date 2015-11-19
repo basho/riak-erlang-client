@@ -25,14 +25,14 @@
 -module(riakc_ts_put_operator).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
--include_lib("riak_pb/include/riak_kv_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_pb.hrl").
 
 -export([serialize/3,
          deserialize/1]).
 
-serialize(TableName, Columns, Measurements) ->
-    SerializedColumns = riak_pb_ts_codec:encode_columns(Columns),
-    SerializedRows = riak_pb_ts_codec:encode_rows(Measurements),
+serialize(TableName, ColumnNames, Measurements) ->
+    SerializedColumns = riak_pb_ts_codec:encode_columnnames(ColumnNames),
+    SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
     #tsputreq{table = TableName,
               columns = SerializedColumns,
               rows = SerializedRows}.

@@ -31,10 +31,11 @@
          get/4,
          delete/4]).
 
--include_lib("riak_pb/include/riak_kv_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_pb.hrl").
 
 -type table_name() :: binary().
--type ts_value() :: number() | binary().
+-type ts_value() :: riak_pb_ts_codec:ldbvalue().
+-type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
 
 -spec query(pid(), string()) ->
@@ -50,15 +51,15 @@ query(Pid, QueryText, Interpolations) ->
     riakc_ts_query_operator:deserialize(Response).
 
 
--spec put(pid(), table_name(), [{binary(), ts_value()}]) ->
+-spec put(pid(), table_name(), [ts_value()]) ->
                  ok | {error, term()}.
 put(Pid, TableName, Measurements) ->
     put(Pid, TableName, [], Measurements).
 
--spec put(pid(), table_name(), [binary()], [{binary(), ts_value()}]) ->
+-spec put(pid(), table_name(), [ts_columnname()], [ts_value()]) ->
                  ok | {error, term()}.
-put(Pid, TableName, Columns, Measurements) ->
-    Message = riakc_ts_put_operator:serialize(TableName, Columns, Measurements),
+put(Pid, TableName, ColumnsNames, Measurements) ->
+    Message = riakc_ts_put_operator:serialize(TableName, ColumnsNames, Measurements),
     Response = server_call(Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
 

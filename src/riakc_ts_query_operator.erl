@@ -25,7 +25,7 @@
 -module(riakc_ts_query_operator).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
--include_lib("riak_pb/include/riak_kv_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_pb.hrl").
 
 -export([serialize/2,
          deserialize/1]).
