@@ -1950,12 +1950,12 @@ process_response(#request{msg = #tsdelreq{}},
 
 process_response(#request{msg = #tslistkeysreq{}} = Request,
                  #tslistkeysresp{done = Done, keys = Keys}, State) ->
-    case Keys of
-        undefined ->
-            ok;
-        _ ->
-            CompoundKeys = riak_pb_ts_codec:decode_rows(Keys),
-            send_caller({keys, CompoundKeys}, Request)
+    _ = case Keys of
+            undefined ->
+                ok;
+            _ ->
+                CompoundKeys = riak_pb_ts_codec:decode_rows(Keys),
+                send_caller({keys, CompoundKeys}, Request)
         end,
     case Done of
         true ->
