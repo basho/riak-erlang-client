@@ -31,11 +31,11 @@
          deserialize/1]).
 
 serialize(TableName, ColumnNames, Measurements) ->
-    SerializedColumns = riak_pb_ts_codec:encode_columnnames(ColumnNames),
+    ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
     SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
-    #tsputreq{table = TableName,
-              columns = SerializedColumns,
-              rows = SerializedRows}.
+    #tsputreq{table   = TableName,
+              columns = ColumnDescs,
+              rows    = SerializedRows}.
 
 deserialize(Response) ->
     Response.

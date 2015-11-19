@@ -24,12 +24,11 @@
 
 -module(riakc_ts).
 
--export([query/2,
-         query/3,
-         put/3,
-         put/4,
+-export([query/2, query/3,
+         put/3, put/4,
          get/4,
-         delete/4]).
+         delete/4,
+         list_keys/3]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -108,32 +107,67 @@ put(Pid, TableName, ColumnNames, Measurements) ->
 %%      called in order to obtain one.
 delete(Pid, TableName, Key, Options)
   when is_list(Key) ->
-    Message = riak_pb_ts_codec:encode_tsdelreq(TableName, Key, Options),
+    Message = #tsdelreq{table   = TableName,
+                        key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
+                        vclock  = proplists:get_value(vclock, Options),
+                        timeout = proplists:get_value(timeout, Options)},
     _Response = server_call(Pid, Message).
 
 
 -spec get(Pid::pid(), Table::table_name(), Key::[ts_value()],
           Options::proplists:proplist()) ->
-                 {Columns::[binary()], Record::[ts_value()]}.
+                 {ok, {Columns::[binary()], Record::[ts_value()]}} |
+                 {error, {ErrCode::integer(), ErrMsg::binary()}}.
 %% @doc Get a record, if there is one, having the fields constituting
 %%      the primary key in the Table equal to the composite Key
 %%      (supplied as a list), using client Pid.  Options is a proplist
-%%      which can include a value for 'timeout'.  Returns a tuple with
-%%      a list of column names in its 1st element, and a record found
-%%      as a list of values, further as a single element in enclosing
-%%      list, in its 2nd element. If no record is found, the return
-%%      value is {[], []}.
+%%      which can include a value for 'timeout'.  Returns @{ok,
+%%      @{Columns, Record@}@} where Columns has column names, and
+%%      Record is the record found as a list of values, further as a
+%%      single element in enclosing list. If no record is found, the
+%%      return value is @{ok, @{[], []@}@}. On error, the function
+%%      returns @{error, @{ErrCode, ErrMsg@}@}.
 get(Pid, TableName, Key, Options) ->
-    Message = riak_pb_ts_codec:encode_tsgetreq(TableName, Key, Options),
+    Message = #tsgetreq{table   = TableName,
+                        key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
+                        timeout = proplists:get_value(timeout, Options)},
+
     case server_call(Pid, Message) of
         {error, {_NotFoundErrCode, <<"notfound">>}} ->
-            {[], []};
+            {ok, {[], []}};
+        {error, OtherError} ->
+            {error, OtherError};
         Response ->
             Columns = [C || #tscolumndescription{name = C} <- Response#tsgetresp.columns],
             Rows = [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsgetresp.rows)],
-            {Columns, Rows}
+            {ok, {Columns, Rows}}
     end.
 
+
+-spec list_keys(Pid::pid(), Table::table_name(), Options::proplists:proplist()) ->
+                       {ok, Keys::[[riak_pb_ts_codec:ldbvalue()]]} | {error, Reason::term()}.
+%% @doc Lists keys in Table, using client Pid.  Parameter Options is a
+%%      proplist that can include a value for 'timeout'. Returns @{ok,
+%%      Keys@} or @{error, Reason@}.
+list_keys(Pid, TableName, Options) ->
+    Message = #tslistkeysreq{table = TableName,
+                             timeout = proplists:get_value(timeout, Options)},
+    collect_list_keys_chunks(Pid, Message, []).
+
+collect_list_keys_chunks(Pid, Message, Acc0) ->
+    case server_call(Pid, Message) of
+        #tslistkeysresp{keys = Keys,
+                        done = Done} ->
+            Acc = lists:append(
+                    Acc0, [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Keys)]),
+            if Done ->
+                    {ok, Acc};
+                e==e ->
+                    collect_list_keys_chunks(Pid, Message, Acc)
+            end;
+        ErrorReason ->
+            ErrorReason
+    end.
 
 %% --------------------------------------------
 %% local functions
