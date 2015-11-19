@@ -41,7 +41,7 @@
 
 
 -spec query(Pid::pid(), Query::string()) ->
-                   {ColumnNames::[binary()], Rows::[tuple()]} | {error, Reason::term()}.
+                   {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.
 %% @doc Execute a "SELECT ..." Query with client.  The result returned
 %%      is a tuple containing a list of columns as binaries in the
 %%      first element, and a list of records, each represented as a
@@ -80,19 +80,19 @@ query(Pid, QueryText, Interpolations) ->
 put(Pid, TableName, Measurements) ->
     put(Pid, TableName, [], Measurements).
 
--spec put(Pid::pid(), Table::table_name(), Columns::[binary()], Data::[[ts_value()]]) ->
+-spec put(Pid::pid(), Table::table_name(), ColumnNames::[ts_columnname()], Data::[[ts_value()]]) ->
                  ok | {error, Reason::term()}.
 %% @doc Make data records from Data and insert them, individually,
 %%      into a time-series Table, using client Pid. Each record is a
 %%      list of values of appropriate types for the complete set of
-%%      table columns, in the order in which they appear in table's
+%%      table column names, in the order in which they appear in table's
 %%      DDL.  On success, 'ok' is returned, else an @{error, Reason@}
 %%      tuple.  Also @see put/3.
 %%
-%%      As of 2015-11-05, Columns parameter is ignored, the function
-%%      expexts the full set of fields in each element of Data.
-put(Pid, TableName, Columns, Measurements) ->
-    Message = riakc_ts_put_operator:serialize(TableName, Columns, Measurements),
+%%      As of 2015-11-05, ColumnNames parameter is ignored, the function
+%%      expects the full set of fields in each element of Data.
+put(Pid, TableName, ColumnNames, Measurements) ->
+    Message = riakc_ts_put_operator:serialize(TableName, ColumnNames, Measurements),
     Response = server_call(Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
 
