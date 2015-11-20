@@ -43,6 +43,7 @@
          is_connected/1, is_connected/2,
          ping/1, ping/2,
          queue_len/1,
+         stats_peek/1, stats_take/1, stats_change_level/2,
          get_client_id/1, get_client_id/2,
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
@@ -130,7 +131,7 @@
 %% of the same name on the `riakc' application, for example:
 %% `application:set_env(riakc, ping_timeout, 5000).'
 -record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
-                  tref :: reference() | undefined }).
+                  tref :: reference() | undefined , timestamp}).
 
 -ifdef(namespaced_types).
 -type request_queue_t() :: queue:queue(#request{}).
@@ -168,6 +169,7 @@
                                % certificate authentication
                 ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
                                % documentation.
+                stats,
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 %% @private Like `gen_server:call/3', but with the timeout hardcoded
@@ -250,6 +252,18 @@ ping(Pid, Timeout) ->
 %% @doc Check how long the queue of requests is
 queue_len(Pid) ->
     call_infinity(Pid, {check, queue_len}).
+
+%% @doc Have a look at the stats without flushing them
+stats_peek(Pid) ->
+    riakc_stats:stats_format(call_infinity(Pid, stats_peek)).
+
+%% @doc Have a look at the stats and flush them
+stats_take(Pid) ->
+    riakc_stats:stats_format(call_infinity(Pid, stats_take)).
+
+%% @doc Change the stats level
+stats_change_level(Pid, NewLevel) ->
+    riakc_stats:stats_format(call_infinity(Pid, {stats_change_level, NewLevel})).
 
 %% @doc Get the client id for this connection
 %% @equiv get_client_id(Pid, default_timeout(get_client_id_timeout))
@@ -1331,6 +1345,12 @@ handle_call({set_options, Options}, _From, State) ->
     {reply, ok, parse_options(Options, State)};
 handle_call({check, queue_len}, _From, #state{queue_len = QueueLen} = State) ->
     {reply, QueueLen, State};
+handle_call(stats_peek, _From, #state{stats = Stats} = State) ->
+    {reply, Stats, State};
+handle_call(stats_take, _From, #state{stats = Stats} = State) ->
+    {reply, Stats, State#state{stats = riakc_stats:init_stats(Stats)}};
+handle_call({stats_change_level, NewLevel}, _From, #state{stats = Stats} = State) ->
+    {reply, Stats, State#state{stats = riakc_stats:init_stats(NewLevel)}};
 handle_call(stop, _From, State) ->
     _ = disconnect(State, true),
     {stop, normal, ok, State};
@@ -1357,9 +1377,10 @@ handle_info({ssl_closed, _Socket}, State) ->
 %% Make sure the two Sock's match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
 %% it should drop through and be ignored.
-handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
+handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active, stats = Stats0})
         when Proto == tcp; Proto == ssl ->
     <<MsgCode:8, MsgData/binary>> = Data,
+    Stats1 = riakc_stats:record_stat(recv, iolist_size(Data), Stats0),
     Resp = case Active#request.msg of
         {tunneled, _MsgID} ->
             %% don't decode tunneled replies, we may not recognize the msgid
@@ -1369,16 +1390,21 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
     end,
     NewState = case Resp of
         #rpberrorresp{} ->
-            NewState1 = maybe_reply(on_error(Active, Resp, State)),
+            NewState1 = maybe_reply(on_error(Active, Resp, State#state{stats = Stats1})),
             dequeue_request(NewState1#state{active = undefined});
         _ ->
-            case process_response(Active, Resp, State) of
-                {reply, Response, NewState0} ->
+            case process_response(Active, Resp, State#state{stats = Stats1}) of
+                {reply, Response, NewState0 = #state{stats = Stats2}} ->
                     %% Send reply and get ready for the next request - send the next request
                     %% if one is queued up
                     cancel_req_timer(Active#request.tref),
                     _ = send_caller(Response, NewState0#state.active),
-                    dequeue_request(NewState0#state{active = undefined});
+                    Stats3 =
+                        riakc_stats:record_stat(
+                          {service_time, op_timeout(Active#request.timeout),
+                           op_type(Active#request.msg), bucket_name(Active)},
+                          timer:now_diff(os:timestamp(), Active#request.timestamp), Stats2),
+                    dequeue_request(NewState0#state{active = undefined, stats = Stats3});
                 {pending, NewState0} -> %% Request is still pending - do not queue up a new one
                     NewActive = restart_req_timer(Active),
                     NewState0#state{active = NewActive}
@@ -1391,13 +1417,20 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
             ok = ssl:setopts(Sock, [{active, once}])
     end,
     {noreply, NewState};
-handle_info({TimeoutTag, Ref}, #state{active = #request{ref = Ref}} = State)
+handle_info({TimeoutTag, Ref}, #state{active = #request{ref = Ref, msg = Msg, timeout = Timeout},
+                                      stats = Stats0} = State)
   when TimeoutTag == op_timeout; TimeoutTag == req_timeout ->
-    NewState = maybe_reply(on_timeout(State#state.active, State)),
+    NewState = maybe_reply(
+                 on_timeout(
+                   State#state.active,
+                   State#state{stats = riakc_stats:record_cntr(
+                                         {TimeoutTag, op_timeout(Timeout),
+                                          op_type(Msg), bucket_name(State#state.active)},
+                                         Stats0)})),
     disconnect(NewState#state{active = undefined}, false);
 handle_info({TimeoutTag, Ref}, State)
   when TimeoutTag == q_timeout; TimeoutTag == req_timeout ->
-    {noreply, remove_queued_request(Ref, State)};
+    {noreply, remove_queued_request(Ref, State, TimeoutTag)};
 handle_info(reconnect, State) ->
     case connect(State) of
         {ok, NewState} ->
@@ -1426,14 +1459,18 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% @private
 %% Parse options
-parse_options([], State) ->
+parse_options([], #state{stats=Stats0} = State) ->
+    Stats1 = case Stats0 of
+                 undefined -> riakc_stats:init_stats(0);
+                 _ -> Stats0
+             end,
     %% Once all options are parsed, make sure auto_reconnect is enabled
     %% if queue_if_disconnected is enabled.
     case State#state.queue_if_disconnected of
         true ->
-            State#state{auto_reconnect = true};
+            State#state{auto_reconnect = true, stats = Stats1};
         _ ->
-            State
+            State#state{stats = Stats1}
     end;
 parse_options([{connect_timeout, T}|Options], State) when is_integer(T) ->
     parse_options(Options, State#state{connect_timeout = T});
@@ -1460,7 +1497,9 @@ parse_options([{cacertfile, File}|Options], State) ->
 parse_options([{keyfile, File}|Options], State) ->
     parse_options(Options, State#state{keyfile=File});
 parse_options([{ssl_opts, Opts}|Options], State) ->
-    parse_options(Options, State#state{ssl_opts=Opts}).
+    parse_options(Options, State#state{ssl_opts=Opts});
+parse_options([{stats, Level}|Options], State) ->
+    parse_options(Options, State#state{stats=riakc_stats:init_stats(Level)}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -2023,14 +2062,18 @@ restart_req_timer(Request) ->
 %% @private
 %% Connect the socket if disconnected
 connect(State) when State#state.sock =:= undefined ->
-    #state{address = Address, port = Port, connects = Connects} = State,
+    #state{address = Address, port = Port, connects = Connects, stats = Stats0} = State,
+    TS0 = os:timestamp(),
     case gen_tcp:connect(Address, Port,
                          [binary, {active, once}, {packet, 4},
                           {keepalive, State#state.keepalive}],
                          State#state.connect_timeout) of
         {ok, Sock} ->
+            TS1 = os:timestamp(),
             State1 = State#state{sock = Sock, connects = Connects+1,
-                                 reconnect_interval = ?FIRST_RECONNECT_INTERVAL},
+                                 reconnect_interval = ?FIRST_RECONNECT_INTERVAL,
+                                 stats = riakc_stats:record_stat(
+                                           connect, timer:now_diff(TS1, TS0), Stats0)},
             case State#state.credentials of
                 undefined ->
                     {ok, State1};
@@ -2149,9 +2192,11 @@ increase_reconnect_interval(State) ->
 
 send_request(#request{ref     = Ref,
                       tref    = TRef,
-                      timeout = Timeout} = Request0, State)
+                      timeout = Timeout} = Request0,
+             State = #state{stats = Stats0})
   when State#state.active =:= undefined ->
-    {Request1, Pkt} = encode_request_message(Request0),
+    {Request1, Pkt} = encode_request_message(Request0#request{timestamp = os:timestamp()}),
+    Stats1 = riakc_stats:record_stat(send, iolist_size(Pkt), Stats0),
     Transport = State#state.transport,
     case Transport:send(State#state.sock, Pkt) of
         ok ->
@@ -2159,14 +2204,14 @@ send_request(#request{ref     = Ref,
                 {_,Msecs} ->
                     cancel_req_timer(TRef),
                     Request2 = Request1#request{tref = erlang:send_after(Msecs, self(), {op_timeout, Ref})},
-                    maybe_reply(after_send(Request2, State#state{active = Request2}));
+                    maybe_reply(after_send(Request2, State#state{active = Request2, stats = Stats1}));
                 _ ->
-                    maybe_reply(after_send(Request1, State#state{active = Request1}))
+                    maybe_reply(after_send(Request1, State#state{active = Request1, stats = Stats1}))
             end;
         {error, Reason} ->
             error_logger:warning_msg("Socket error while sending riakc request: ~p.", [Reason]),
             Transport:close(State#state.sock),
-            maybe_enqueue_and_reconnect(Request1, State#state{sock=undefined})
+            maybe_enqueue_and_reconnect(Request1, State#state{sock=undefined, stats = Stats1})
     end.
 
 %% Already encoded (for tunneled messages), but must provide Message Id
@@ -2203,32 +2248,41 @@ enqueue_or_reply_error(Request, State) ->
 %% @private
 queue_request(Request, State)      -> queue_request(Request, State, in).
 queue_request_head(Request, State) -> queue_request(Request, State, in_r).
-queue_request(Request, #state{queue_len = QLen, queue = Q} = State, Infunc) ->
-    State#state{queue_len = QLen + 1, queue = queue:Infunc(Request, Q)}.
-
+queue_request(Request0, #state{queue_len = QLen, queue = Q, stats = Stats0} = State, Infunc) ->
+    Request1 = Request0#request{timestamp = os:timestamp()},
+    Stats1 = riakc_stats:record_cntr({queue_len, QLen + 1}, Stats0),
+    State#state{queue_len = QLen + 1, queue = queue:Infunc(Request1, Q), stats = Stats1}.
 %% Try and dequeue request and send onto the server if one is waiting
 %% @private
-dequeue_request(#state{queue_len = QLen} = State) ->
+dequeue_request(#state{queue_len = QLen, stats = Stats0} = State) ->
     case queue:out(State#state.queue) of
         {empty, _} ->
             State#state{active = undefined};
-        {{value, Request}, Q2} ->
-            send_request(Request, State#state{active    = undefined,
-                                              queue_len = QLen - 1,
-                                              queue     = Q2})
+        {{value, #request{timestamp = TS0, timeout = Timeout} = Request}, Q2} ->
+            Now = os:timestamp(),
+            Stats1 = riakc_stats:record_stat(
+                       {queue_time, q_timeout(Timeout)}, timer:now_diff(Now, TS0), Stats0),
+            send_request(Request#request{timestamp = Now},
+                         State#state{active    = undefined,
+                                     queue_len = QLen - 1,
+                                     queue     = Q2,
+                                     stats     = Stats1})
     end.
 
 %% Remove a queued request by reference - returns same queue if ref not present
 %% @private
-remove_queued_request(Ref, #state{queue_len = QLen, queue = Q} = State) ->
+remove_queued_request(Ref, #state{queue_len = QLen, queue = Q, stats = Stats0} = State, TimeoutTag) ->
     case lists:keytake(Ref, #request.ref, queue:to_list(Q)) of
         false -> % Ref not queued up
             State;
-        {value, Req, L2} ->
+        {value, #request{timeout = Timeout} = Req, L2} ->
             {reply, Reply, NewState} = on_timeout(Req, State),
             _ = send_caller(Reply, Req),
             NewState#state{queue_len = QLen - 1,
-                           queue     = queue:from_list(L2)}
+                           queue     = queue:from_list(L2),
+                           stats     = riakc_stats:record_cntr(
+                                         {TimeoutTag, q_timeout(Timeout), bucket_name(Req)},
+                                         Stats0)}
     end.
 
 %% @private
@@ -2391,6 +2445,50 @@ set_index_create_req_timeout(Timeout, Req) when Timeout =:= infinity ->
 set_index_create_req_timeout(Timeout, _Req) when not is_integer(Timeout) ->
     erlang:error(badarg).
 
+op_type(rpbpingreq                  ) -> ping;
+op_type(rpbgetclientidreq           ) -> get_client_id;
+op_type(rpbgetserverinforeq         ) -> get_server_info;
+op_type({tunneled,_}                ) -> tunneled;
+op_type(#dtfetchreq{}               ) -> dt_fetch;
+op_type(#dtupdatereq{}              ) -> dt_update;
+op_type(#rpbcountergetreq{}         ) -> counter_get;
+op_type(#rpbcounterupdatereq{}      ) -> counter_update;
+op_type(#rpbcsbucketreq{}           ) -> cs_bucket;
+op_type(#rpbdelreq{}                ) -> del;
+op_type(#rpbgetbucketreq{}          ) -> get_bucket;
+op_type(#rpbgetbuckettypereq{}      ) -> get_bucket_type;
+op_type(#rpbgetreq{}                ) -> get;
+op_type(#rpbindexreq{}              ) -> index;
+op_type(#rpblistbucketsreq{}        ) -> list_buckets;
+op_type(#rpblistkeysreq{}           ) -> list_keys;
+op_type(#rpbmapredreq{}             ) -> mapred;
+op_type(#rpbputreq{}                ) -> put;
+op_type(#rpbresetbucketreq{}        ) -> reset_bucket;
+op_type(#rpbsearchqueryreq{}        ) -> search_query;
+op_type(#rpbsetbucketreq{}          ) -> set_bucket;
+op_type(#rpbsetbuckettypereq{}      ) -> set_bucket_type;
+op_type(#rpbsetclientidreq{}        ) -> set_client_id;
+op_type(#rpbyokozunaindexdeletereq{}) -> yokozuna_index_delete;
+op_type(#rpbyokozunaindexgetreq{}   ) -> yokozuna_index_get;
+op_type(#rpbyokozunaindexputreq{}   ) -> yokozuna_index_put;
+op_type(#rpbyokozunaschemagetreq{}  ) -> yokozuna_schema_get;
+op_type(#rpbyokozunaschemaputreq{}  ) -> yokozuna_schema_put;
+op_type(_                           ) -> unknown_op.
+
+op_timeout({_,OPTimeout}) -> OPTimeout;
+op_timeout(Timeout) -> Timeout.
+
+q_timeout({QTimeout,_}) -> QTimeout;
+q_timeout(Timeout) -> Timeout.
+
+bucket_name(Req) ->
+    case Req#request.msg of
+        #rpbgetreq{bucket = B} -> B;
+        #rpbputreq{bucket = B} -> B;
+        #rpbdelreq{bucket = B} -> B;
+        rpbpingreq -> ping;
+        _ -> other_bucket
+    end.
 
 %% ====================================================================
 %% unit tests
@@ -4017,11 +4115,11 @@ timeout_no_conn_test() ->
     {T17, {error, timeout}} = RES(P17),
 
     % All these requests should spend ~1500ms in the queue
-    io:format(user, "150ms TIMES: ~p ~p ~p ~p ~p~n", [T01,T03,T05,T07,T09]),
+    io:format(user, "1500ms TIMES: ~p ~p ~p ~p ~p~n", [T01,T03,T05,T07,T09]),
     lists:foreach(fun(T) -> true = T > 1490, true = T < 1510 end, [T01,T03,T05,T07,T09]),
 
     % All these requests should spend ~1000ms in the queue
-    io:format(user, "100ms TIMES: ~p ~p ~p ~p~n", [T02,T04,T06,T08]),
+    io:format(user, "1000ms TIMES: ~p ~p ~p ~p~n", [T02,T04,T06,T08]),
     lists:foreach(fun(T) -> true = T > 990,  true = T < 1010 end, [T02,T04,T06,T08]),
 
     % These test the old timeouts
@@ -4138,9 +4236,89 @@ timeout_conn_test() ->
 
     stop(Pid).
 
+stats_demo_test() ->
+    % Set up a dummy socket to send requests on
+    {ok, DummyServerPid, Port} = dummy_server(noreply),
+    {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected]),
+    erlang:monitor(process, DummyServerPid),
+    % {ok, Pid} = start_link(test_ip(), test_port(), [auto_reconnect, queue_if_disconnected]),
+    Self = self(),
+
+    REQ = fun(Func, TO) ->
+                  erlang:spawn(fun() ->
+                                       {T,Info} = (catch timer:tc(?MODULE, Func,
+                                                                  [Pid, <<"qwer">>, <<"qwer">>, [], TO])),
+                                       % io:format(user, "RES: ~p~n", [{T,Info}]),
+                                       Self ! {self(), {T div 1000, Info}}
+                               end)
+          end,
+
+    RES = fun(RPid) ->
+                  receive
+                      {RPid, Result} -> Result
+                  after
+                      3000 -> error
+                  end
+          end,
+
+    Traffic = fun() ->
+                      P01 = REQ(get, {100, 20}),
+                      P02 = REQ(get, {100, 20}),
+                      P03 = REQ(get, {100, 20}),
+                      P04 = REQ(get, {100, 20}),
+                      P05 = REQ(get, {100, 20}),
+                      P06 = REQ(get, {100, 20}),
+                      P07 = REQ(get, {100, 20}),
+                      P08 = REQ(get, {100, 20}),
+                      P09 = REQ(get, {100, 20}),
+                      P10 = REQ(get, {100, 20}),
+                      P11 = REQ(get, 20),
+                      P12 = REQ(get, 40),
+                      P13 = REQ(get, 60),
+                      P14 = REQ(get, 80),
+                      P15 = REQ(get, 20),
+                      P16 = REQ(get, 100),
+                      P17 = REQ(get, {20, 100}),
+                      P18 = REQ(get, {20, 100}),
+
+                      lists:foreach(
+                        fun(P) -> RES(P) end,
+                        [P01,P02,P03,P04,P05,P06,P07,P08,P09,P10,
+                         P11,P12,P13,P14,P15,P16,P17,P18])
+              end,
+
+    Traffic(),
+    {_,[],[_]} = stats_take(Pid),
+
+    stats_change_level(Pid, 1),
+    Traffic(),
+    {_,CL1,HL1} = stats_take(Pid),
+
+    stats_change_level(Pid, 2),
+    Traffic(),
+    {_,CL2,HL2} = stats_take(Pid),
+
+    % io:format(user, "~n~n~p~n~n~p~n~n", [CL2, CL1]),
+    % io:format(user, "~n~n~p~n~n~p~n~n", [HL2, HL1]),
+    true = length(CL1) >= 2,
+    true = length(CL2) >= 2,
+    true = length(HL1) >= 2,
+    true = length(HL2) >= 2,
+
+    lists:foreach(fun({_,_,_,[]}) -> ok end, HL1),
+    lists:foreach(fun({_,_,_,L}) -> true = length(L) >= 10 end, HL2),
+
+    catch DummyServerPid ! stop,
+    timer:sleep(10),
+    receive _Msg -> ok
+    after 1 -> ok
+    end,
+
+    stop(Pid).
+
 overload_demo_test() ->
     {ok, DummyServerPid, Port} = dummy_server({50, <<10>>}),
-    {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected]),
+    {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected, {stats,1}]),
     timer:sleep(50),
     erlang:monitor(process, DummyServerPid),
 
@@ -4164,38 +4342,45 @@ overload_demo_test() ->
 
     TEST = fun(TO) ->
 
-		   PidList = lists:foldl(fun(_,Acc) ->
-						 timer:sleep(45),
-						 [REQ(get, TO) | Acc]
-					 end, [], lists:seq(1,200)),
-		   timer:sleep(100),
+                   PidList = lists:foldl(fun(_,Acc) ->
+                                                 timer:sleep(45),
+                                                 [REQ(get, TO) | Acc]
+                                         end, [], lists:seq(1,200)),
+                   timer:sleep(100),
 
-		   ReplyList = lists:foldl(fun(RPid,Acc) ->
-						   [RES(RPid) | Acc]
-					   end, [], PidList),
+                   ReplyList = lists:foldl(fun(RPid,Acc) ->
+                                                   [RES(RPid) | Acc]
+                                           end, [], PidList),
 
-		   Replies = lists:foldl(
-			       fun({error,Reply},Acc) ->
-				       case lists:keyfind(Reply, 1, Acc) of
-					   false -> [{Reply, 1} | Acc];
-					   {Reply, C} ->
-					       lists:keyreplace(Reply, 1, Acc, {Reply, C+1})
-				       end
-			       end, [], ReplyList),
-		   TimeOuts = case lists:keyfind(timeout, 1, Replies) of
-				  {_,TOV} -> TOV;
-				  false -> 0
-			      end,
-		   NotFounds = case lists:keyfind(notfound, 1, Replies) of
-				   {_,NFV} -> NFV;
-				   false -> 0
-			       end,
+                   {_,_,KL} = stats_take(Pid),
+                   Reconns = case lists:keyfind(connect, 1, KL) of
+                                 false -> 0;
+                                 {_,V,_,_} -> V
+                             end,
+                   Replies = lists:foldl(
+                               fun({error,Reply},Acc) ->
+                                       case lists:keyfind(Reply, 1, Acc) of
+                                           false -> [{Reply, 1} | Acc];
+                                           {Reply, C} ->
+                                               lists:keyreplace(Reply, 1, Acc, {Reply, C+1})
+                                       end
+                               end, [], ReplyList),
+                   TimeOuts = case lists:keyfind(timeout, 1, Replies) of
+                                  {_,TOV} -> TOV;
+                                  false -> 0
+                              end,
+                   NotFounds = case lists:keyfind(notfound, 1, Replies) of
+                                   {_,NFV} -> NFV;
+                                   false -> 0
+                               end,
 
-		   io:format(user, "  With timeout: ~p we got ~p timeouts and ~p replies~n",
-			     [TO, TimeOuts, NotFounds]),
-		   {TimeOuts, NotFounds}
+                   % io:format(user, "~nSTATS: ~p~n", [Stats])
+                   io:format(user, "  With timeout: ~p we got ~p reconnections, ~p timeouts and ~p replies~n",
+                             [TO, Reconns, TimeOuts, NotFounds]),
+                   {TimeOuts, NotFounds}
 
-	   end,
+
+           end,
 
     {OldTO, OldNF} = TEST(60),
     {NewTO, NewNF} = TEST({5,55}),
@@ -4209,7 +4394,7 @@ overload_demo_test() ->
     %  consistent during the overloaded state
     true = NewTO < 80,
     true = NewNF > 120,
-    
+
     catch DummyServerPid ! stop,
     timer:sleep(10),
     receive _Msg -> ok % io:format(user, "MSG: ~p~n", [_Msg])
@@ -4225,6 +4410,10 @@ dummy_server(Directive) ->
     {ok, Pid, Port}.
 
 dummy_server_loop({Listen, no_conn, Directive}) ->
+    % case Directive of
+    %         {SleepMs, _} -> timer:sleep(SleepMs div 2);
+    %         _ -> ok
+    %  end,
     {ok, Sock} = gen_tcp:accept(Listen),
     dummy_server_loop({Listen, Sock, Directive});
 dummy_server_loop({Listen, Sock, Directive}) ->
