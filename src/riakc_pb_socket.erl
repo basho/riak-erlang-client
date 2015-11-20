@@ -4138,20 +4138,106 @@ timeout_conn_test() ->
 
     stop(Pid).
 
-dummy_server() ->
+overload_demo_test() ->
+    {ok, DummyServerPid, Port} = dummy_server({50, <<10>>}),
+    {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected]),
+    timer:sleep(50),
+    erlang:monitor(process, DummyServerPid),
+
+    Self = self(),
+
+    REQ = fun(Func, TO) ->
+                  erlang:spawn(fun() ->
+                                       Info = (catch apply(?MODULE, Func,
+                                                           [Pid, <<"qwer">>, <<"qwer">>, [], TO])),
+                                       Self ! {self(), Info}
+                               end)
+          end,
+
+    RES = fun(RPid) ->
+                  receive
+                      {RPid, Result} -> Result
+                  after
+                      4000 -> error
+                  end
+          end,
+
+    TEST = fun(TO) ->
+
+		   PidList = lists:foldl(fun(_,Acc) ->
+						 timer:sleep(45),
+						 [REQ(get, TO) | Acc]
+					 end, [], lists:seq(1,200)),
+		   timer:sleep(100),
+
+		   ReplyList = lists:foldl(fun(RPid,Acc) ->
+						   [RES(RPid) | Acc]
+					   end, [], PidList),
+
+		   Replies = lists:foldl(
+			       fun({error,Reply},Acc) ->
+				       case lists:keyfind(Reply, 1, Acc) of
+					   false -> [{Reply, 1} | Acc];
+					   {Reply, C} ->
+					       lists:keyreplace(Reply, 1, Acc, {Reply, C+1})
+				       end
+			       end, [], ReplyList),
+		   TimeOuts = case lists:keyfind(timeout, 1, Replies) of
+				  {_,TOV} -> TOV;
+				  false -> 0
+			      end,
+		   NotFounds = case lists:keyfind(notfound, 1, Replies) of
+				   {_,NFV} -> NFV;
+				   false -> 0
+			       end,
+
+		   io:format(user, "  With timeout: ~p we got ~p timeouts and ~p replies~n",
+			     [TO, TimeOuts, NotFounds]),
+		   {TimeOuts, NotFounds}
+
+	   end,
+
+    {OldTO, OldNF} = TEST(60),
+    {NewTO, NewNF} = TEST({5,55}),
+
+    % the worst-case response time for both timeout mechanisms is the same, 60ms
+    % using the old mechanism we typically get 2 or 3 responses
+    %  and the link timesout as long as it remains overloaded
+    true = OldTO > 190,
+    true = OldNF < 10,
+    % but using the new mechanism we get get an almost 66% success rate
+    %  consistent during the overloaded state
+    true = NewTO < 80,
+    true = NewNF > 120,
+    
+    catch DummyServerPid ! stop,
+    timer:sleep(10),
+    receive _Msg -> ok % io:format(user, "MSG: ~p~n", [_Msg])
+    after 1 -> ok % io:format(user, "NO MSG: ~p~n", [process_info(DummyServerPid, messages)])
+    end,
+
+    stop(Pid).
+
+dummy_server(Directive) ->
     {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, true}]),
     {ok, Port} = inet:port(Listen),
-    Pid = spawn(?MODULE, dummy_server, [{Listen, no_conn}]),
+    Pid = spawn(?MODULE, dummy_server_loop, [{Listen, no_conn, Directive}]),
     {ok, Pid, Port}.
 
-dummy_server({Listen, no_conn}) ->
+dummy_server_loop({Listen, no_conn, Directive}) ->
     {ok, Sock} = gen_tcp:accept(Listen),
-    dummy_server({Listen, Sock});
-dummy_server({Listen, Sock}) ->
+    dummy_server_loop({Listen, Sock, Directive});
+dummy_server_loop({Listen, Sock, Directive}) ->
     receive
         stop -> ok;
-        {tcp_closed, Sock} -> dummy_server({Listen, no_conn});
-        _Data              -> dummy_server({Listen, Sock}) % ignore requests, let them timeout
+        {tcp_closed, Sock} -> dummy_server_loop({Listen, no_conn, Directive});
+        _Data ->
+            case Directive of
+                noreply -> dummy_server_loop({Listen, Sock, Directive}); % ignore requests, let them timeout
+                {SleepMs, Reply} ->
+                    spawn(fun() -> timer:sleep(SleepMs), gen_tcp:send(Sock, Reply) end),
+                    dummy_server_loop({Listen, Sock, Directive})
+            end
     end.
 
 -endif.
