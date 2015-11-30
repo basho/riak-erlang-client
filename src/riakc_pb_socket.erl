@@ -1298,6 +1298,7 @@ init([Address, Port, Options]) ->
     State = parse_options(Options, #state{address = Address,
                                           port = Port,
                                           queue = queue:new()}),
+    erlang:send(self(), schedule),
     case connect(State) of
         {error, Reason} when State#state.auto_reconnect /= true ->
             {stop, {tcp, Reason}};
@@ -1360,6 +1361,10 @@ handle_info({ssl_error, _Socket, Reason}, State) ->
 
 handle_info({ssl_closed, _Socket}, State) ->
     disconnect(State);
+
+handle_info(schedule, State) ->
+    send(self(), schedule),
+    {noreply, State};
 
 %% Make sure the two Sock's match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
