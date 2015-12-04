@@ -1645,7 +1645,7 @@ counter_val_options([_ | _Rest], _Req) ->
 -spec process_response(#request{}, rpb_resp(), #state{}) ->
                               {reply, term(), #state{}} |
                               {pending, #state{}}.
-process_response(#request{msg = rpbrawtermreq}, #rpbrawtermresp{use_raw=Raw}, State) ->
+process_response(#request{msg = #rpbrawtermreq{}}, #rpbrawtermresp{use_raw=Raw}, State) ->
     erlang:put(use_raw, Raw),
     {reply, ok, State};
 process_response(#request{msg = rpbpingreq}, rpbpingresp, State) ->
