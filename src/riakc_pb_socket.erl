@@ -97,6 +97,8 @@
          update_type/4, update_type/5,
          modify_type/5]).
 
+%% supporting functions used in riakc_ts
+-export([mk_reqid/0]).
 
 -deprecated({get_index,'_', eventually}).
 

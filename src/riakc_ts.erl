@@ -28,11 +28,12 @@
          put/3, put/4,
          get/4,
          delete/4,
-         list_keys/3]).
+         stream_list_keys/3]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
+-include("riakc.hrl").
 
 -type table_name() :: binary().
 -type ts_value() :: riak_pb_ts_codec:ldbvalue().
@@ -144,30 +145,21 @@ get(Pid, TableName, Key, Options) ->
     end.
 
 
--spec list_keys(Pid::pid(), Table::table_name(), Options::proplists:proplist()) ->
-                       {ok, Keys::[[riak_pb_ts_codec:ldbvalue()]]} | {error, Reason::term()}.
-%% @doc Lists keys in Table, using client Pid.  Parameter Options is a
-%%      proplist that can include a value for 'timeout'. Returns @{ok,
-%%      Keys@} or @{error, Reason@}.
-list_keys(Pid, TableName, Options) ->
-    Message = #tslistkeysreq{table = TableName,
-                             timeout = proplists:get_value(timeout, Options)},
-    collect_list_keys_chunks(Pid, Message, []).
-
-collect_list_keys_chunks(Pid, Message, Acc0) ->
-    case server_call(Pid, Message) of
-        #tslistkeysresp{keys = Keys,
-                        done = Done} ->
-            Acc = lists:append(
-                    Acc0, [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Keys)]),
-            if Done ->
-                    {ok, Acc};
-                e==e ->
-                    collect_list_keys_chunks(Pid, Message, Acc)
-            end;
-        ErrorReason ->
-            ErrorReason
-    end.
+-spec stream_list_keys(pid(), table_name(), proplists:proplist()) ->
+                              {ok, req_id()} | {error, term()}.
+%% @doc Streaming lists keys in Table, using client Pid.  Parameter
+%%      Options is a proplist that can include a value for
+%%      'timeout'. Returns @{ok, ReqId@} or @{error, Reason@}.
+stream_list_keys(Pid, Table, infinity) ->
+    stream_list_keys(Pid, Table, [{timeout, undefined}]);
+stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
+    stream_list_keys(Pid, Table, [{timeout, Timeout}]);
+stream_list_keys(Pid, Table, Options) ->
+    ReqTimeout = proplists:get_value(timeout, Options),
+    Req = #tslistkeysreq{table = Table,
+                         timeout = ReqTimeout},
+    ReqId = riakc_pb_socket:mk_reqid(),
+    gen_server:call(Pid, {req, Req, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
 
 %% --------------------------------------------
 %% local functions
