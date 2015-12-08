@@ -4018,24 +4018,24 @@ timeout_no_conn_test() ->
 
     % All these requests should spend ~1500ms in the queue
     io:format(user, "150ms TIMES: ~p ~p ~p ~p ~p~n", [T01,T03,T05,T07,T09]),
-    lists:foreach(fun(T) -> true = T > 1490, true = T < 1510 end, [T01,T03,T05,T07,T09]),
+    lists:foreach(fun(T) -> true = T > 1490, true = T < 1515 end, [T01,T03,T05,T07,T09]),
 
     % All these requests should spend ~1000ms in the queue
     io:format(user, "100ms TIMES: ~p ~p ~p ~p~n", [T02,T04,T06,T08]),
-    lists:foreach(fun(T) -> true = T > 990,  true = T < 1010 end, [T02,T04,T06,T08]),
+    lists:foreach(fun(T) -> true = T > 990,  true = T < 1015 end, [T02,T04,T06,T08]),
 
     % These test the old timeouts
     io:format(user, "TIMES: ~p ~p ~p ~p ~p ~p ~p ~p~n", [T10,T11,T12,T13,T14,T15,T16,T17]),
-    true = T10 > 190, true = T10 < 210,
-    true = T11 > 390, true = T11 < 410,
-    true = T12 > 590, true = T12 < 610,
-    true = T13 > 790, true = T13 < 810,
-    true = T14 > 190, true = T14 < 210,
-    true = T15 > 990, true = T15 < 1010,
+    true = T10 > 190, true = T10 < 215,
+    true = T11 > 390, true = T11 < 415,
+    true = T12 > 590, true = T12 < 615,
+    true = T13 > 790, true = T13 < 815,
+    true = T14 > 190, true = T14 < 215,
+    true = T15 > 990, true = T15 < 1015,
 
     % These 2 requests should spend ~200ms in the queue
-    true = T16 > 190, true = T16 < 210,
-    true = T17 > 190, true = T17 < 210,
+    true = T16 > 190, true = T16 < 215,
+    true = T17 > 190, true = T17 < 215,
 
     stop(Pid).
 
@@ -4105,41 +4105,41 @@ timeout_conn_test() ->
     {T17, {error, timeout}} = RES(P17),
     {T18, {error, timeout}} = RES(P18),
 
-    io:format(user, "TIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p~n",
-              [T01,T02,T03,T04,T05,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15,T16,T17,T18]),
-    true = T01 > 190, true = T01 < 210, % This one is serviced right away & should timeout after 200ms
-    true = T02 > 390, true = T02 < 410, % This one is serviced after the 1st one has timed out, ~400ms
-    true = T03 > 590, true = T03 < 610, % This one is serviced after the 1st two have timed out, ~600ms
-    true = T04 > 790, true = T04 < 810, % This one is serviced after the 1st three have timed out, ~800ms
-    true = T05 > 990, true = T05 < 1010, % This one is serviced after the 1st four have timed out, ~1000ms
-
-    [HD|TL] = lists:reverse(lists:sort([T06,T07,T08,T09,T10])),
-    % One will have queued & been serviced, ~1200ms
-    true = HD > 1190, true = HD < 1210,
-    % All these will timeout in the queue, ~1000ms
-    lists:foreach(fun(T) -> true = T > 990, true = T < 1010 end, TL),
-
-    % These test for backward compatibility
-    true = T11 > 190, true = T11 < 210,
-    true = T12 > 390, true = T12 < 410,
-    true = T13 > 590, true = T13 < 610,
-    true = T14 > 790, true = T14 < 810,
-    true = T15 > 190, true = T15 < 210,
-    true = T16 > 990, true = T16 < 1010,
-
-    true = T17 > 990, true = T17 < 1010,  % This one will be serviced right away & timeout after ~100ms
-    true = T18 > 190, true = T18 < 210,   % This one will timeout in the queue waiting for the previous one ~20ms
-
     catch DummyServerPid ! stop,
     timer:sleep(10),
     receive _Msg -> ok
     after 1 -> ok
     end,
 
+    io:format(user, "TIMES: ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p ~p~n",
+              [T01,T02,T03,T04,T05,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15,T16,T17,T18]),
+    true = T01 > 190, true = T01 < 215, % This one is serviced right away & should timeout after 200ms
+    true = T02 > 390, true = T02 < 415, % This one is serviced after the 1st one has timed out, ~400ms
+    true = T03 > 590, true = T03 < 615, % This one is serviced after the 1st two have timed out, ~600ms
+    true = T04 > 790, true = T04 < 815, % This one is serviced after the 1st three have timed out, ~800ms
+    true = T05 > 990, true = T05 < 1015, % This one is serviced after the 1st four have timed out, ~1000ms
+
+    [HD|TL] = lists:reverse(lists:sort([T06,T07,T08,T09,T10])),
+    % One will have queued & been serviced, ~1200ms
+    true = HD > 1190, true = HD < 1215,
+    % All these will timeout in the queue, ~1000ms
+    lists:foreach(fun(T) -> true = T > 990, true = T < 1015 end, TL),
+
+    % These test for backward compatibility
+    true = T11 > 190, true = T11 < 215,
+    true = T12 > 390, true = T12 < 415,
+    true = T13 > 590, true = T13 < 615,
+    true = T14 > 790, true = T14 < 815,
+    true = T15 > 190, true = T15 < 215,
+    true = T16 > 990, true = T16 < 1015,
+
+    true = T17 > 990, true = T17 < 1015,  % This one will be serviced right away & timeout after ~100ms
+    true = T18 > 190, true = T18 < 215,   % This one will timeout in the queue waiting for the previous one ~20ms
+
     stop(Pid).
 
 overload_demo_test() ->
-    {ok, DummyServerPid, Port} = dummy_server({50, <<10>>}),
+    {ok, DummyServerPid, Port} = dummy_server({5, <<10>>}),
     {ok, Pid} = start("127.0.0.1", Port, [auto_reconnect, queue_if_disconnected]),
     timer:sleep(50),
     erlang:monitor(process, DummyServerPid),
@@ -4164,57 +4164,57 @@ overload_demo_test() ->
 
     TEST = fun(TO) ->
 
-		   PidList = lists:foldl(fun(_,Acc) ->
-						 timer:sleep(45),
-						 [REQ(get, TO) | Acc]
-					 end, [], lists:seq(1,200)),
-		   timer:sleep(100),
+                   PidList = lists:foldl(fun(_,Acc) ->
+                                                 timer:sleep(4),
+                                                 [REQ(get, TO) | Acc]
+                                         end, [], lists:seq(1,200)),
+                   timer:sleep(20),
 
-		   ReplyList = lists:foldl(fun(RPid,Acc) ->
-						   [RES(RPid) | Acc]
-					   end, [], PidList),
+                   ReplyList = lists:foldl(fun(RPid,Acc) ->
+                                                   [RES(RPid) | Acc]
+                                           end, [], PidList),
 
-		   Replies = lists:foldl(
-			       fun({error,Reply},Acc) ->
-				       case lists:keyfind(Reply, 1, Acc) of
-					   false -> [{Reply, 1} | Acc];
-					   {Reply, C} ->
-					       lists:keyreplace(Reply, 1, Acc, {Reply, C+1})
-				       end
-			       end, [], ReplyList),
-		   TimeOuts = case lists:keyfind(timeout, 1, Replies) of
-				  {_,TOV} -> TOV;
-				  false -> 0
-			      end,
-		   NotFounds = case lists:keyfind(notfound, 1, Replies) of
-				   {_,NFV} -> NFV;
-				   false -> 0
-			       end,
+                   Replies = lists:foldl(
+                               fun({error,Reply},Acc) ->
+                                       case lists:keyfind(Reply, 1, Acc) of
+                                           false -> [{Reply, 1} | Acc];
+                                           {Reply, C} ->
+                                               lists:keyreplace(Reply, 1, Acc, {Reply, C+1})
+                                       end
+                               end, [], ReplyList),
+                   TimeOuts = case lists:keyfind(timeout, 1, Replies) of
+                                  {_,TOV} -> TOV;
+                                  false -> 0
+                              end,
+                   NotFounds = case lists:keyfind(notfound, 1, Replies) of
+                                   {_,NFV} -> NFV;
+                                   false -> 0
+                               end,
 
-		   io:format(user, "  With timeout: ~p we got ~p timeouts and ~p replies~n",
-			     [TO, TimeOuts, NotFounds]),
-		   {TimeOuts, NotFounds}
+                   io:format(user, "  With timeout: ~p we got ~p timeouts and ~p replies~n",
+                             [TO, TimeOuts, NotFounds]),
+                   {TimeOuts, NotFounds}
 
-	   end,
+           end,
 
-    {OldTO, OldNF} = TEST(60),
-    {NewTO, NewNF} = TEST({5,55}),
+    {OldTO, OldNF} = TEST(9),
+    {NewTO, NewNF} = TEST({1,8}),
 
-    % the worst-case response time for both timeout mechanisms is the same, 60ms
-    % using the old mechanism we typically get 2 or 3 responses
-    %  and the link timesout as long as it remains overloaded
-    true = OldTO > 190,
-    true = OldNF < 10,
-    % but using the new mechanism we get get an almost 66% success rate
-    %  consistent during the overloaded state
-    true = NewTO < 80,
-    true = NewNF > 120,
-    
     catch DummyServerPid ! stop,
     timer:sleep(10),
     receive _Msg -> ok % io:format(user, "MSG: ~p~n", [_Msg])
     after 1 -> ok % io:format(user, "NO MSG: ~p~n", [process_info(DummyServerPid, messages)])
     end,
+
+    % the worst-case response time for both timeout mechanisms is the same, 9ms
+    % using the old mechanism we typically get ~10 responses
+    %  and the rest timeout as long as the link remains overloaded
+    true = OldTO > 170,
+    true = OldNF < 30,
+    % but using the new mechanism we get get an almost 66% success rate
+    %  consistent during the overloaded state
+    true = NewTO < 80,
+    true = NewNF > 120,
 
     stop(Pid).
 
