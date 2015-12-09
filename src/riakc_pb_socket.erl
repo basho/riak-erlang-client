@@ -74,7 +74,8 @@
          tunnel/4,
          get_preflist/3, get_preflist/4,
          get_coverage/2, get_coverage/3,
-         replace_coverage/3, replace_coverage/4]).
+         replace_coverage/3, replace_coverage/4,
+         use_native_encoding/2]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -1288,6 +1289,8 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                   {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
                    Timeout}).
 
+use_native_encoding(Pid, Raw) when is_boolean(Raw) ->
+    call_infinity(Pid, {use_native_encoding, Raw}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -1311,6 +1314,9 @@ init([Address, Port, Options]) ->
     end.
 
 %% @private
+handle_call({use_native_encoding, Raw}, From, State) when is_boolean(Raw) ->
+    {noreply, send_request(new_request(#rpbtoggleencodingreq{use_native=Raw}, From,
+                                        ?DEFAULT_PB_TIMEOUT), State)};
 handle_call({req, Msg, Timeout}, From, State) when State#state.sock =:= undefined ->
     case State#state.queue_if_disconnected of
         true ->
@@ -1641,6 +1647,9 @@ counter_val_options([_ | _Rest], _Req) ->
 -spec process_response(#request{}, rpb_resp(), #state{}) ->
                               {reply, term(), #state{}} |
                               {pending, #state{}}.
+process_response(#request{msg = #rpbtoggleencodingreq{}}, #rpbtoggleencodingresp{use_native=Raw}, State) ->
+    erlang:put(pb_use_native_encoding, Raw),
+    {reply, ok, State};
 process_response(#request{msg = rpbpingreq}, rpbpingresp, State) ->
     {reply, pong, State};
 process_response(#request{msg = rpbgetclientidreq},
