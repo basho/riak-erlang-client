@@ -98,6 +98,8 @@
          update_type/4, update_type/5,
          modify_type/5]).
 
+%% supporting functions used in riakc_ts
+-export([mk_reqid/0]).
 
 -deprecated({get_index,'_', eventually}).
 
@@ -2322,7 +2324,7 @@ remove_queued_request(Ref, State) ->
     end.
 
 %% @private
-mk_reqid() -> erlang:phash2(erlang:now()). % only has to be unique per-pid
+mk_reqid() -> erlang:phash2(crypto:rand_bytes(10)). % only has to be unique per-pid
 
 %% @private
 wait_for_list(ReqId) ->
