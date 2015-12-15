@@ -5,6 +5,9 @@
 
 [![Build Status](https://secure.travis-ci.org/basho/riak-erlang-client.png?branch=master)](http://travis-ci.org/basho/riak-erlang-client)
 
+## NOTE: This branch / version of the Riak Erlang Client is intended for use with a Riak Time Series instance. Use with a vanilla Riak instance may not work. 
+
+
 This document assumes that you have already started your Riak cluster.
 For instructions on that prerequisite, refer to
 [Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html)
@@ -615,21 +618,45 @@ Create a qfun that returns the size of the record and feed this into the existin
 Timeseries
 ==========
 
-```erlang
-{ok, Pid} = riakc_pb_socket:start_link("pancake", 10017).
-riakc_ts:query(Pid, "select * from asdf").
+Assume the following table definition for the examples.
+
+```SQL
+CREATE TABLE GeoCheckin
+(
+   myfamily    varchar   not null,
+   myseries    varchar   not null,
+   time        timestamp not null,
+   weather     varchar   not null,
+   temperature double,
+   PRIMARY KEY (
+     (myfamily, myseries, quantum(time, 15, 'm')),
+     myfamily, myseries, time
+   )
+)
 ```
 
-### Put
+### Store TS Data
 
-Put requests don't serialize column descriptions yet. There's probably a more
-advanced serialization/deserialization codepath that needs to be written. If
-your measurement columns line up with how the table was defined that's what
-you'll be submitting.
+To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition.
+
 
 ```erlang
-{ok, Pid} = riakc_pb_socket:start_link("pancake", 10017).
-riakc_ts:put(Pid, "asdf", [[{time, 12345}, 2, 3], [{time, 23456}, 5, 6]]).
+{ok, Pid} = riakc_pb_socket:start_link("myriakdb.host", 10017).
+riakc_ts:put(Pid, "GeoCheckin", [[<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5], [<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8]]).
+```
+
+### Query TS Data
+
+To query TS data, simply use `riakc_ts:query/2` with a connection and a query string. All parts of a table's Primary Key must be included in the where clause. 
+
+```erlang
+{ok, Pid} = riakc_pb_socket:start_link("myriakdb.host", 10017).
+
+riakc_ts:query(Pid, "select * from GeoCheckin where time > 1234560 and time < 1234569 and myfamily = 'family1' and myseries = 'series1'").
+
+riakc_ts:query(Pid, "select weather, temperature from GeoCheckin where time > 1234560 and time < 1234569 and myfamily = 'family1' and myseries = 'series1'").
+
+riakc_ts:query(Pid, "select weather, temperature from GeoCheckin where time > 1234560 and time < 1234569 and myfamily = 'family1' and myseries = 'series1' and temperature > 27.0").
 ```
 
 Troubleshooting
