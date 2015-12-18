@@ -24,7 +24,8 @@
 
 -module(riakc_ts).
 
--export([query/2, query/3,
+-export([describe_table/2,
+         query/2, query/3,
          put/3, put/4,
          get/4,
          delete/4,
@@ -39,6 +40,28 @@
 -type ts_value() :: riak_pb_ts_codec:ldbvalue().
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
+
+-spec describe_table(Pid::pid(), Table::table_name()) ->
+                           {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+%% @doc Execute a "DESCRIBE TABLE" query on Table with client.
+%%      Returns a @{ok, @{ColumnNames, Rows@}@} tuple, where
+%%      ColumnNames is ["Column", "Type", "Is Null", "Primary Key",
+%%      "Local Key"], and Rows is a list of lists, each containing the
+%%      corresponding items for one column in Table.  The last two
+%%      "Key" columns list the position of that field in the
+%%      partition/local key starting from 1, or [] if the field does
+%%      not appear in any keys. If Table does not exist, an @{error,
+%%      Reason@} is returned.
+describe_table(Pid, Table) ->
+    Message = #tsddlschemareq{table = Table},
+    case server_call(Pid, Message) of
+        {error, Reason} ->
+            {error, Reason};
+        Response ->
+            Columns = [C || #tscolumndescription{name = C} <- Response#tsddlschemaresp.columns],
+            Rows = [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsddlschemaresp.rows)],
+            {ok, {Columns, Rows}}
+    end.
 
 -spec query(Pid::pid(), Query::string()) ->
                    {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.

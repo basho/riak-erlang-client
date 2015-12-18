@@ -1952,6 +1952,15 @@ process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
               || T <- Preflist],
     {reply, {ok, Result}, State};
 
+process_response(#request{msg = #tsddlschemareq{}},
+                 tsddlschemaresp, State) ->
+    {reply, #tsddlschemareq{}, State};
+
+process_response(#request{msg = #tsddlschemareq{}},
+                 Result = #tsddlschemaresp{},
+                 State) ->
+    {reply, Result, State};
+
 process_response(#request{msg = #tsputreq{}},
                  tsputresp, State) ->
     {reply, ok, State};
