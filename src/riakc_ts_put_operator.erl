@@ -28,6 +28,7 @@
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
 
 -export([serialize/3,
+         serialize_for_ttb/3,
          deserialize/1]).
 
 serialize(TableName, ColumnNames, Measurements) ->
@@ -36,6 +37,14 @@ serialize(TableName, ColumnNames, Measurements) ->
     #tsputreq{table   = TableName,
               columns = ColumnDescs,
               rows    = SerializedRows}.
+
+serialize_for_ttb(TableName, ColumnNames, Measurements) ->
+    
+    ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
+    SerializedRows = riak_pb_ts_codec:encode_rows_for_ttb(Measurements),
+        #tsttbputreq{table   = TableName,
+                 columns = ColumnDescs,
+                 rows    = SerializedRows}.
 
 deserialize(Response) ->
     Response.

@@ -92,7 +92,7 @@ put(Pid, TableName, Measurements) ->
 %%      As of 2015-11-05, ColumnNames parameter is ignored, the function
 %%      expects the full set of fields in each element of Data.
 put(Pid, TableName, ColumnNames, Measurements) ->
-    Message = riakc_ts_put_operator:serialize(TableName, ColumnNames, Measurements),
+    Message = riakc_ts_put_operator:serialize_for_ttb(TableName, ColumnNames, Measurements),
     Response = server_call(Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
 
