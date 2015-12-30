@@ -1986,7 +1986,7 @@ process_response(#request{msg = #tsqueryreq{}},
     {reply, Result, State};
 
 process_response(#request{msg = #tscoveragereq{}},
-                 #rpbcoverageresp{entries=E}, State) ->
+                 #tscoverageresp{entries=E}, State) ->
     {reply, {ok, E}, State};
 
 process_response(#request{msg = #rpbcoveragereq{}},
