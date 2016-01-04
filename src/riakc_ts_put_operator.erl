@@ -28,23 +28,26 @@
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
 
 -export([serialize/3,
-         serialize_for_ttb/3,
          deserialize/1]).
+
+%% serialize uses the process dictionary to check if native encoding
+%% should be used.  If true (ttb encoding) call encode_rows_for_ttb.
+%% If false, call default pb encoding function.
 
 serialize(TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
-    SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
-    #tsputreq{table   = TableName,
-              columns = ColumnDescs,
-              rows    = SerializedRows}.
-
-serialize_for_ttb(TableName, ColumnNames, Measurements) ->
-    
-    ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
-    SerializedRows = riak_pb_ts_codec:encode_rows_for_ttb(Measurements),
-        #tsttbputreq{table   = TableName,
-                 columns = ColumnDescs,
-                 rows    = SerializedRows}.
+    case get(pb_use_native_encoding) of
+        true ->
+	    SerializedRows = riak_pb_ts_codec:encode_rows_for_ttb(Measurements),
+	    #tsttbputreq{table   = TableName,
+			 columns = ColumnDescs,
+			 rows    = SerializedRows};
+	_ ->
+	    SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
+	    #tsputreq{table   = TableName,
+		      columns = ColumnDescs,
+		      rows    = SerializedRows}
+    end.
 
 deserialize(Response) ->
     Response.
