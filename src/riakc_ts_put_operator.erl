@@ -44,7 +44,7 @@ serialize(true, TableName, ColumnDescs, Measurements) ->
                  columns = ColumnDescs,
 		 rows    = SerializedRows};
 
-serialize(false, TableName, ColumnDescs, Measurements) ->
+serialize(_, TableName, ColumnDescs, Measurements) ->
     SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
     #tsputreq{table   = TableName,
               columns = ColumnDescs,
