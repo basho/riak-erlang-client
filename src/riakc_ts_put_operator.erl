@@ -36,18 +36,19 @@
 
 serialize(TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
-    case get(pb_use_native_encoding) of
-        true ->
-	    SerializedRows = riak_pb_ts_codec:encode_rows_for_ttb(Measurements),
-	    #tsttbputreq{table   = TableName,
-			 columns = ColumnDescs,
-			 rows    = SerializedRows};
-	_ ->
-	    SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
-	    #tsputreq{table   = TableName,
-		      columns = ColumnDescs,
-		      rows    = SerializedRows}
-    end.
+    serialize(get(pb_use_native_encoding), TableName, ColumnDescs, Measurements).
+
+serialize(true, TableName, ColumnDescs, Measurements) ->
+    SerializedRows = riak_pb_ts_codec:encode_rows_for_ttb(Measurements),
+    #tsttbputreq{table   = TableName,
+                 columns = ColumnDescs,
+		 rows    = SerializedRows};
+
+serialize(false, TableName, ColumnDescs, Measurements) ->
+    SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
+    #tsputreq{table   = TableName,
+              columns = ColumnDescs,
+              rows    = SerializedRows}.
 
 deserialize(Response) ->
     Response.
