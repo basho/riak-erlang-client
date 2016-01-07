@@ -24,7 +24,8 @@
 
 -module(riakc_ts).
 
--export([query/2, query/3,
+-export([query/2, query/3, query/4,
+         get_coverage/3,
          put/3, put/4,
          get/4,
          delete/4,
@@ -61,6 +62,19 @@ query(Pid, QueryText, Interpolations) ->
     Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
     Response = server_call(Pid, Message),
     riakc_ts_query_operator:deserialize(Response).
+
+query(Pid, QueryText, Interpolations, Cover) ->
+    Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
+    Response = server_call(Pid, Message#tsqueryreq{cover_context=Cover}),
+    riakc_ts_query_operator:deserialize(Response).
+
+
+%% @doc Generate a parallel coverage plan for the specified query
+get_coverage(Pid, Table, QueryText) ->
+    server_call(Pid,
+                #tscoveragereq{query = #tsinterpolation{base=QueryText},
+                               replace_cover=undefined,
+                               table = Table}).
 
 
 -spec put(Pid::pid(), Table::table_name(), Data::[[ts_value()]]) ->
