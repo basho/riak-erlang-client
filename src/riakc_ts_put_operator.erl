@@ -37,7 +37,7 @@
 serialize(true, TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
     SerializedRows = riak_pb_ts_codec:encode_rows_for_ttb(Measurements),
-    #tsttbputreq{table   = TableName,
+    #tsputreqttb{table   = TableName,
                  columns = ColumnDescs,
 		 rows    = SerializedRows};
 
