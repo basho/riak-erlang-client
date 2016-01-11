@@ -1965,7 +1965,7 @@ process_response(#request{msg = #tsputreq{}},
                  tsputresp, State) ->
     {reply, ok, State};
 
-process_response(#request{msg = #tsputreqttb{}},
+process_response(#request{msg = #tsttbputreq{}},
                  tsputresp, State) ->
     {reply, ok, State};
 
