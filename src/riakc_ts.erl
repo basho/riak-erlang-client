@@ -106,10 +106,10 @@ put(Pid, TableName, Measurements) ->
 %%      As of 2015-11-05, ColumnNames parameter is ignored, the function
 %%      expects the full set of fields in each element of Data.
 put(Pid, TableName, ColumnNames, Measurements) ->
-    Message = riakc_ts_put_operator:serialize(TableName, ColumnNames, Measurements),
-    Response = server_call(Pid, Message),
+    UseNativeEncoding = get(pb_use_native_encoding),
+    Message = riakc_ts_put_operator:serialize(UseNativeEncoding, TableName, ColumnNames, Measurements),
+    Response = server_call(UseNativeEncoding, Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
-
 
 -spec delete(Pid::pid(), Table::table_name(), Key::[ts_value()],
              Options::proplists:proplist()) ->
@@ -182,4 +182,9 @@ stream_list_keys(Pid, Table, Options) ->
 server_call(Pid, Message) ->
     gen_server:call(Pid,
                     {req, Message, riakc_pb_socket:default_timeout(timeseries)},
+                    infinity).
+
+server_call(UseNativeEncoding, Pid, Message) ->
+    gen_server:call(Pid,
+                    {req, UseNativeEncoding, Message, riakc_pb_socket:default_timeout(timeseries)},
                     infinity).

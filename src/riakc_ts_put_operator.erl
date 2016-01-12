@@ -27,10 +27,21 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
 
--export([serialize/3,
+-export([serialize/4,
          deserialize/1]).
 
-serialize(TableName, ColumnNames, Measurements) ->
+%% serialize uses the process dictionary to check if native encoding
+%% should be used.  If true (ttb encoding) call encode_rows_for_ttb.
+%% If false, call default pb encoding function.
+
+serialize(true, TableName, ColumnNames, Measurements) ->
+    ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
+    SerializedRows = riak_pb_ts_codec:encode_rows_for_ttb(Measurements),
+    #tsttbputreq{table   = TableName,
+                 columns = ColumnDescs,
+		 rows    = SerializedRows};
+
+serialize(_, TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
     SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
     #tsputreq{table   = TableName,
