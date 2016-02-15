@@ -140,7 +140,7 @@ delete(Pid, TableName, Key, Options)
 %%      @{Columns, Record@}@} where Columns has column names, and
 %%      Record is the record found as a list of values, further as a
 %%      single element in enclosing list. If no record is found, the
-%%      return value is @{ok, @{[], []@}@}. On error, the function
+%%      return value is @{error, notfound@}. On error, the function
 %%      returns @{error, @{ErrCode, ErrMsg@}@}.
 get(Pid, TableName, Key, Options) ->
     Message = #tsgetreq{table   = TableName,
@@ -149,7 +149,7 @@ get(Pid, TableName, Key, Options) ->
 
     case server_call(Pid, Message) of
         {error, {_NotFoundErrCode, <<"notfound">>}} ->
-            {ok, {[], []}};
+            {error, notfound};
         {error, OtherError} ->
             {error, OtherError};
         Response ->
