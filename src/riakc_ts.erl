@@ -40,6 +40,42 @@
 -type ts_value() :: riak_pb_ts_codec:ldbvalue().
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
+%-define(PROF_QUERY, 1).
+
+-compile(export_all).
+
+fakeResp() ->
+    {tsqueryresp,
+     [{tscolumndescription,<<"myfamily">>,'VARCHAR'},
+      {tscolumndescription,<<"myseries">>,'VARCHAR'},
+      {tscolumndescription,<<"time">>,'TIMESTAMP'},
+      {tscolumndescription,<<"myint">>,'SINT64'},
+      {tscolumndescription,<<"mybin">>,'VARCHAR'},
+      {tscolumndescription,<<"myfloat">>,'DOUBLE'},
+      {tscolumndescription,<<"mybool">>,'BOOLEAN'}],
+     [{tsrow,
+       [{tscell,<<"family1">>,undefined,undefined,
+	 undefined,undefined},
+	{tscell,<<"seriesX">>,undefined,undefined,
+	 undefined,undefined},
+	{tscell,undefined,undefined,100,undefined,
+	 undefined},
+	{tscell,undefined,1,undefined,undefined,undefined},
+	{tscell,<<"test1">>,undefined,undefined,undefined,
+	 undefined},
+	{tscell,undefined,undefined,undefined,undefined,
+	 1.0},
+	{tscell,undefined,undefined,undefined,true,
+	 undefined}]}],
+     true}.
+
+-ifdef(PROF_QUERY).
+callProf(_Pid, _Message) ->
+    fakeResp().
+-else.
+callProf(Pid, Message) ->
+    server_call(Pid, Message).
+-endif.
 
 -spec query(Pid::pid(), Query::string()) ->
                    {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.
@@ -60,7 +96,7 @@ query(Pid, QueryText) ->
 %%      second element, or an @{error, Reason@} tuple.
 query(Pid, QueryText, Interpolations) ->
     Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
-    Response = server_call(Pid, Message),
+    Response = callProf(Pid, Message),
     riakc_ts_query_operator:deserialize(Response).
 
 query(Pid, QueryText, Interpolations, Cover) ->
