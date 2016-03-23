@@ -103,6 +103,8 @@
 
 -deprecated({get_index,'_', eventually}).
 
+-include_lib("profiler/include/profiler.hrl").
+
 -type ctx() :: any().
 -type rpb_req() :: {tunneled, msg_id(), binary()} | atom() | tuple().
 -type rpb_resp() :: atom() | tuple().
@@ -2272,8 +2274,12 @@ increase_reconnect_interval(State) ->
 %% Send a request to the server and prepare the state for the response
 %% @private
 send_request(Request0, State) when State#state.active =:= undefined ->
+    profiler:perf_profile({start, 1, ?FNNAME()}),
+    profiler:perf_profile({start, 3, 'riakc_pb_socket:encode_request_message'}),
     {Request, Pkt} = encode_request_message(Request0),
+    profiler:perf_profile({stop, 3}),
     Transport = State#state.transport,
+    Ret =
     case Transport:send(State#state.sock, Pkt) of
         ok ->
             maybe_reply(after_send(Request, State#state{active = Request}));
@@ -2281,7 +2287,9 @@ send_request(Request0, State) when State#state.active =:= undefined ->
             error_logger:warning_msg("Socket error while sending riakc request: ~p.", [Reason]),
             Transport:close(State#state.sock),
             maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
-    end.
+    end,
+    profiler:perf_profile({stop, 1}),
+    Ret.
 
 send_request(UseNativeEncoding, Request0, State) when State#state.active =:= undefined ->
     {Request, Pkt} = encode_request_message(UseNativeEncoding, Request0),
