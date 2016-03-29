@@ -1290,7 +1290,7 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                    Timeout}).
 
 use_native_encoding(Pid, Raw) when is_boolean(Raw) ->
-    erlang:put(pb_use_native_encoding, Raw),
+    erlang:put(Pid, [{pb_use_native_encoding, Raw}]),
     call_infinity(Pid, {use_native_encoding, Raw}).
 
 %% ====================================================================

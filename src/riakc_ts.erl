@@ -59,15 +59,26 @@ query(Pid, QueryText) ->
 %%      of records, each represented as a list of values, in the
 %%      second element, or an @{error, Reason@} tuple.
 query(Pid, QueryText, Interpolations) ->
-    Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
+    UseNativeEncoding = proplists:get_bool(pb_use_native_encoding, get(Pid)),
+    Message = riakc_ts_query_operator:serialize(UseNativeEncoding, QueryText, Interpolations),
     Response = server_call(Pid, Message),
     riakc_ts_query_operator:deserialize(Response).
 
 query(Pid, QueryText, Interpolations, Cover) ->
-    Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
-    Response = server_call(Pid, Message#tsqueryreq{cover_context=Cover}),
+    UseNativeEncoding = proplists:get_bool(pb_use_native_encoding, get(Pid)),
+    Message = riakc_ts_query_operator:serialize(UseNativeEncoding, QueryText, Interpolations),
+    Response = get_query_response(UseNativeEncoding, Pid, Message, Cover),
     riakc_ts_query_operator:deserialize(Response).
 
+%% ------------------------------------------------------------
+%% Construct an appropriate request depending on encoding, and return
+%% the response
+%% ------------------------------------------------------------
+
+get_query_response(false, Pid, Message, Cover) ->
+    server_call(Pid, Message#tsqueryreq{cover_context=Cover});
+get_query_response(true, Pid, Message, Cover) ->
+    server_call(Pid, Message#tsttbqueryreq{cover_context=Cover}).
 
 %% @doc Generate a parallel coverage plan for the specified query
 get_coverage(Pid, Table, QueryText) ->
@@ -106,9 +117,9 @@ put(Pid, TableName, Measurements) ->
 %%      As of 2015-11-05, ColumnNames parameter is ignored, the function
 %%      expects the full set of fields in each element of Data.
 put(Pid, TableName, ColumnNames, Measurements) ->
-    UseNativeEncoding = get(pb_use_native_encoding),
+    UseNativeEncoding = proplists:get_bool(pb_use_native_encoding, get(Pid)),
     Message = riakc_ts_put_operator:serialize(UseNativeEncoding, TableName, ColumnNames, Measurements),
-    Response = server_call(UseNativeEncoding, Pid, Message),
+    Response = server_call(Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
 
 -spec delete(Pid::pid(), Table::table_name(), Key::[ts_value()],
@@ -182,9 +193,4 @@ stream_list_keys(Pid, Table, Options) ->
 server_call(Pid, Message) ->
     gen_server:call(Pid,
                     {req, Message, riakc_pb_socket:default_timeout(timeseries)},
-                    infinity).
-
-server_call(UseNativeEncoding, Pid, Message) ->
-    gen_server:call(Pid,
-                    {req, UseNativeEncoding, Message, riakc_pb_socket:default_timeout(timeseries)},
                     infinity).
