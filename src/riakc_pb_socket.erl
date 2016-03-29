@@ -1338,12 +1338,6 @@ handle_call({req, Msg, Timeout, Ctx}, From, State) when State#state.active =/= u
     {noreply, queue_request(new_request(Msg, From, Timeout, Ctx), State)};
 handle_call({req, Msg, Timeout}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout), State)};
-handle_call({req, true, Msg, Timeout}, From, State) ->
-    {noreply, send_request(true, new_request(Msg, From, Timeout), State)};
-handle_call({req, false, Msg, Timeout}, From, State) ->
-    {noreply, send_request(false, new_request(Msg, From, Timeout), State)};
-handle_call({req, undefined, Msg, Timeout}, From, State) ->
-    {noreply, send_request(undefined, new_request(Msg, From, Timeout), State)};
 handle_call({req, Msg, Timeout, Ctx}, From, State) ->
     {noreply, send_request(new_request(Msg, From, Timeout, Ctx), State)};
 handle_call(is_connected, _From, State) ->
@@ -2283,18 +2277,6 @@ send_request(Request0, State) when State#state.active =:= undefined ->
             maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
     end.
 
-send_request(UseNativeEncoding, Request0, State) when State#state.active =:= undefined ->
-    {Request, Pkt} = encode_request_message(UseNativeEncoding, Request0),
-    Transport = State#state.transport,
-    case Transport:send(State#state.sock, Pkt) of
-        ok ->
-            maybe_reply(after_send(Request, State#state{active = Request}));
-        {error, Reason} ->
-            error_logger:warning_msg("Socket error while sending riakc request: ~p.", [Reason]),
-            Transport:close(State#state.sock),
-            maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
-    end.
-
 %% Already encoded (for tunneled messages), but must provide Message Id
 %% for responding to the second form of send_request.
 encode_request_message(#request{msg={tunneled,MsgId,Pkt}}=Req) ->
@@ -2302,8 +2284,6 @@ encode_request_message(#request{msg={tunneled,MsgId,Pkt}}=Req) ->
 %% Unencoded Request (the normal PB client path)
 encode_request_message(#request{msg=Msg}=Req) ->
     {Req, riak_pb_codec:encode(Msg)}.
-encode_request_message(UseNativeEncoding, #request{msg=Msg}=Req) ->
-    {Req, riak_pb_codec:encode(UseNativeEncoding, Msg)}.
 
 %% If the socket was closed, see if we can enqueue the request and
 %% trigger a reconnect. Otherwise, return an error to the requestor.
