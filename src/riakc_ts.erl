@@ -41,6 +41,14 @@
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
 
+use_native_encoding(Pid) ->
+    use_native_encoding_from_proplist(get(Pid)).
+
+use_native_encoding_from_proplist(undefined) ->
+    false;
+use_native_encoding_from_proplist(Proplist) ->
+    proplists:get_bool(pb_use_native_encoding, Proplist).
+
 -spec query(Pid::pid(), Query::string()) ->
                    {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.
 %% @doc Execute a "SELECT ..." Query with client.  The result returned
@@ -59,13 +67,12 @@ query(Pid, QueryText) ->
 %%      of records, each represented as a list of values, in the
 %%      second element, or an @{error, Reason@} tuple.
 query(Pid, QueryText, Interpolations) ->
-    UseNativeEncoding = proplists:get_bool(pb_use_native_encoding, get(Pid)),
-    Message = riakc_ts_query_operator:serialize(UseNativeEncoding, QueryText, Interpolations),
+    Message = riakc_ts_query_operator:serialize(use_native_encoding(Pid), QueryText, Interpolations),
     Response = server_call(Pid, Message),
     riakc_ts_query_operator:deserialize(Response).
 
 query(Pid, QueryText, Interpolations, Cover) ->
-    UseNativeEncoding = proplists:get_bool(pb_use_native_encoding, get(Pid)),
+    UseNativeEncoding = use_native_encoding(Pid),
     Message = riakc_ts_query_operator:serialize(UseNativeEncoding, QueryText, Interpolations),
     Response = get_query_response(UseNativeEncoding, Pid, Message, Cover),
     riakc_ts_query_operator:deserialize(Response).
@@ -117,8 +124,7 @@ put(Pid, TableName, Measurements) ->
 %%      As of 2015-11-05, ColumnNames parameter is ignored, the function
 %%      expects the full set of fields in each element of Data.
 put(Pid, TableName, ColumnNames, Measurements) ->
-    UseNativeEncoding = proplists:get_bool(pb_use_native_encoding, get(Pid)),
-    Message = riakc_ts_put_operator:serialize(UseNativeEncoding, TableName, ColumnNames, Measurements),
+    Message = riakc_ts_put_operator:serialize(use_native_encoding(Pid), TableName, ColumnNames, Measurements),
     Response = server_call(Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
 
@@ -194,3 +200,4 @@ server_call(Pid, Message) ->
     gen_server:call(Pid,
                     {req, Message, riakc_pb_socket:default_timeout(timeseries)},
                     infinity).
+

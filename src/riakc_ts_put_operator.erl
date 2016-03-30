@@ -30,9 +30,12 @@
 -export([serialize/4,
          deserialize/1]).
 
-%% serialize uses the process dictionary to check if native encoding
-%% should be used.  If true (ttb encoding) call encode_rows_for_ttb.
+%% ------------------------------------------------------------
+%% Serialize into tsttbputreq or tsputreq depending on encoding
+%%
+%% If first arg is true (ttb encoding) call encode_rows_for_ttb.
 %% If false, call default pb encoding function.
+%% ------------------------------------------------------------
 
 serialize(true, TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),

@@ -27,10 +27,21 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
 
--export([serialize/2,
+-export([serialize/3,
          deserialize/1]).
 
-serialize(QueryText, Interpolations) ->
+
+%------------------------------------------------------------
+% Serialize into tsqueryreq or tsttbqueryreq depending on encoding
+%------------------------------------------------------------
+
+serialize(true, QueryText, Interpolations) ->
+    Content = #tsinterpolation{
+                 base = QueryText,
+                 interpolations = serialize_interpolations(Interpolations)},
+    #tsttbqueryreq{query = Content};
+
+serialize(_, QueryText, Interpolations) ->
     Content = #tsinterpolation{
                  base = QueryText,
                  interpolations = serialize_interpolations(Interpolations)},

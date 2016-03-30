@@ -1954,11 +1954,11 @@ process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
     {reply, {ok, Result}, State};
 
 process_response(#request{msg = #tsputreq{}},
-                 tsputresp, State) ->
+                 #tsputresp{}, State) ->
     {reply, ok, State};
 
 process_response(#request{msg = #tsttbputreq{}},
-                 tsputresp, State) ->
+                 tsttbputresp, State) ->
     {reply, ok, State};
 
 process_response(#request{msg = #tsdelreq{}},
