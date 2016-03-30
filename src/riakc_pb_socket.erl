@@ -1985,6 +1985,11 @@ process_response(#request{msg = #tsqueryreq{}},
                  tsqueryresp, State) ->
     {reply, #tsqueryresp{}, State};
 
+process_response(#request{msg = #tsttbqueryreq{}},
+                 Result = #tsttbqueryresp{}, 
+		 State) ->
+    {reply, Result, State};
+
 process_response(#request{msg = #tsqueryreq{}},
                  Result = #tsqueryresp{},
                  State) ->

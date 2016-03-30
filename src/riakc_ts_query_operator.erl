@@ -62,4 +62,6 @@ deserialize({error, Message}) -> {error, Message};
 deserialize(#tsqueryresp{columns = Columns_, rows = Rows_}) ->
     Columns = [C || #tscolumndescription{name = C} <- Columns_],
     Rows = riak_pb_ts_codec:decode_rows(Rows_),
-    {Columns, Rows}.
+    {Columns, Rows};
+deserialize(#tsttbqueryresp{columns = {ColumnNames, _ColumnTypes}, rows = Rows}) ->
+    {ColumnNames, Rows}.
