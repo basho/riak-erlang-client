@@ -26,6 +26,7 @@
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_ttb.hrl").
 
 -export([serialize/3,
          deserialize/1]).

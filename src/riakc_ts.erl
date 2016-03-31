@@ -34,6 +34,7 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_ttb.hrl").
 -include("riakc.hrl").
 
 -type table_name() :: binary().
