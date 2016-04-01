@@ -86,11 +86,11 @@ query(Pid, QueryText) ->
 %%
 
 query(Pid, QueryText, true) ->
-	query(Pid, QueryText, [], true);
+        query(Pid, QueryText, [], true);
 query(Pid, QueryText, false) ->
-	query(Pid, QueryText, [], false);
+        query(Pid, QueryText, [], false);
 query(Pid, QueryText, Interpolations) ->
-	query(Pid, QueryText, Interpolations, use_native_encoding(Pid)).
+        query(Pid, QueryText, Interpolations, use_native_encoding(Pid)).
 
 -spec query(Pid::pid(), Query::string(), Interpolations::[{binary(), binary()}], term()) ->
                    {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
@@ -112,11 +112,11 @@ query(Pid, QueryText, Interpolations) ->
 %%
 
 query(Pid, QueryText, Interpolations, true) ->
-	get_query_response_nocover(Pid, QueryText, Interpolations, true);
+        get_query_response_nocover(Pid, QueryText, Interpolations, true);
 query(Pid, QueryText, Interpolations, false) ->
-	get_query_response_nocover(Pid, QueryText, Interpolations, false);
+        get_query_response_nocover(Pid, QueryText, Interpolations, false);
 query(Pid, QueryText, Interpolations, Cover) ->
-	query(Pid, QueryText, Interpolations, Cover, use_native_encoding(Pid)).
+        query(Pid, QueryText, Interpolations, Cover, use_native_encoding(Pid)).
 
 get_query_response_nocover(Pid, QueryText, Interpolations, UseNativeEncoding) ->
     Message = riakc_ts_query_operator:serialize(UseNativeEncoding, QueryText, Interpolations),

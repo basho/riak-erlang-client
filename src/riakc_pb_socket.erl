@@ -1981,7 +1981,7 @@ process_response(#request{msg = #tsqueryreq{}},
 
 process_response(#request{msg = #tsttbqueryreq{}},
                  Result = #tsttbqueryresp{}, 
-		 State) ->
+                 State) ->
     {reply, Result, State};
 
 process_response(#request{msg = #tsqueryreq{}},
