@@ -4110,6 +4110,31 @@ live_node_tests() ->
                                               node = Node,
                                               primary = true}],
                               Preflist)
+             end)},
+     {"add redundant and multiple items to hll(set)",
+      ?_test(begin
+                 reset_riak(),
+                 {ok, Pid} = start_link(test_ip(), test_port()),
+                 ok = update_type(Pid,
+                                  {<<"hll_bucket">>, <<"bucket">>}, <<"key">>,
+                                  riakc_hll:to_op(
+                                    riakc_hll:add_elements([<<"X">>, <<"Y">>],
+                                                          riakc_hll:new()))),
+                 {ok, Hll0} = fetch_type(Pid, {<<"hll_bucket">>, <<"bucket">>},
+                                       <<"key">>),
+                 ?assertEqual(riakc_hll:value(Hll0), 2),
+                 ok = update_type(Pid,
+                                  {<<"hll_bucket">>, <<"bucket">>}, <<"key">>,
+                                  riakc_hll:to_op(
+                                    riakc_hll:add_element(<<"X">>, Hll0))),
+                 {ok, Hll1} = fetch_type(Pid, {<<"hll_bucket">>, <<"bucket">>},
+                                         <<"key">>),
+                 ?assert(riakc_hll:is_type(Hll1)),
+                 Value = riakc_hll:value(Hll1),
+                 ?assertEqual(Value, 2),
+
+                 %% Make sure card and value are the same
+                 ?assertEqual(riakc_hll:card(Hll1), Value)
              end)}
      ].
 
