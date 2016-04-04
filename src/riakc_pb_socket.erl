@@ -75,8 +75,7 @@
          tunnel/4,
          get_preflist/3, get_preflist/4,
          get_coverage/2, get_coverage/3,
-         replace_coverage/3, replace_coverage/4,
-         use_native_encoding/2]).
+         replace_coverage/3, replace_coverage/4]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -1290,9 +1289,6 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                   {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
                    Timeout}).
 
-use_native_encoding(Pid, Raw) when is_boolean(Raw) ->
-    erlang:put(Pid, [{pb_use_native_encoding, Raw}]).
-
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -1355,19 +1351,15 @@ handle_info({tcp_error, _Socket, Reason}, State) ->
     error_logger:error_msg("PBC client TCP error for ~p:~p - ~p\n",
                            [State#state.address, State#state.port, Reason]),
     disconnect(State);
-
 handle_info({tcp_closed, _Socket}, State) ->
     disconnect(State);
-
 handle_info({ssl_error, _Socket, Reason}, State) ->
     error_logger:error_msg("PBC client SSL error for ~p:~p - ~p\n",
                            [State#state.address, State#state.port, Reason]),
     disconnect(State);
-
 handle_info({ssl_closed, _Socket}, State) ->
     disconnect(State);
-
-%% Make sure the two Sock's match.  If a request timed out, but there was
+%% Make sure the two Socks match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
 %% it should drop through and be ignored.
 handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
@@ -1378,7 +1370,7 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
             %% don't decode tunneled replies, we may not recognize the msgid
             {MsgCode, MsgData};
         _ ->
-            riak_pb_codec:decode(MsgCode, MsgData)
+            decode(MsgCode, MsgData)
     end,
     NewState = case Resp of
         #rpberrorresp{} ->
@@ -1442,6 +1434,12 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 %% internal functions
 %% ====================================================================
+
+%% @private
+decode(?TTB_MSG_CODE, MsgData) ->
+    riak_ttb_codec:decode(?TTB_MSG_CODE, MsgData);
+decode(MsgCode, MsgData) ->
+    riak_pb_codec:decode(MsgCode, MsgData).
 
 %% @private
 %% Parse options
@@ -1951,10 +1949,6 @@ process_response(#request{msg = #tsputreq{}},
                  #tsputresp{}, State) ->
     {reply, ok, State};
 
-process_response(#request{msg = #tsttbputreq{}},
-                 tsttbputresp, State) ->
-    {reply, ok, State};
-
 process_response(#request{msg = #tsdelreq{}},
                  tsdelresp, State) ->
     {reply, ok, State};
@@ -1978,11 +1972,6 @@ process_response(#request{msg = #tslistkeysreq{}} = Request,
 process_response(#request{msg = #tsqueryreq{}},
                  tsqueryresp, State) ->
     {reply, #tsqueryresp{}, State};
-
-process_response(#request{msg = #tsttbqueryreq{}},
-                 Result = #tsttbqueryresp{}, 
-                 State) ->
-    {reply, Result, State};
 
 process_response(#request{msg = #tsqueryreq{}},
                  Result = #tsqueryresp{},
@@ -2276,13 +2265,21 @@ send_request(Request0, State) when State#state.active =:= undefined ->
             maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
     end.
 
+%% @private
+encode(Msg=#tsputreq{}) ->
+    riak_ttb_codec:encode(Msg);
+encode(Msg=#tsqueryreq{}) ->
+    riak_ttb_codec:encode(Msg);
+encode(Msg) ->
+    riak_pb_codec:encode(Msg).
+
 %% Already encoded (for tunneled messages), but must provide Message Id
 %% for responding to the second form of send_request.
 encode_request_message(#request{msg={tunneled,MsgId,Pkt}}=Req) ->
     {Req#request{msg={tunneled,MsgId}},[MsgId|Pkt]};
 %% Unencoded Request (the normal PB client path)
 encode_request_message(#request{msg=Msg}=Req) ->
-    {Req, riak_pb_codec:encode(Msg)}.
+    {Req, encode(Msg)}.
 
 %% If the socket was closed, see if we can enqueue the request and
 %% trigger a reconnect. Otherwise, return an error to the requestor.

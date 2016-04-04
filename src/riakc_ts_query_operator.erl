@@ -28,21 +28,11 @@
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_ttb.hrl").
 
--export([serialize/3,
+-export([serialize/2,
          deserialize/1]).
 
 
-%------------------------------------------------------------
-% Serialize into tsqueryreq or tsttbqueryreq depending on encoding
-%------------------------------------------------------------
-
-serialize(true, QueryText, Interpolations) ->
-    Content = #tsinterpolation{
-                 base = QueryText,
-                 interpolations = serialize_interpolations(Interpolations)},
-    #tsttbqueryreq{query = Content};
-
-serialize(_, QueryText, Interpolations) ->
+serialize(QueryText, Interpolations) ->
     Content = #tsinterpolation{
                  base = QueryText,
                  interpolations = serialize_interpolations(Interpolations)},
@@ -60,9 +50,5 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
 
 deserialize({error, Message}) -> {error, Message};
 
-deserialize(#tsqueryresp{columns = Columns_, rows = Rows_}) ->
-    Columns = [C || #tscolumndescription{name = C} <- Columns_],
-    Rows = riak_pb_ts_codec:decode_rows(Rows_),
-    {Columns, Rows};
-deserialize(#tsttbqueryresp{columns = {ColumnNames, _ColumnTypes}, rows = Rows}) ->
+deserialize(#tsqueryresp{columns = {ColumnNames, _ColumnTypes}, rows = Rows}) ->
     {ColumnNames, Rows}.
