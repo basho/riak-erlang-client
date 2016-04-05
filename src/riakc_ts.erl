@@ -74,9 +74,6 @@ query(Pid, QueryText, Interpolations) ->
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
-%%
-%%      query/5 acts like query/4 with interpolations and coverage
-%%      list, but additionally specifies the encoding
 
 query(Pid, QueryText, Interpolations, Cover) ->
     Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),

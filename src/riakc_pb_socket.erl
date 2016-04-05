@@ -1437,7 +1437,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% @private
 decode(?TTB_MSG_CODE, MsgData) ->
-    riak_ttb_codec:decode(?TTB_MSG_CODE, MsgData);
+    riak_ttb_codec:decode(MsgData);
 decode(MsgCode, MsgData) ->
     riak_pb_codec:decode(MsgCode, MsgData).
 
