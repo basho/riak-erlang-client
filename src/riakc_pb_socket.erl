@@ -2268,6 +2268,8 @@ send_request(Request0, State) when State#state.active =:= undefined ->
 %% @private
 encode(Msg=#tsputreq{}) ->
     riak_ttb_codec:encode(Msg);
+encode(Msg=#tsgetreq{}) ->
+    riak_ttb_codec:encode(Msg);
 encode(Msg=#tsqueryreq{}) ->
     riak_ttb_codec:encode(Msg);
 encode(Msg) ->

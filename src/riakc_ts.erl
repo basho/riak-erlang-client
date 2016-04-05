@@ -157,7 +157,7 @@ delete(Pid, TableName, Key, Options)
 %%      returns @{error, @{ErrCode, ErrMsg@}@}.
 get(Pid, TableName, Key, Options) ->
     Message = #tsgetreq{table   = TableName,
-                        key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
+                        key     = Key,
                         timeout = proplists:get_value(timeout, Options)},
 
     case server_call(Pid, Message) of
@@ -166,8 +166,8 @@ get(Pid, TableName, Key, Options) ->
         {error, OtherError} ->
             {error, OtherError};
         Response ->
-            Columns = [C || #tscolumndescription{name = C} <- Response#tsgetresp.columns],
-            Rows = [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsgetresp.rows)],
+            Columns = Response#tsgetresp.columns,
+            Rows = Response#tsgetresp.rows,
             {ok, {Columns, Rows}}
     end.
 
