@@ -26,9 +26,11 @@
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_ttb.hrl").
 
 -export([serialize/2,
          deserialize/1]).
+
 
 serialize(QueryText, Interpolations) ->
     Content = #tsinterpolation{
@@ -48,7 +50,5 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
 
 deserialize({error, Message}) -> {error, Message};
 
-deserialize(#tsqueryresp{columns = Columns_, rows = Rows_}) ->
-    Columns = [C || #tscolumndescription{name = C} <- Columns_],
-    Rows = riak_pb_ts_codec:decode_rows(Rows_),
-    {Columns, Rows}.
+deserialize(#tsqueryresp{columns = {ColumnNames, _ColumnTypes}, rows = Rows}) ->
+    {ColumnNames, Rows}.

@@ -34,12 +34,12 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_ttb.hrl").
 -include("riakc.hrl").
 
 -type table_name() :: binary().
 -type ts_value() :: riak_pb_ts_codec:ldbvalue().
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
-
 
 -spec query(Pid::pid(), Query::string()) ->
                    {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.
@@ -48,26 +48,37 @@
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
+%%
+
 query(Pid, QueryText) ->
     query(Pid, QueryText, []).
 
 -spec query(Pid::pid(), Query::string(), Interpolations::[{binary(), binary()}]) ->
                    {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
-%% @doc Execute a "SELECT ..." Query with client Pid, using
-%%      Interpolations.  The result returned is a tuple containing a
-%%      list of columns as binaries in the first element, and a list
-%%      of records, each represented as a list of values, in the
-%%      second element, or an @{error, Reason@} tuple.
+%% @doc Execute a "SELECT ..." Query with client.  The result returned
+%%      is a tuple containing a list of columns as binaries in the
+%%      first element, and a list of records, each represented as a
+%%      list of values, in the second element, or an @{error, Reason@}
+%%      tuple.
+%%
+
 query(Pid, QueryText, Interpolations) ->
     Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
     Response = server_call(Pid, Message),
     riakc_ts_query_operator:deserialize(Response).
 
+-spec query(Pid::pid(), Query::string(), Interpolations::[{binary(), binary()}], Cover::term()) ->
+                   {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+%% @doc Execute a "SELECT ..." Query with client.  The result returned
+%%      is a tuple containing a list of columns as binaries in the
+%%      first element, and a list of records, each represented as a
+%%      list of values, in the second element, or an @{error, Reason@}
+%%      tuple.
+
 query(Pid, QueryText, Interpolations, Cover) ->
     Message = riakc_ts_query_operator:serialize(QueryText, Interpolations),
     Response = server_call(Pid, Message#tsqueryreq{cover_context=Cover}),
     riakc_ts_query_operator:deserialize(Response).
-
 
 %% @doc Generate a parallel coverage plan for the specified query
 get_coverage(Pid, Table, QueryText) ->
@@ -76,25 +87,7 @@ get_coverage(Pid, Table, QueryText) ->
                                replace_cover=undefined,
                                table = Table}).
 
-
--spec put(Pid::pid(), Table::table_name(), Data::[[ts_value()]]) ->
-                 ok | {error, Reason::term()}.
-%% @doc Make data records from Data and insert them, individually,
-%%      into a time-series Table, using client Pid. Each record is a
-%%      list of values of appropriate types for the complete set of
-%%      table columns, in the order in which they appear in table's
-%%      DDL.  On success, 'ok' is returned, else an @{error, Reason@}
-%%      tuple.
-%%
-%%      Note: Type validation is done on the first record only.  If
-%%      any subsequent record contains fewer or more elements than
-%%      there are columns, or some element fails to convert to the
-%%      appropriate type, the rest of the records will not get
-%%      inserted.
-put(Pid, TableName, Measurements) ->
-    put(Pid, TableName, [], Measurements).
-
--spec put(Pid::pid(), Table::table_name(), ColumnNames::[ts_columnname()], Data::[[ts_value()]]) ->
+-spec put(Pid::pid(), Table::table_name(), [[ts_value()]]) ->
                  ok | {error, Reason::term()}.
 %% @doc Make data records from Data and insert them, individually,
 %%      into a time-series Table, using client Pid. Each record is a
@@ -105,10 +98,27 @@ put(Pid, TableName, Measurements) ->
 %%
 %%      As of 2015-11-05, ColumnNames parameter is ignored, the function
 %%      expects the full set of fields in each element of Data.
+%%
+
+put(Pid, TableName, Measurements) ->
+    put(Pid, TableName, [], Measurements).
+
+-spec put(Pid::pid(), Table::table_name(), ColumnNames::[ts_columnname()], Data::[[ts_value()]]) ->
+                 ok | {error, Reason::term()}.
+%% @doc Make data records from Data and insert them, individually,
+%%      into a time-series Table, using client Pid. Each record is a
+%%      list of values of appropriate types for the complete set of
+%%      table column names, in the order in which they appear in table's
+%%      DDL.  On success, 'ok' is returned, else an @{error, Reason@}
+%%      tuple.  
+%%
+%%      As of 2015-11-05, ColumnNames parameter is ignored, the function
+%%      expects the full set of fields in each element of Data.
+%%
+
 put(Pid, TableName, ColumnNames, Measurements) ->
-    UseNativeEncoding = get(pb_use_native_encoding),
-    Message = riakc_ts_put_operator:serialize(UseNativeEncoding, TableName, ColumnNames, Measurements),
-    Response = server_call(UseNativeEncoding, Pid, Message),
+    Message = riakc_ts_put_operator:serialize(TableName, ColumnNames, Measurements),
+    Response = server_call(Pid, Message),
     riakc_ts_put_operator:deserialize(Response).
 
 -spec delete(Pid::pid(), Table::table_name(), Key::[ts_value()],
@@ -144,7 +154,7 @@ delete(Pid, TableName, Key, Options)
 %%      returns @{error, @{ErrCode, ErrMsg@}@}.
 get(Pid, TableName, Key, Options) ->
     Message = #tsgetreq{table   = TableName,
-                        key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
+                        key     = Key,
                         timeout = proplists:get_value(timeout, Options)},
 
     case server_call(Pid, Message) of
@@ -153,8 +163,8 @@ get(Pid, TableName, Key, Options) ->
         {error, OtherError} ->
             {error, OtherError};
         Response ->
-            Columns = [C || #tscolumndescription{name = C} <- Response#tsgetresp.columns],
-            Rows = [tuple_to_list(X) || X <- riak_pb_ts_codec:decode_rows(Response#tsgetresp.rows)],
+            Columns = Response#tsgetresp.columns,
+            Rows = Response#tsgetresp.rows,
             {ok, {Columns, Rows}}
     end.
 
@@ -184,7 +194,3 @@ server_call(Pid, Message) ->
                     {req, Message, riakc_pb_socket:default_timeout(timeseries)},
                     infinity).
 
-server_call(UseNativeEncoding, Pid, Message) ->
-    gen_server:call(Pid,
-                    {req, UseNativeEncoding, Message, riakc_pb_socket:default_timeout(timeseries)},
-                    infinity).
