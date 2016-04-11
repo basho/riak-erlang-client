@@ -31,10 +31,11 @@
 -export([serialize/3,
          deserialize/1]).
 
+
 serialize(TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
     SerializedRows = riak_ttb_codec:encode_ts_rows(Measurements),
-    #tsputreq{table   = TableName,
+    #tsputreq{table   = riakc_ts:convert_to_binary(TableName),
               columns = ColumnDescs,
               rows    = SerializedRows}.
 

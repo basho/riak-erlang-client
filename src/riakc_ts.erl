@@ -29,7 +29,9 @@
          put/3, put/4,
          get/4,
          delete/4,
-         stream_list_keys/3]).
+         stream_list_keys/3,
+         convert_to_binary/1,
+         convert_list_to_binary/1]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -81,11 +83,14 @@ query(Pid, QueryText, Interpolations, Cover) ->
     riakc_ts_query_operator:deserialize(Response).
 
 %% @doc Generate a parallel coverage plan for the specified query
+-spec get_coverage(Pid :: pid(),
+                   Table :: binary(),
+                   QueryText :: binary()) -> {ok, any()} | {'EXIT', any()}.
 get_coverage(Pid, Table, QueryText) ->
     server_call(Pid,
-                #tscoveragereq{query = #tsinterpolation{base=QueryText},
+                #tscoveragereq{query = #tsinterpolation{base=riakc_ts:convert_to_binary(QueryText)},
                                replace_cover=undefined,
-                               table = Table}).
+                               table = riakc_ts:convert_to_binary(Table)}).
 
 -spec put(Pid::pid(), Table::table_name(), [[ts_value()]]) ->
                  ok | {error, Reason::term()}.
@@ -194,3 +199,12 @@ server_call(Pid, Message) ->
                     {req, Message, riakc_pb_socket:default_timeout(timeseries)},
                     infinity).
 
+-spec convert_to_binary(Value :: binary() | list()) -> binary().
+convert_to_binary(Value) when is_binary(Value) ->
+    Value;
+convert_to_binary(Value) when is_list(Value) ->
+    list_to_binary(Value).
+
+-spec convert_list_to_binary(Value :: [binary()] | [list()]) -> binary().
+convert_list_to_binary(Values) ->
+    list:map(fun convert_to_binary/1, Values).
