@@ -63,7 +63,8 @@ query(Pid, QueryText, Interpolations) ->
 %%      tuple.
 query(Pid, Query, Interpolations, Cover)
   when is_pid(Pid), is_list(Query) ->
-    Message = riakc_ts_query_operator:serialize(Query, Interpolations),
+    Message = riakc_ts_query_operator:serialize(
+                lists:flatten(Query), Interpolations),
     Response = server_call(Pid, Message#tsqueryreq{cover_context = Cover}),
     riakc_ts_query_operator:deserialize(Response).
 
