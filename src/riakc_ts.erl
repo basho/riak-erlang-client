@@ -81,8 +81,8 @@ query_common(Pid, Query, Interpolations, Cover)
 get_coverage(Pid, Table, QueryText) ->
     server_call(Pid,
                 #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(QueryText)},
-                               replace_cover=undefined,
-                               table=iolist_to_binary(Table)}).
+                               replace_cover = undefined,
+                               table = iolist_to_binary(Table)}).
 
 
 -spec put(pid(), table_name(), [[ts_value()]]) ->
