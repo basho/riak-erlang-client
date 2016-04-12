@@ -54,5 +54,7 @@ deserialize({error, {Code, Message}}) when is_integer(Code), is_atom(Message) ->
 deserialize({error, Message}) ->
     {error, Message};
 
+deserialize(#tsqueryresp{columns=[], rows=[]}) ->
+    {[], []};
 deserialize(#tsqueryresp{columns={ColumnNames, _ColumnTypes}, rows=Rows}) ->
     {ColumnNames, Rows}.

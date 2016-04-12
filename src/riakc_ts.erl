@@ -150,8 +150,6 @@ get(Pid, Table, Key, Options)
                         timeout=proplists:get_value(timeout, Options)},
 
     case server_call(Pid, Message) of
-        {error, {_NotFoundErrCode, <<"notfound">>}} ->
-            {ok, {[], []}};
         {error, OtherError} ->
             {error, OtherError};
         Response ->
