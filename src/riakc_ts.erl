@@ -76,12 +76,10 @@ query_common(Pid, Query, Interpolations, Cover)
     riakc_ts_query_operator:deserialize(Response).
 
 
--spec get_coverage(pid(), table_name(), Query::string()) ->
-                          {ok, Entries::[term()]} | {error, term()}.
 %% @doc Generate a parallel coverage plan for the specified query
--spec get_coverage(Pid :: pid(),
-                   Table :: binary(),
-                   QueryText :: binary()) -> {ok, any()} | {'EXIT', any()}.
+-spec get_coverage(Pid::pid(),
+                   Table::binary(),
+                   QueryText::binary()) -> {ok, Entries::[term()]} | {error, term()} | {'EXIT', any()}.
 get_coverage(Pid, Table, QueryText) ->
     server_call(Pid,
                 #tscoveragereq{query = #tsinterpolation{base=riakc_ts:convert_to_binary(QueryText)},
