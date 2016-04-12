@@ -153,7 +153,7 @@ get(Pid, Table, Key, Options)
         {error, OtherError} ->
             {error, OtherError};
         Response ->
-            Columns = Response#tsgetresp.columns,
+            {Columns, _Types} = Response#tsgetresp.columns,
             Rows = Response#tsgetresp.rows,
             {ok, {Columns, Rows}}
     end.
