@@ -2,7 +2,7 @@
 %%
 %% riakc_ts_put_operator.erl: helper functions for put requests to Riak TS
 %%
-%% Copyright (c) 2015 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2015, 2016 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -34,7 +34,7 @@
 serialize(TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
     SerializedRows = riak_ttb_codec:encode_ts_rows(Measurements),
-    #tsputreq{table   = TableName,
+    #tsputreq{table   = iolist_to_binary(TableName),
               columns = ColumnDescs,
               rows    = SerializedRows}.
 

@@ -2,7 +2,7 @@
 %%
 %% riakc_ts_put_operator.erl: helper functions for query requests to Riak TS
 %%
-%% Copyright (c) 2015 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2015, 2016 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -34,7 +34,7 @@
 
 serialize(QueryText, Interpolations) ->
     Content = #tsinterpolation{
-                 base = QueryText,
+                 base = iolist_to_binary(QueryText),
                  interpolations = serialize_interpolations(Interpolations)},
     #tsqueryreq{query = Content}.
 
@@ -45,7 +45,8 @@ serialize_interpolations([], SerializedInterps) ->
     SerializedInterps;
 serialize_interpolations([{Key, Value} | RemainingInterps],
                          SerializedInterps) ->
-    UpdatedInterps = [#rpbpair{key=Key, value=Value} | SerializedInterps],
+    UpdatedInterps = [#rpbpair{key = iolist_to_binary(Key),
+                               value = Value} | SerializedInterps],
     serialize_interpolations(RemainingInterps, UpdatedInterps).
 
 deserialize({error, Message}) -> {error, Message};
