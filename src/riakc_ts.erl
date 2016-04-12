@@ -61,7 +61,12 @@ query(Pid, QueryText, Interpolations) ->
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
-query(Pid, Query, Interpolations, Cover)
+query(Pid, Query, Interpolations, undefined) ->
+	query_common(Pid, Query, Interpolations, undefined);
+query(Pid, Query, Interpolations, Cover) when is_binary(Cover) ->
+	query_common(Pid, Query, Interpolations, Cover).
+
+query_common(Pid, Query, Interpolations, Cover)
   when is_pid(Pid), is_list(Query) ->
     Message = riakc_ts_query_operator:serialize(
                 iolist_to_binary(Query), Interpolations),
