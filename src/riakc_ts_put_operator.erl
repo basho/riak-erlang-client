@@ -34,10 +34,9 @@
 
 serialize(TableName, ColumnNames, Measurements) ->
     ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
-    SerializedRows = riak_ttb_codec:encode_ts_rows(Measurements),
     #tsputreq{table   = iolist_to_binary(TableName),
               columns = ColumnDescs,
-              rows    = SerializedRows}.
+              rows    = Measurements}.
 
 deserialize({error, {Code, Message}}) when is_integer(Code), is_list(Message) ->
     {error, {Code, iolist_to_binary(Message)}};

@@ -152,10 +152,8 @@ get(Pid, Table, Key, Options)
     case server_call(Pid, Message) of
         {error, OtherError} ->
             {error, OtherError};
-        Response ->
-            Columns = Response#tsgetresp.columns,
-            Rows = Response#tsgetresp.rows,
-            {ok, {Columns, Rows}}
+        {tsgetresp, {ColumnNames, _ColumnTypes, Rows}} ->
+            {ok, {ColumnNames, Rows}}
     end.
 
 

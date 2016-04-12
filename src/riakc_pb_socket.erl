@@ -1971,10 +1971,10 @@ process_response(#request{msg = #tslistkeysreq{}} = Request,
 
 process_response(#request{msg = #tsqueryreq{}},
                  tsqueryresp, State) ->
-    {reply, #tsqueryresp{}, State};
+    {reply, tsqueryresp, State};
 
 process_response(#request{msg = #tsqueryreq{}},
-                 Result = #tsqueryresp{},
+                 Result = {tsqueryresp, _},
                  State) ->
     {reply, Result, State};
 
@@ -1988,10 +1988,10 @@ process_response(#request{msg = #rpbcoveragereq{}},
 
 process_response(#request{msg = #tsgetreq{}},
                  tsgetresp, State) ->
-    {reply, #tsgetresp{}, State};
+    {reply, tsgetresp, State};
 
 process_response(#request{msg = #tsgetreq{}},
-                 Result = #tsgetresp{},
+                 Result = {tsgetresp, _},
                  State) ->
     {reply, Result, State};
 
