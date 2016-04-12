@@ -33,8 +33,8 @@
 
 serialize(QueryText, Interpolations) ->
     Content = #tsinterpolation{
-                 base=iolist_to_binary(QueryText),
-                 interpolations=serialize_interpolations(Interpolations)},
+                 base           = iolist_to_binary(QueryText),
+                 interpolations = serialize_interpolations(Interpolations)},
     #tsqueryreq{query = Content}.
 
 serialize_interpolations(Interpolations) ->

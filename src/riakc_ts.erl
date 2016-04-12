@@ -80,7 +80,7 @@ query_common(Pid, Query, Interpolations, Cover)
                    QueryText::binary()) -> {ok, Entries::[term()]} | {error, term()} | {'EXIT', any()}.
 get_coverage(Pid, Table, QueryText) ->
     server_call(Pid,
-                #tscoveragereq{query = #tsinterpolation{base=iolist_to_binary(QueryText)},
+                #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(QueryText)},
                                replace_cover=undefined,
                                table=iolist_to_binary(Table)}).
 
@@ -122,10 +122,10 @@ put(Pid, Table, ColumnNames, Measurements)
 delete(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsdelreq{table  =iolist_to_binary(Table),
-                        key    =riak_pb_ts_codec:encode_cells_non_strict(Key),
-                        vclock =proplists:get_value(vclock, Options),
-                        timeout=proplists:get_value(timeout, Options)},
+    Message = #tsdelreq{table   = iolist_to_binary(Table),
+                        key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
+                        vclock  = proplists:get_value(vclock, Options),
+                        timeout = proplists:get_value(timeout, Options)},
     _Response = server_call(Pid, Message).
 
 
@@ -145,9 +145,9 @@ delete(Pid, Table, Key, Options)
 get(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsgetreq{table  =iolist_to_binary(Table),
-                        key    =Key,
-                        timeout=proplists:get_value(timeout, Options)},
+    Message = #tsgetreq{table   = iolist_to_binary(Table),
+                        key     = Key,
+                        timeout = proplists:get_value(timeout, Options)},
 
     case server_call(Pid, Message) of
         {error, OtherError} ->
@@ -169,8 +169,8 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
     ReqTimeout = proplists:get_value(timeout, Options),
-    Req = #tslistkeysreq{table=iolist_to_binary(Table),
-                         timeout=ReqTimeout},
+    Req = #tslistkeysreq{table   = iolist_to_binary(Table),
+                         timeout = ReqTimeout},
     ReqId = riakc_pb_socket:mk_reqid(),
     gen_server:call(Pid, {req, Req, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
 
