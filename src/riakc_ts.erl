@@ -140,7 +140,7 @@ delete(Pid, Table, Key, Options)
 %%      @{Columns, Record@}@} where Columns has column names, and
 %%      Record is the record found as a list of values, further as a
 %%      single element in enclosing list. If no record is found, the
-%%      return value is @{ok, @{[], []@}@}. On error, the function
+%%      return value is @{error, notfound@}. On error, the function
 %%      returns @{error, @{ErrCode, ErrMsg@}@}.
 get(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
@@ -151,7 +151,7 @@ get(Pid, Table, Key, Options)
 
     case server_call(Pid, Message) of
         {error, {_NotFoundErrCode, <<"notfound">>}} ->
-            {ok, {[], []}};
+            {error, notfound};
         {error, OtherError} ->
             {error, OtherError};
         Response ->
