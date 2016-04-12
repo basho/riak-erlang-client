@@ -29,9 +29,7 @@
          put/3, put/4,
          get/4,
          delete/4,
-         stream_list_keys/3,
-         convert_to_binary/1,
-         convert_list_to_binary/1]).
+         stream_list_keys/3]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -71,7 +69,7 @@ query(Pid, Query, Interpolations, Cover) when is_binary(Cover) ->
 query_common(Pid, Query, Interpolations, Cover)
   when is_pid(Pid), is_list(Query) ->
     Message = riakc_ts_query_operator:serialize(
-                convert_to_binary(Query), Interpolations),
+                iolist_to_binary(Query), Interpolations),
     Response = server_call(Pid, Message#tsqueryreq{cover_context = Cover}),
     riakc_ts_query_operator:deserialize(Response).
 
@@ -82,9 +80,9 @@ query_common(Pid, Query, Interpolations, Cover)
                    QueryText::binary()) -> {ok, Entries::[term()]} | {error, term()} | {'EXIT', any()}.
 get_coverage(Pid, Table, QueryText) ->
     server_call(Pid,
-                #tscoveragereq{query = #tsinterpolation{base=convert_to_binary(QueryText)},
+                #tscoveragereq{query = #tsinterpolation{base=iolist_to_binary(QueryText)},
                                replace_cover=undefined,
-                               table=convert_to_binary(Table)}).
+                               table=iolist_to_binary(Table)}).
 
 
 -spec put(pid(), table_name(), [[ts_value()]]) ->
@@ -124,7 +122,7 @@ put(Pid, Table, ColumnNames, Measurements)
 delete(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsdelreq{table  =convert_to_binary(Table),
+    Message = #tsdelreq{table  =iolist_to_binary(Table),
                         key    =riak_pb_ts_codec:encode_cells_non_strict(Key),
                         vclock =proplists:get_value(vclock, Options),
                         timeout=proplists:get_value(timeout, Options)},
@@ -147,7 +145,7 @@ delete(Pid, Table, Key, Options)
 get(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsgetreq{table  =convert_to_binary(Table),
+    Message = #tsgetreq{table  =iolist_to_binary(Table),
                         key    =Key,
                         timeout=proplists:get_value(timeout, Options)},
 
@@ -175,7 +173,7 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
     ReqTimeout = proplists:get_value(timeout, Options),
-    Req = #tslistkeysreq{table=convert_to_binary(Table),
+    Req = #tslistkeysreq{table=iolist_to_binary(Table),
                          timeout=ReqTimeout},
     ReqId = riakc_pb_socket:mk_reqid(),
     gen_server:call(Pid, {req, Req, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
@@ -188,12 +186,3 @@ server_call(Pid, Message) ->
     gen_server:call(Pid,
                     {req, Message, riakc_pb_socket:default_timeout(timeseries)},
                     infinity).
--spec convert_to_binary(Value :: binary() | list()) -> binary().
-convert_to_binary(Value) when is_binary(Value) ->
-    Value;
-convert_to_binary(Value) when is_list(Value) ->
-    list_to_binary(Value).
-
--spec convert_list_to_binary(Value :: [binary()] | [list()]) -> binary().
-convert_list_to_binary(Values) ->
-    list:map(fun convert_to_binary/1, Values).

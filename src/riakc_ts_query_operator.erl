@@ -33,8 +33,8 @@
 
 serialize(QueryText, Interpolations) ->
     Content = #tsinterpolation{
-                 base = riakc_ts:convert_to_binary(QueryText),
-                 interpolations = serialize_interpolations(Interpolations)},
+                 base=iolist_to_binary(QueryText),
+                 interpolations=serialize_interpolations(Interpolations)},
     #tsqueryreq{query = Content}.
 
 serialize_interpolations(Interpolations) ->
@@ -48,11 +48,11 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
     serialize_interpolations(RemainingInterps, UpdatedInterps).
 
 deserialize({error, {Code, Message}}) when is_integer(Code), is_list(Message) ->
-    {error, {Code, riakc_ts:convert_to_binary(Message)}};
+    {error, {Code, iolist_to_binary(Message)}};
 deserialize({error, {Code, Message}}) when is_integer(Code), is_atom(Message) ->
-    {error, {Code, riakc_ts:convert_to_binary(atom_to_list(Message))}};
+    {error, {Code, iolist_to_binary(atom_to_list(Message))}};
 deserialize({error, Message}) ->
     {error, Message};
 
-deserialize(#tsqueryresp{columns = {ColumnNames, _ColumnTypes}, rows = Rows}) ->
+deserialize(#tsqueryresp{columns={ColumnNames, _ColumnTypes}, rows=Rows}) ->
     {ColumnNames, Rows}.
