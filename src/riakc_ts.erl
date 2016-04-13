@@ -74,13 +74,13 @@ query_common(Pid, Query, Interpolations, Cover)
     riakc_ts_query_operator:deserialize(Response).
 
 
--spec get_coverage(pid(), table_name(), Query::string()) ->
-                          {ok, Entries::[term()]} | {error, term()}.
 %% @doc Generate a parallel coverage plan for the specified query
-get_coverage(Pid, Table, Query)
-  when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Query) ->
+-spec get_coverage(Pid::pid(),
+                   Table::binary(),
+                   QueryText::binary()) -> {ok, Entries::[term()]} | {error, term()} | {'EXIT', any()}.
+get_coverage(Pid, Table, QueryText) ->
     server_call(Pid,
-                #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
+                #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(QueryText)},
                                replace_cover = undefined,
                                table = iolist_to_binary(Table)}).
 
@@ -150,14 +150,10 @@ get(Pid, Table, Key, Options)
                         timeout = proplists:get_value(timeout, Options)},
 
     case server_call(Pid, Message) of
-        {error, {_NotFoundErrCode, <<"notfound">>}} ->
-            {ok, {[], []}};
         {error, OtherError} ->
             {error, OtherError};
-        Response ->
-            Columns = Response#tsgetresp.columns,
-            Rows = Response#tsgetresp.rows,
-            {ok, {Columns, Rows}}
+        {tsgetresp, {ColumnNames, _ColumnTypes, Rows}} ->
+            {ok, {ColumnNames, Rows}}
     end.
 
 
@@ -173,7 +169,7 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
     ReqTimeout = proplists:get_value(timeout, Options),
-    Req = #tslistkeysreq{table = iolist_to_binary(Table),
+    Req = #tslistkeysreq{table   = iolist_to_binary(Table),
                          timeout = ReqTimeout},
     ReqId = riakc_pb_socket:mk_reqid(),
     gen_server:call(Pid, {req, Req, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).

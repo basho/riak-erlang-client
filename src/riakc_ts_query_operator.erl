@@ -31,10 +31,9 @@
 -export([serialize/2,
          deserialize/1]).
 
-
 serialize(QueryText, Interpolations) ->
     Content = #tsinterpolation{
-                 base = QueryText,
+                 base           = iolist_to_binary(QueryText),
                  interpolations = serialize_interpolations(Interpolations)},
     #tsqueryreq{query = Content}.
 
@@ -48,7 +47,16 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
     UpdatedInterps = [#rpbpair{key=Key, value=Value} | SerializedInterps],
     serialize_interpolations(RemainingInterps, UpdatedInterps).
 
-deserialize({error, Message}) -> {error, Message};
+deserialize({error, {Code, Message}}) when is_integer(Code), is_list(Message) ->
+    {error, {Code, iolist_to_binary(Message)}};
+deserialize({error, {Code, Message}}) when is_integer(Code), is_atom(Message) ->
+    {error, {Code, iolist_to_binary(atom_to_list(Message))}};
+deserialize({error, Message}) ->
+    {error, Message};
 
-deserialize(#tsqueryresp{columns = {ColumnNames, _ColumnTypes}, rows = Rows}) ->
+deserialize(tsqueryresp) ->
+    {[], []};
+deserialize({tsqueryresp, {_, _, []}}) ->
+    {[], []};
+deserialize({tsqueryresp, {ColumnNames, _ColumnTypes, Rows}}) ->
     {ColumnNames, Rows}.
