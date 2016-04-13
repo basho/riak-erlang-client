@@ -134,8 +134,13 @@
 %% can be overridden by setting the application environment variable
 %% of the same name on the `riakc' application, for example:
 %% `application:set_env(riakc, ping_timeout, 5000).'
--record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
-                  tref :: reference() | undefined }).
+-record(request, {ref :: reference(),
+                  msg :: rpb_req(),
+                  from, ctx :: ctx(),
+                  timeout :: timeout(),
+                  tref :: reference() | undefined,
+                  opts :: proplists:proplist()
+                 }).
 
 -type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
 -type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
@@ -1972,29 +1977,27 @@ process_response(#request{msg = #tslistkeysreq{}} = Request,
 process_response(#request{msg = #tsqueryreq{}},
                  tsqueryresp, State) ->
     {reply, tsqueryresp, State};
-
 process_response(#request{msg = #tsqueryreq{}},
                  Result = {tsqueryresp, _},
                  State) ->
     {reply, Result, State};
-
+process_response(#request{msg = #tsqueryreq{}},
+                 Result = #tsqueryresp{},
+                 State) ->
+    {reply, Result, State};
 process_response(#request{msg = #tscoveragereq{}},
                  #tscoverageresp{entries = E}, State) ->
     {reply, {ok, E}, State};
-
 process_response(#request{msg = #rpbcoveragereq{}},
                  #rpbcoverageresp{entries = E}, State) ->
     {reply, {ok, E}, State};
-
 process_response(#request{msg = #tsgetreq{}},
                  tsgetresp, State) ->
     {reply, tsgetresp, State};
-
 process_response(#request{msg = #tsgetreq{}},
                  Result = {tsgetresp, _},
                  State) ->
     {reply, Result, State};
-
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
@@ -2090,14 +2093,22 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
 
 %% @private
 %% Make a new request that can be sent or queued
+new_request({Msg, {msgopts, Options}}, From, Timeout) ->
+    Ref = make_ref(),
+    #request{ref = Ref,
+             msg = Msg,
+             from = From,
+             timeout = Timeout,
+             tref = create_req_timer(Timeout, Ref),
+             opts = Options};
 new_request(Msg, From, Timeout) ->
     Ref = make_ref(),
     #request{ref = Ref, msg = Msg, from = From, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
+             tref = create_req_timer(Timeout, Ref), opts = []}.
 new_request(Msg, From, Timeout, Context) ->
     Ref = make_ref(),
     #request{ref =Ref, msg = Msg, from = From, ctx = Context, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
+             tref = create_req_timer(Timeout, Ref), opts = []}.
 
 %% @private
 %% Create a request timer if desired, otherwise return undefined.
@@ -2266,13 +2277,13 @@ send_request(Request0, State) when State#state.active =:= undefined ->
     end.
 
 %% @private
-encode(Msg=#tsputreq{}) ->
+encode(Msg=#tsputreq{}, true) ->
     riak_ttb_codec:encode(Msg);
-encode(Msg=#tsgetreq{}) ->
+encode(Msg=#tsgetreq{}, true) ->
     riak_ttb_codec:encode(Msg);
-encode(Msg=#tsqueryreq{}) ->
+encode(Msg=#tsqueryreq{}, true) ->
     riak_ttb_codec:encode(Msg);
-encode(Msg) ->
+encode(Msg, _UseTTB) ->
     riak_pb_codec:encode(Msg).
 
 %% Already encoded (for tunneled messages), but must provide Message Id
@@ -2280,8 +2291,9 @@ encode(Msg) ->
 encode_request_message(#request{msg={tunneled,MsgId,Pkt}}=Req) ->
     {Req#request{msg={tunneled,MsgId}},[MsgId|Pkt]};
 %% Unencoded Request (the normal PB client path)
-encode_request_message(#request{msg=Msg}=Req) ->
-    {Req, encode(Msg)}.
+encode_request_message(#request{msg=Msg,opts=Opts}=Req) ->
+    UseTTB = proplists:get_value(use_ttb, Opts, true),
+    {Req, encode(Msg, UseTTB)}.
 
 %% If the socket was closed, see if we can enqueue the request and
 %% trigger a reconnect. Otherwise, return an error to the requestor.

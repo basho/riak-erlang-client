@@ -24,7 +24,7 @@
 
 -module(riakc_ts).
 
--export([query/2, query/3, query/4,
+-export([query/2, query/3, query/4, query/5,
          get_coverage/3,
          put/3, put/4,
          get/4,
@@ -44,33 +44,48 @@
 
 -spec query(pid(), Query::string()|binary()) ->
                    {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.
-%% @equiv query/4.
-query(Pid, QueryText) ->
-    query(Pid, QueryText, [], undefined).
+%% @equiv query/5.
+query(Pid, Query) ->
+    query(Pid, Query, [], undefined, []).
 
 -spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
                    {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
-%% @equiv query/4.
-query(Pid, QueryText, Interpolations) ->
-    query(Pid, QueryText, Interpolations, undefined).
+%% @equiv query/5.
+query(Pid, Query, Interpolations) ->
+    query(Pid, Query, Interpolations, undefined, []).
 
--spec query(pid(), Query::string(), Interpolations::[{binary(), binary()}], Cover::term()) ->
-                   {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+-spec query(Pid::pid(),
+            Query::string(),
+            Interpolations::[{binary(), binary()}],
+            Cover::term()) ->
+            {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+%% @equiv query/5.
+query(Pid, Query, Interpolations, Cover) ->
+    query(Pid, Query, Interpolations, Cover, []).
+
+-spec query(Pid::pid(),
+            Query::string(),
+            Interpolations::[{binary(), binary()}],
+            Cover::term(),
+            Options::proplists:proplist()) ->
+            {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
 %% @doc Execute a Query with client.  The result returned
 %%      is a tuple containing a list of columns as binaries in the
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
-query(Pid, Query, Interpolations, undefined) ->
-	query_common(Pid, Query, Interpolations, undefined);
-query(Pid, Query, Interpolations, Cover) when is_binary(Cover) ->
-	query_common(Pid, Query, Interpolations, Cover).
+query(Pid, Query, Interpolations, undefined, Options) ->
+	query_common(Pid, Query, Interpolations, undefined, Options);
+query(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
+	query_common(Pid, Query, Interpolations, Cover, Options).
 
-query_common(Pid, Query, Interpolations, Cover)
+query_common(Pid, Query, Interpolations, Cover, Options)
   when is_pid(Pid), is_list(Query) ->
-    Message = riakc_ts_query_operator:serialize(
+    Msg0 = riakc_ts_query_operator:serialize(
                 iolist_to_binary(Query), Interpolations),
-    Response = server_call(Pid, Message#tsqueryreq{cover_context = Cover}),
+    Msg1 = Msg0#tsqueryreq{cover_context = Cover},
+    Msg = {Msg1, {msgopts, Options}},
+    Response = server_call(Pid, Msg),
     riakc_ts_query_operator:deserialize(Response).
 
 
@@ -148,8 +163,8 @@ get(Pid, Table, Key, Options)
     Message = #tsgetreq{table   = iolist_to_binary(Table),
                         key     = Key,
                         timeout = proplists:get_value(timeout, Options)},
-
-    case server_call(Pid, Message) of
+    Msg = {Message, {msgopts, Options}},
+    case server_call(Pid, Msg) of
         {error, OtherError} ->
             {error, OtherError};
         {tsgetresp, {ColumnNames, _ColumnTypes, Rows}} ->
