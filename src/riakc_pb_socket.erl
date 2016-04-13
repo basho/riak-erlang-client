@@ -1998,6 +1998,10 @@ process_response(#request{msg = #tsgetreq{}},
                  Result = {tsgetresp, _},
                  State) ->
     {reply, Result, State};
+process_response(#request{msg = #tsgetreq{}},
+                 Result = #tsgetresp{},
+                 State) ->
+    {reply, Result, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.

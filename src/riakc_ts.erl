@@ -168,6 +168,10 @@ get(Pid, Table, Key, Options)
         {error, OtherError} ->
             {error, OtherError};
         {tsgetresp, {ColumnNames, _ColumnTypes, Rows}} ->
+            {ok, {ColumnNames, Rows}};
+		#tsgetresp{columns = C, rows = R} ->
+            ColumnNames = [CName || #tscolumndescription{name = CName} <- C],
+            Rows = riak_pb_ts_codec:decode_rows(R),
             {ok, {ColumnNames, Rows}}
     end.
 
