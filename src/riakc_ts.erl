@@ -165,20 +165,12 @@ delete(Pid, Table, Key, Options)
 get(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsgetreq{table   = iolist_to_binary(Table),
-                        key     = Key,
-                        timeout = proplists:get_value(timeout, Options)},
-    Msg = {Message, {msgopts, Options}},
-    case server_call(Pid, Msg) of
-        {error, OtherError} ->
-            {error, OtherError};
-        {tsgetresp, {ColumnNames, _ColumnTypes, Rows}} ->
-            {ok, {ColumnNames, Rows}};
-		#tsgetresp{columns = C, rows = R} ->
-            ColumnNames = [CName || #tscolumndescription{name = CName} <- C],
-            Rows = riak_pb_ts_codec:decode_rows(R),
-            {ok, {ColumnNames, Rows}}
-    end.
+    UseTTB = proplists:get_value(use_ttb, Options, true),
+    Msg0 = riakc_ts_get_operator:serialize(Table, Key, UseTTB),
+    Msg1 = Msg0#tsgetreq{timeout = proplists:get_value(timeout, Options)},
+    Msg = {Msg1, {msgopts, Options}},
+    Response = server_call(Pid, Msg),
+    riakc_ts_get_operator:deserialize(Response).
 
 
 -spec stream_list_keys(pid(), table_name(), proplists:proplist()) ->
