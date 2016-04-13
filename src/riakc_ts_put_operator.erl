@@ -32,11 +32,17 @@
          deserialize/1]).
 
 
-serialize(TableName, ColumnNames, Measurements) ->
-    ColumnDescs = riak_pb_ts_codec:encode_columnnames(ColumnNames),
+%% As of 2015-11-05, columns parameter is ignored, Riak TS
+%% expects the full set of fields in each element of Data.
+serialize(TableName, Measurements, true) ->
     #tsputreq{table   = iolist_to_binary(TableName),
-              columns = ColumnDescs,
-              rows    = Measurements}.
+              columns = [],
+              rows    = Measurements};
+serialize(TableName, Measurements, false) ->
+    SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
+    #tsputreq{table   = TableName,
+              columns = [],
+              rows    = SerializedRows}.
 
 deserialize({error, {Code, Message}}) when is_integer(Code), is_list(Message) ->
     {error, {Code, iolist_to_binary(Message)}};

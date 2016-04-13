@@ -1953,6 +1953,9 @@ process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
 process_response(#request{msg = #tsputreq{}},
                  #tsputresp{}, State) ->
     {reply, ok, State};
+process_response(#request{msg = #tsputreq{}},
+                 tsputresp, State) ->
+    {reply, ok, State};
 
 process_response(#request{msg = #tsdelreq{}},
                  tsdelresp, State) ->

@@ -100,14 +100,17 @@ get_coverage(Pid, Table, QueryText) ->
                                table = iolist_to_binary(Table)}).
 
 
--spec put(pid(), table_name(), [[ts_value()]]) ->
-                 ok | {error, Reason::term()}.
+-spec put(pid(),
+          table_name(),
+          [[ts_value()]]) -> ok | {error, Reason::term()}.
 %% @equiv put/4.
 put(Pid, Table, Measurements) ->
-    put(Pid, Table, [], Measurements).
+    put(Pid, Table, Measurements, []).
 
--spec put(pid(), table_name(), ColumnNames::[ts_columnname()], Data::[[ts_value()]]) ->
-                 ok | {error, Reason::term()}.
+-spec put(pid(),
+          table_name(),
+          [[ts_value()]],
+          Options::proplists:proplist()) -> ok | {error, Reason::term()}.
 %% @doc Make data records from Data and insert them, individually,
 %%      into a time-series Table, using client Pid. Each record is a
 %%      list of values of appropriate types for the complete set of
@@ -117,11 +120,13 @@ put(Pid, Table, Measurements) ->
 %%
 %%      As of 2015-11-05, ColumnNames parameter is ignored, the function
 %%      expects the full set of fields in each element of Data.
-put(Pid, Table, ColumnNames, Measurements)
+put(Pid, Table, Measurements, Options)
   when is_pid(Pid) andalso (is_binary(Table) orelse is_list(Table)) andalso
-       is_list(ColumnNames) andalso is_list(Measurements) ->
-    Message = riakc_ts_put_operator:serialize(Table, ColumnNames, Measurements),
-    Response = server_call(Pid, Message),
+       is_list(Measurements) ->
+    UseTTB = proplists:get_value(use_ttb, Options, true),
+    Message = riakc_ts_put_operator:serialize(Table, Measurements, UseTTB),
+    Msg = {Message, {msgopts, Options}},
+    Response = server_call(Pid, Msg),
     riakc_ts_put_operator:deserialize(Response).
 
 
