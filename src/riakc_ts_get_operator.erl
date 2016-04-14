@@ -1,8 +1,8 @@
 %% -------------------------------------------------------------------
 %%
-%% riakc_ts_put_operator.erl: helper functions for put requests to Riak TS
+%% riakc_ts_get_operator.erl: helper functions for get requests to Riak TS
 %%
-%% Copyright (c) 2015 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2016 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -22,7 +22,7 @@
 
 %% @doc Helper functions for put requests to Riak TS
 
--module(riakc_ts_put_operator).
+-module(riakc_ts_get_operator).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_ttb.hrl").
@@ -32,17 +32,13 @@
          deserialize/1]).
 
 
-%% As of 2015-11-05, columns parameter is ignored, Riak TS
-%% expects the full set of fields in each element of Data.
-serialize(TableName, Measurements, true) ->
-    #tsputreq{table   = iolist_to_binary(TableName),
-              columns = [],
-              rows    = Measurements};
-serialize(TableName, Measurements, false) ->
-    SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
-    #tsputreq{table   = TableName,
-              columns = [],
-              rows    = SerializedRows}.
+serialize(Table, Key, true) ->
+    #tsgetreq{table = iolist_to_binary(Table),
+              key   = Key};
+serialize(Table, Key, false) ->
+    SerializedKey = riak_pb_ts_codec:encode_cells_non_strict(Key),
+    #tsgetreq{table = iolist_to_binary(Table),
+              key   = SerializedKey}.
 
 deserialize({error, {Code, Message}}) when is_integer(Code), is_list(Message) ->
     {error, {Code, iolist_to_binary(Message)}};
@@ -50,5 +46,9 @@ deserialize({error, {Code, Message}}) when is_integer(Code), is_atom(Message) ->
     {error, {Code, iolist_to_binary(atom_to_list(Message))}};
 deserialize({error, Message}) ->
     {error, Message};
-deserialize(Response) ->
-    Response.
+deserialize({tsgetresp, {ColumnNames, _ColumnTypes, Rows}}) ->
+    {ok, {ColumnNames, Rows}};
+deserialize(#tsgetresp{columns = C, rows = R}) ->
+    ColumnNames = [CName || #tscolumndescription{name = CName} <- C],
+    Rows = riak_pb_ts_codec:decode_rows(R),
+    {ok, {ColumnNames, Rows}}.

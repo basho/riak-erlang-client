@@ -24,7 +24,7 @@
 
 -module(riakc_ts).
 
--export([query/2, query/3, query/4,
+-export([query/2, query/3, query/4, query/5,
          get_coverage/3,
          put/3, put/4,
          get/4,
@@ -44,33 +44,48 @@
 
 -spec query(pid(), Query::string()|binary()) ->
                    {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.
-%% @equiv query/4.
-query(Pid, QueryText) ->
-    query(Pid, QueryText, [], undefined).
+%% @equiv query/5.
+query(Pid, Query) ->
+    query(Pid, Query, [], undefined, []).
 
 -spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
                    {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
-%% @equiv query/4.
-query(Pid, QueryText, Interpolations) ->
-    query(Pid, QueryText, Interpolations, undefined).
+%% @equiv query/5.
+query(Pid, Query, Interpolations) ->
+    query(Pid, Query, Interpolations, undefined, []).
 
--spec query(pid(), Query::string(), Interpolations::[{binary(), binary()}], Cover::term()) ->
-                   {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+-spec query(Pid::pid(),
+            Query::string(),
+            Interpolations::[{binary(), binary()}],
+            Cover::term()) ->
+            {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+%% @equiv query/5.
+query(Pid, Query, Interpolations, Cover) ->
+    query(Pid, Query, Interpolations, Cover, []).
+
+-spec query(Pid::pid(),
+            Query::string(),
+            Interpolations::[{binary(), binary()}],
+            Cover::term(),
+            Options::proplists:proplist()) ->
+            {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
 %% @doc Execute a Query with client.  The result returned
 %%      is a tuple containing a list of columns as binaries in the
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
-query(Pid, Query, Interpolations, undefined) ->
-	query_common(Pid, Query, Interpolations, undefined);
-query(Pid, Query, Interpolations, Cover) when is_binary(Cover) ->
-	query_common(Pid, Query, Interpolations, Cover).
+query(Pid, Query, Interpolations, undefined, Options) ->
+	query_common(Pid, Query, Interpolations, undefined, Options);
+query(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
+	query_common(Pid, Query, Interpolations, Cover, Options).
 
-query_common(Pid, Query, Interpolations, Cover)
+query_common(Pid, Query, Interpolations, Cover, Options)
   when is_pid(Pid), is_list(Query) ->
-    Message = riakc_ts_query_operator:serialize(
+    Msg0 = riakc_ts_query_operator:serialize(
                 iolist_to_binary(Query), Interpolations),
-    Response = server_call(Pid, Message#tsqueryreq{cover_context = Cover}),
+    Msg1 = Msg0#tsqueryreq{cover_context = Cover},
+    Msg = {Msg1, {msgopts, Options}},
+    Response = server_call(Pid, Msg),
     riakc_ts_query_operator:deserialize(Response).
 
 
@@ -85,14 +100,17 @@ get_coverage(Pid, Table, QueryText) ->
                                table = iolist_to_binary(Table)}).
 
 
--spec put(pid(), table_name(), [[ts_value()]]) ->
-                 ok | {error, Reason::term()}.
+-spec put(pid(),
+          table_name(),
+          [[ts_value()]]) -> ok | {error, Reason::term()}.
 %% @equiv put/4.
 put(Pid, Table, Measurements) ->
-    put(Pid, Table, [], Measurements).
+    put(Pid, Table, Measurements, []).
 
--spec put(pid(), table_name(), ColumnNames::[ts_columnname()], Data::[[ts_value()]]) ->
-                 ok | {error, Reason::term()}.
+-spec put(pid(),
+          table_name(),
+          [[ts_value()]],
+          Options::proplists:proplist()) -> ok | {error, Reason::term()}.
 %% @doc Make data records from Data and insert them, individually,
 %%      into a time-series Table, using client Pid. Each record is a
 %%      list of values of appropriate types for the complete set of
@@ -102,11 +120,13 @@ put(Pid, Table, Measurements) ->
 %%
 %%      As of 2015-11-05, ColumnNames parameter is ignored, the function
 %%      expects the full set of fields in each element of Data.
-put(Pid, Table, ColumnNames, Measurements)
+put(Pid, Table, Measurements, Options)
   when is_pid(Pid) andalso (is_binary(Table) orelse is_list(Table)) andalso
-       is_list(ColumnNames) andalso is_list(Measurements) ->
-    Message = riakc_ts_put_operator:serialize(Table, ColumnNames, Measurements),
-    Response = server_call(Pid, Message),
+       is_list(Measurements) ->
+    UseTTB = proplists:get_value(use_ttb, Options, true),
+    Message = riakc_ts_put_operator:serialize(Table, Measurements, UseTTB),
+    Msg = {Message, {msgopts, Options}},
+    Response = server_call(Pid, Msg),
     riakc_ts_put_operator:deserialize(Response).
 
 
@@ -145,16 +165,12 @@ delete(Pid, Table, Key, Options)
 get(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsgetreq{table   = iolist_to_binary(Table),
-                        key     = Key,
-                        timeout = proplists:get_value(timeout, Options)},
-
-    case server_call(Pid, Message) of
-        {error, OtherError} ->
-            {error, OtherError};
-        {tsgetresp, {ColumnNames, _ColumnTypes, Rows}} ->
-            {ok, {ColumnNames, Rows}}
-    end.
+    UseTTB = proplists:get_value(use_ttb, Options, true),
+    Msg0 = riakc_ts_get_operator:serialize(Table, Key, UseTTB),
+    Msg1 = Msg0#tsgetreq{timeout = proplists:get_value(timeout, Options)},
+    Msg = {Msg1, {msgopts, Options}},
+    Response = server_call(Pid, Msg),
+    riakc_ts_get_operator:deserialize(Response).
 
 
 -spec stream_list_keys(pid(), table_name(), proplists:proplist()) ->
