@@ -48,6 +48,8 @@ deserialize({error, Message}) ->
     {error, Message};
 deserialize(tsgetresp) ->
     {ok, {[], []}};
+deserialize({tsgetresp, {_, _, []}}) ->
+    {[], []};
 deserialize({tsgetresp, {ColumnNames, _ColumnTypes, Rows}}) ->
     {ok, {ColumnNames, Rows}};
 deserialize(#tsgetresp{columns = C, rows = R}) ->
