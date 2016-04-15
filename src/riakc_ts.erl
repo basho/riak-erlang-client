@@ -43,13 +43,13 @@
 
 
 -spec query(pid(), Query::string()|binary()) ->
-                   {ColumnNames::[ts_columnname()], Rows::[tuple()]} | {error, Reason::term()}.
+            {ok, {ColumnNames::[ts_columnname()], Rows::[tuple()]}} | {error, Reason::term()}.
 %% @equiv query/5.
 query(Pid, Query) ->
     query(Pid, Query, [], undefined, []).
 
 -spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
-                   {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+            {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
 %% @equiv query/5.
 query(Pid, Query, Interpolations) ->
     query(Pid, Query, Interpolations, undefined, []).
@@ -58,7 +58,7 @@ query(Pid, Query, Interpolations) ->
             Query::string(),
             Interpolations::[{binary(), binary()}],
             Cover::term()) ->
-            {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+            {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
 %% @equiv query/5.
 query(Pid, Query, Interpolations, Cover) ->
     query(Pid, Query, Interpolations, Cover, []).
@@ -68,7 +68,7 @@ query(Pid, Query, Interpolations, Cover) ->
             Interpolations::[{binary(), binary()}],
             Cover::term(),
             Options::proplists:proplist()) ->
-            {ColumnNames::[binary()], Rows::[tuple()]} | {error, term()}.
+            {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
 %% @doc Execute a Query with client.  The result returned
 %%      is a tuple containing a list of columns as binaries in the
 %%      first element, and a list of records, each represented as a

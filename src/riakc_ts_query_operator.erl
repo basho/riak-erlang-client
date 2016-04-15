@@ -54,12 +54,10 @@ deserialize({error, {Code, Message}}) when is_integer(Code), is_atom(Message) ->
 deserialize({error, Message}) ->
     {error, Message};
 deserialize(tsqueryresp) ->
-    {[], []};
-deserialize({tsqueryresp, {_, _, []}}) ->
-    {[], []};
+    {ok, {[], []}};
 deserialize({tsqueryresp, {ColumnNames, _ColumnTypes, Rows}}) ->
-    {ColumnNames, Rows};
+    {ok, {ColumnNames, Rows}};
 deserialize(#tsqueryresp{columns = C, rows = R}) ->
     ColumnNames = [ColName || #tscolumndescription{name = ColName} <- C],
     Rows = riak_pb_ts_codec:decode_rows(R),
-    {ColumnNames, Rows}.
+    {ok, {ColumnNames, Rows}}.
