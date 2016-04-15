@@ -90,14 +90,19 @@ query_common(Pid, Query, Interpolations, Cover, Options)
 
 
 %% @doc Generate a parallel coverage plan for the specified query
--spec get_coverage(Pid::pid(),
-                   Table::binary(),
-                   QueryText::binary()) -> {ok, Entries::[term()]} | {error, term()} | {'EXIT', any()}.
-get_coverage(Pid, Table, QueryText) ->
-    server_call(Pid,
-                #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(QueryText)},
-                               replace_cover = undefined,
-                               table = iolist_to_binary(Table)}).
+-spec get_coverage(pid(), table_name(), QueryText::iolist()) ->
+                          {ok, Entries::[term()]} | {error, term()}.
+get_coverage(Pid, Table, Query) ->
+    Message =
+        #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
+                       replace_cover = undefined,
+                       table = iolist_to_binary(Table)},
+    case server_call(Pid, Message) of
+        {ok, Entries} ->
+            {ok, riak_pb_ts_codec:decode_cover_list(Entries)};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 
 -spec put(pid(),
