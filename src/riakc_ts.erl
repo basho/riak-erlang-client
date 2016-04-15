@@ -75,9 +75,9 @@ query(Pid, Query, Interpolations, Cover) ->
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
 query(Pid, Query, Interpolations, undefined, Options) ->
-	query_common(Pid, Query, Interpolations, undefined, Options);
+        query_common(Pid, Query, Interpolations, undefined, Options);
 query(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
-	query_common(Pid, Query, Interpolations, Cover, Options).
+        query_common(Pid, Query, Interpolations, Cover, Options).
 
 query_common(Pid, Query, Interpolations, Cover, Options)
   when is_pid(Pid), is_list(Query) ->
