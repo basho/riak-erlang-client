@@ -46,6 +46,8 @@ deserialize({error, {Code, Message}}) when is_integer(Code), is_atom(Message) ->
     {error, {Code, iolist_to_binary(atom_to_list(Message))}};
 deserialize({error, Message}) ->
     {error, Message};
+deserialize(tsgetresp) ->
+    {ok, {[], []}};
 deserialize({tsgetresp, {ColumnNames, _ColumnTypes, Rows}}) ->
     {ok, {ColumnNames, Rows}};
 deserialize(#tsgetresp{columns = C, rows = R}) ->
