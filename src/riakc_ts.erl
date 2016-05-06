@@ -29,7 +29,8 @@
          put/3, put/4,
          get/4,
          delete/4,
-         stream_list_keys/3]).
+         stream_list_keys/3,
+         stream_query/4]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -81,13 +82,22 @@ query(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
 
 query_common(Pid, Query, Interpolations, Cover, Options)
   when is_pid(Pid), is_list(Query) ->
-    Msg0 = riakc_ts_query_operator:serialize(
-                iolist_to_binary(Query), Interpolations),
+    Stream = false,
+    Msg0 = riakc_ts_query_operator:serialize(Query, Interpolations, Stream),
     Msg1 = Msg0#tsqueryreq{cover_context = Cover},
     Msg = {Msg1, {msgopts, Options}},
     Response = server_call(Pid, Msg),
     riakc_ts_query_operator:deserialize(Response).
 
+%%
+stream_query(Pid, Query, Interpolations, _Options) when is_pid(Pid),
+                                                       is_list(Query) ->
+    Stream = false,
+    Msg1 = riakc_ts_query_operator:serialize(Query, Interpolations, Stream),
+    % Msg2 = {Msg1, {msgopts, Options}},
+    ReqId = riakc_pb_socket:mk_reqid(),
+    gen_server:call(
+        Pid, {req, Msg1, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
 
 %% @doc Generate a parallel coverage plan for the specified query
 -spec get_coverage(pid(), table_name(), QueryText::iolist()) ->
