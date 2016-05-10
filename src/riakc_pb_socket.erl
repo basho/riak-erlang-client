@@ -1980,12 +1980,14 @@ process_response(#request{msg = #tslistkeysreq{}} = Request,
 process_response(#request{msg = #tsqueryreq{ }} = Request,
                  #tsqueryresp{done = Done, rows = Rows},
                  #state{ active = Req } = State) when Req /= undefined ->
-    case Rows of
-        [_|_] ->
-            send_caller({rows, riak_pb_ts_codec:decode_rows(Rows)}, Request);
-        _ ->
-            ok
-    end,
+    %% match on an underscore to make dialyzer happy...
+    _ =
+        case Rows of
+            [_|_] ->
+                send_caller({rows, riak_pb_ts_codec:decode_rows(Rows)}, Request);
+            _ ->
+                ok
+        end,
     case Done of
         true ->
             {reply, done, State};
