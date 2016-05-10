@@ -1977,6 +1977,22 @@ process_response(#request{msg = #tslistkeysreq{}} = Request,
             {pending, State}
     end;
 
+process_response(#request{msg = #tsqueryreq{ }} = Request,
+                 #tsqueryresp{done = Done, rows = Rows},
+                 #state{ active = Req } = State) when Req /= undefined ->
+    case Rows of
+        [_|_] ->
+            send_caller({rows, riak_pb_ts_codec:decode_rows(Rows)}, Request);
+        _ ->
+            ok
+    end,
+    case Done of
+        true ->
+            {reply, done, State};
+        _ ->
+            {pending, State}
+    end;
+
 process_response(#request{msg = #tsqueryreq{}},
                  tsqueryresp, State) ->
     {reply, tsqueryresp, State};
@@ -2047,6 +2063,8 @@ after_send(#request{msg = #rpblistbucketsreq{}, ctx = {ReqId, _Client}},
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #tslistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #tsqueryreq{ stream = true }, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};

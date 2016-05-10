@@ -91,8 +91,8 @@ query_common(Pid, Query, Interpolations, Cover, Options)
 
 %%
 stream_query(Pid, Query, Interpolations, _Options) when is_pid(Pid),
-                                                       is_list(Query) ->
-    Stream = false,
+                                                        is_list(Query) ->
+    Stream = true,
     Msg1 = riakc_ts_query_operator:serialize(Query, Interpolations, Stream),
     % Msg2 = {Msg1, {msgopts, Options}},
     ReqId = riakc_pb_socket:mk_reqid(),
