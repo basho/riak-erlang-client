@@ -1978,13 +1978,17 @@ process_response(#request{msg = #tslistkeysreq{}} = Request,
     end;
 
 process_response(#request{msg = #tsqueryreq{ }} = Request,
-                 #tsqueryresp{done = Done, rows = Rows},
+                 {tsresponse, RespProps},
                  #state{ active = Req } = State) when Req /= undefined ->
+    ColNames = tsresponse_column_names(RespProps),
+    Done = tsresponse_done(RespProps),
+    Rows = tsresponse_rows(RespProps),
+    SubQueryId = tsresponse_sub_query_id(RespProps),
     %% match on an underscore to make dialyzer happy...
     _ =
         case Rows of
             [_|_] ->
-                send_caller({rows, riak_pb_ts_codec:decode_rows(Rows)}, Request);
+                send_caller({rows, SubQueryId, ColNames, Rows}, Request);
             _ ->
                 ok
         end,
@@ -2529,6 +2533,19 @@ set_index_create_req_timeout(Timeout, Req) when Timeout =:= infinity ->
 set_index_create_req_timeout(Timeout, _Req) when not is_integer(Timeout) ->
     erlang:error(badarg).
 
+
+
+tsresponse_column_names(RespProps) ->
+    proplists:get_value(column_names, RespProps).
+
+tsresponse_done(RespProps) ->
+    proplists:get_value(done, RespProps).
+
+tsresponse_rows(RespProps) ->
+    proplists:get_value(rows, RespProps).
+
+tsresponse_sub_query_id(RespProps) ->
+    proplists:get_value(sub_query_id, RespProps).
 
 %% ====================================================================
 %% unit tests
