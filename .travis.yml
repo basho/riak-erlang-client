@@ -1,6 +1,4 @@
 language: erlang
-before_script:
-  - kerl list installations
 notifications:
   webhooks: http://basho-engbot.herokuapp.com/travis?key=8f07584549e458d4c83728f3397ecbd4368e60a8
   email: eng@basho.com
