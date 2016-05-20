@@ -1983,12 +1983,12 @@ process_response(#request{msg = #tsqueryreq{ }} = Request,
     ColNames = tsresponse_column_names(RespProps),
     Done = tsresponse_done(RespProps),
     Rows = tsresponse_rows(RespProps),
-    SubQueryId = tsresponse_sub_query_id(RespProps),
+    Continuation = tsresponse_cotinuation(RespProps),
     %% match on an underscore to make dialyzer happy...
     _ =
         case Rows of
             [_|_] ->
-                send_caller({rows, SubQueryId, ColNames, Rows}, Request);
+                send_caller({rows, Continuation, ColNames, Rows}, Request);
             _ ->
                 ok
         end,
@@ -2544,8 +2544,8 @@ tsresponse_done(RespProps) ->
 tsresponse_rows(RespProps) ->
     proplists:get_value(rows, RespProps).
 
-tsresponse_sub_query_id(RespProps) ->
-    proplists:get_value(sub_query_id, RespProps).
+tsresponse_cotinuation(RespProps) ->
+    proplists:get_value(cotinuation, RespProps).
 
 %% ====================================================================
 %% unit tests

@@ -20,6 +20,7 @@
 %%
 %% -------------------------------------------------------------------
 
+%% @hidden
 %% @doc Helper functions for put requests to Riak TS
 
 -module(riakc_ts_get_operator).

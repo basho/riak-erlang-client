@@ -42,16 +42,23 @@
 -type ts_value() :: riak_pb_ts_codec:ldbvalue().
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
+%% @doc Message types sent to the calling process of stream_query/4
+-type stream_query_chunk() ::
+    {rows, Continuation::binary(), ColumnNames::[binary()], Rows::[tuple()]}.
+-type stream_result() ::
+    {ReqId::non_neg_integer(), stream_query_chunk() | done}.
+
+-export_type([stream_result/0, stream_query_chunk/0]).
 
 -spec query(pid(), Query::string()|binary()) ->
             {ok, {ColumnNames::[ts_columnname()], Rows::[tuple()]}} | {error, Reason::term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query) ->
     query(Pid, Query, [], undefined, []).
 
 -spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query, Interpolations) ->
     query(Pid, Query, Interpolations, undefined, []).
 
@@ -60,7 +67,7 @@ query(Pid, Query, Interpolations) ->
             Interpolations::[{binary(), binary()}],
             Cover::term()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query, Interpolations, Cover) ->
     query(Pid, Query, Interpolations, Cover, []).
 
@@ -70,7 +77,7 @@ query(Pid, Query, Interpolations, Cover) ->
             Cover::term(),
             Options::proplists:proplist()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @doc Execute a Query with client.  The result returned
+%% @doc Execute a Query.  The result returned
 %%      is a tuple containing a list of columns as binaries in the
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
@@ -96,7 +103,10 @@ stream_query(Pid, Query) when is_pid(Pid),
                               is_list(Query) ->
     stream_query(Pid, Query, [], []).
 
-%%
+%% @doc
+%% Execute a streamed query. The immediate result
+%% is a reference to the request ID. This will be used in messages
+%% sent asynchronously from the socket process.
 -spec stream_query(ClientPid::pid(),
                    QueryString::string(),
                    Interpolations::[{binary(), binary()}],
@@ -131,7 +141,7 @@ get_coverage(Pid, Table, Query) ->
 -spec put(pid(),
           table_name(),
           [[ts_value()]]) -> ok | {error, Reason::term()}.
-%% @equiv put/4.
+%% @equiv put/4
 put(Pid, Table, Measurements) ->
     put(Pid, Table, Measurements, []).
 

@@ -20,6 +20,7 @@
 %%
 %% -------------------------------------------------------------------
 
+%% @hidden
 %% @doc Helper functions for query requests to Riak TS
 
 -module(riakc_ts_query_operator).
