@@ -3565,10 +3565,10 @@ live_node_tests() ->
                 Bucket = <<"mybucket">>,
                 ?assertEqual(ok, ?MODULE:create_search_index(Pid, Index)),
                 ok = ?MODULE:set_search_index(Pid, Bucket, Index),
-                PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"בָּרָא\"}">>, "application/json"),
+                PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"בָּרָא\"}"/utf8>>, "application/json"),
                 {ok, _Obj} = ?MODULE:put(Pid, PO, [return_head]),
                 wait_until( fun() ->
-                    {ok, Result} = search(Pid, Index, <<"name_s:בָּרָא">>),
+                    {ok, Result} = search(Pid, Index, <<"name_s:בָּרָא"/utf8>>),
                     1 == Result#search_results.num_found
                 end )
          end)}},
@@ -3906,16 +3906,17 @@ live_node_tests() ->
      {"get preflist test",
       ?_test(begin
                  reset_riak(),
+                 Node = atom_to_binary(test_riak_node(), latin1),
                  {ok, Pid} = start_link(test_ip(), test_port()),
                  {ok, Preflist} = get_preflist(Pid, <<"b">>, <<"f">>),
                  ?assertEqual([#preflist_item{partition = 52,
-                                              node = <<"riak@127.0.0.1">>,
+                                              node = Node,
                                               primary = true},
                                #preflist_item{partition = 53,
-                                              node = <<"riak@127.0.0.1">>,
+                                              node = Node,
                                               primary = true},
                                #preflist_item{partition = 54,
-                                              node = <<"riak@127.0.0.1">>,
+                                              node = Node,
                                               primary = true}],
                               Preflist)
              end)}
