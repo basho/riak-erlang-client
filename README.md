@@ -1,6 +1,6 @@
 # Riak Erlang Client
 
-This document assumes that you have already started your Riak cluster. For instructions on that prerequisite, refer to the [setup](http://docs.basho.com/riak/kv/latest/setup/) guide in the [Basho Docs](https://docs.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
+This document assumes that you have already started your Riak cluster. For instructions on that prerequisite, refer to the [setup][kv_setup] guide in the [Basho Docs][basho_docs]. You can also view the Riak Erlang Client EDocs [here][erlang_client_edocs].
 
 Build Status
 ============
@@ -95,7 +95,7 @@ The object is now stored in Riak. `put/2` uses default parameters for storing th
     </tr>
 </table>
 
-See [Default Bucket Properties](http://docs.basho.com/riak/latest/ops/advanced/configs/configuration-files/#Default-Bucket-Properties) for more details.
+See [Default Bucket Properties][kv_configuring_reference_bucket_properties] for more details.
 
 
     6> AnotherObject = riakc_obj:new(<<"my bucket">>, <<"my key">>, <<"my binary data">>).
@@ -114,9 +114,7 @@ See [Default Bucket Properties](http://docs.basho.com/riak/latest/ops/advanced/c
 
 Would make sure at least two nodes responded successfully to the put and at least one node has durably stored the value and an updated object is returned.
 
-See [riak/doc/architecture.txt](https://github.com/basho/riak/blob/master/doc/architecture.txt) for more information about W and DW
-values.
-
+See [this page][kv_learn_glossary_quorum] for more information about W and DW values.
 
 Fetching Data
 =============
@@ -400,7 +398,7 @@ The following example illustrates how to perform exact match as well as range qu
 Riak Data Types
 ===============
 
-[Riak Data Types](http://docs.basho.com/riak/2.0.0pre20/dev/using/data-types/) can only be used in buckets of a [bucket type](http://docs.basho.com/riak/2.0.0pre20/dev/advanced/bucket-types/) in which the `datatype` bucket property is set to either `counter`, `set`, or `map`.
+[Riak Data Types][kv_developing_data_types] can only be used in buckets of a [bucket type][kv_developing_data_types_setting_up] in which the `datatype` bucket property is set to either `counter`, `set`, or `map`.
 
 All Data Types in the Erlang client can be created and modified at will prior to being stored. Basic CRUD operations are performed by functions in `riakc_pb_socket` specific to Data Types, e.g. `fetch_type/3,4` instead of `get/3,4,5` for normal objects, `update_type/4,5` instead of `put/2,3,4`, etc.
 
@@ -473,7 +471,7 @@ Updating maps involves both specifying the map field that you wish to update (by
                             fun(R) -> riakc_register:set(<<"foo">>, R) end,
                             Map).
 
-For more detailed instructions on maps, see the [Using Data Types](http://docs.basho.com/riak/latest/dev/using/data-types/#Maps) documentation.
+For more detailed instructions on maps, see the [documentation][kv_developing_data_types_maps].
 
 Links
 =====
@@ -607,9 +605,9 @@ Create a qfun that returns the size of the record and feed this into the existin
 Security
 ========
 
-If you are using Riak's new [security feature](http://docs.basho.com/riak/latest/ops/running/authz/) introduced in version 2.0, you will need to configure your Riak Erlang client to use SSL when connecting to Riak. The required setup depends on the [security source](http://docs.basho.com/riak/latest/ops/running/security-sources/) that you choose. A general primer on Riak client security can be found in our [official docs](http://docs.basho.com/riak/latest/dev/advanced/client-security/).
+If you are using [Riak Security][kv_using_security_basics], you will need to configure your Riak Erlang client to use SSL when connecting to Riak. The required setup depends on the [security source][kv_using_security_managing_sources] that you choose. A general primer on Riak client security can be found in our [official docs][kv_developing_usage_security].
 
-Regardless of which authentication source you use, your client will need to have access to a certificate authority (CA) shared by your Riak server. You will also need to provide a username that corresponds to the username for the user or role that you have [created in Riak](http://docs.basho.com/riak/latest/ops/running/authz/#User-Management).
+Regardless of which authentication source you use, your client will need to have access to a certificate authority (CA) shared by your Riak server. You will also need to provide a username that corresponds to the username for the user or role that you have [created in Riak][kv_using_security_basics_user_mgmt].
 
 Let's say that your CA is stored in the `/ssl_dir` directory and bears the name `cacertfile.pem` and that you need provide a username of `riakuser` and a password of `rosebud`. You can input that information as a list of tuples when you create your process identifier (PID) for further connections to Riak:
 
@@ -622,9 +620,9 @@ SecurityOptions = [
 {ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
 ```
 
-This setup will suffice for [password-](http://docs.basho.com/riak/latest/ops/running/security-sources/#Password-based-Authentication), [PAM-](http://docs.basho.com/riak/latest/ops/running/security-sources/#PAM-based-Authentication) and [trust](http://docs.basho.com/riak/latest/ops/running/security-sources/#Trust-based-Authentication)-based authentication.
+This setup will suffice for [password, PAM and trust][kv_using_security_basics] based authentication.
 
-If you are using [certificate-based authentication](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/#Certificate-based-Authentication), you will also need to specify a cert and keyfile. The example below uses the same connection information from the sample above but also points to a cert called `cert.pem` and a keyfile called `key.pem` (both stored in the same `/ssl_dir` directory as the CA):
+If you are using [certificate-based authentication][kv_using_security_basics_certs], you will also need to specify a cert and keyfile. The example below uses the same connection information from the sample above but also points to a cert called `cert.pem` and a keyfile called `key.pem` (both stored in the same `/ssl_dir` directory as the CA):
 
 ```erlang
 CertDir = "/ssl_dir",
@@ -637,9 +635,23 @@ SecurityOptions = [
 {ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
 ```
 
-More detailed information can be found in our [official documentation](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/).
+More detailed information can be found in our [official documentation][kv_using_security_basics].
 
 Troubleshooting
 ==================
 
 If `start/2` or `start_link/2` return `{error,econnrefused}` the client could not connect to the server - make sure the protocol buffers interface is enabled on the server and the address/port is correct.
+
+[basho_docs]: http://docs.basho.com/
+[kv_setup]: http://docs.basho.com/riak/kv/latest/setup/
+[erlang_client_edocs]: http://basho.github.com/riak-erlang-client/
+[kv_developing_data_types]: http://docs.basho.com/riak/kv/latest/developing/data-types/
+[kv_developing_data_types_setting_up]: http://docs.basho.com/riak/kv/latest/developing/data-types/#setting-up-buckets-to-use-riak-data-types
+[kv_developing_data_types_maps]: http://docs.basho.com/riak/kv/latest/developing/data-types/#maps
+[kv_configuring_reference_bucket_properties]: https://docs.basho.com/riak/kv/latest/configuring/reference/#default-bucket-properties
+[kv_learn_glossary_quorum]: http://docs.basho.com/riak/kv/latest/learn/glossary/#quorum
+[kv_using_security_managing_sources]: http://docs.basho.com/riak/kv/latest/using/security/managing-sources/
+[kv_using_security_basics]: https://docs.basho.com/riak/kv/latest/using/security/basics/
+[kv_developing_usage_security]: https://docs.basho.com/riak/kv/latest/developing/usage/security/
+[kv_using_security_basics_user_mgmt]: https://docs.basho.com/riak/kv/latest/using/security/basics/#user-management
+[kv_using_security_basics_certs]: https://docs.basho.com/riak/kv/latest/using/security/basics/#certificate-configuration
