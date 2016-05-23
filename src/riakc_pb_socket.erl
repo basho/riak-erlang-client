@@ -3269,14 +3269,19 @@ live_node_tests() ->
              end)},
      {"putting without a key should generate one",
          ?_test(begin
-                     reset_riak(),
-                     {ok, Pid} = start_link(test_ip(), test_port()),
-                     PO = riakc_obj:new(<<"b">>, undefined, <<"value">>),
-                     Res1 = ?MODULE:put(Pid, PO),
-                     Res2 = ?MODULE:put(Pid, PO),
-                     ?assertMatch({ok, _Key}, Res1),
-                     % Make sure the same key isn't generated twice
-                     ?assert(Res1 =/= Res2)
+                    reset_riak(),
+                    {ok, Pid} = start_link(test_ip(), test_port()),
+                    PO = riakc_obj:new(<<"b">>, undefined, <<"value">>),
+                    Res1 = ?MODULE:put(Pid, PO),
+                    Res2 = ?MODULE:put(Pid, PO),
+                    ?assertMatch({ok, _K}, Res1),
+                    ?assertMatch({ok, _K}, Res2),
+                    {ok, K1} = Res1,
+                    {ok, K2} = Res2,
+                    ?assertMatch(true, is_binary(K1)),
+                    ?assertMatch(true, is_binary(K2)),
+                    % Make sure the same key isn't generated twice
+                    ?assert(Res1 =/= Res2)
              end)},
      {"putting without a key should generate one with return_body",
          ?_test(begin
@@ -3286,8 +3291,8 @@ live_node_tests() ->
                     {ok, Obj1} = ?MODULE:put(Pid, PO, [return_body]),
                     {ok, Obj2} = ?MODULE:put(Pid, PO, [return_body]),
                     %% Make sure the same key isn't generated twice
-                    ?assertEqual(element(1, Obj1), riakc_obj),
-                    ?assertEqual(element(1, Obj2), riakc_obj),
+                    ?assertEqual(riakc_obj, element(1, Obj1)),
+                    ?assertEqual(riakc_obj, element(1, Obj2)),
                     ?assert(riakc_obj:key(Obj1) /= riakc_obj:key(Obj2))
              end)},
      {"conditional gets should return unchanged if the vclock matches",
