@@ -1,7 +1,4 @@
-<p align="right">
-    <img src="http://wiki.basho.com/images/riaklogo.png">
-</p>
-# Riak Protocol Buffers Client Introduction
+# Riak Erlang Client
 
 [![Build Status](https://secure.travis-ci.org/basho/riak-erlang-client.png?branch=master)](http://travis-ci.org/basho/riak-erlang-client)
 
@@ -9,6 +6,11 @@ This document assumes that you have already started your Riak cluster.
 For instructions on that prerequisite, refer to the
 [Quick Start](http://docs.basho.com/riak/latest/quickstart/) guide
 in the [Basho Docs](https://docs.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
+
+Build Status
+============
+
+* Master: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=master)](https://travis-ci.org/basho/riak-erlang-client)
 
 Dependencies
 =========
