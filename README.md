@@ -2,10 +2,7 @@
 
 [![Build Status](https://secure.travis-ci.org/basho/riak-erlang-client.png?branch=master)](http://travis-ci.org/basho/riak-erlang-client)
 
-This document assumes that you have already started your Riak cluster.
-For instructions on that prerequisite, refer to the
-[Quick Start](http://docs.basho.com/riak/latest/quickstart/) guide
-in the [Basho Docs](https://docs.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
+This document assumes that you have already started your Riak cluster. For instructions on that prerequisite, refer to the [Quick Start](http://docs.basho.com/riak/latest/quickstart/) guide in the [Basho Docs](https://docs.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
 
 Build Status
 ============
@@ -13,7 +10,7 @@ Build Status
 * Master: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=master)](https://travis-ci.org/basho/riak-erlang-client)
 
 Dependencies
-=========
+============
 
 To build the riak-erlang-client you will need Erlang OTP R15B01 or later, and Git.
 
@@ -26,7 +23,7 @@ On a Debian based system (Debian, Ubuntu, ...) you will need to make sure that c
 
 
 Installing
-=========
+==========
 
         $ git clone git://github.com/basho/riak-erlang-client.git
         $ cd riak-erlang-client
@@ -34,7 +31,7 @@ Installing
 
 
 Connecting
-=======
+==========
 
 To talk to riak, all you need is an Erlang node with the riak-erlang-client library (riakc) in its code path.
 
@@ -59,7 +56,7 @@ Verify connectivity with the server using `ping/1`.
 
 
 Storing New Data
-=========
+================
 
 Each bit of data in Riak is stored in a "bucket" at a "key" that is unique to that bucket. The bucket is intended as an organizational aid, for example to help segregate data by type, but Riak doesn't care what values it stores, so choose whatever scheme suits you. Buckets, keys and values are all binaries.
 
@@ -124,7 +121,7 @@ values.
 
 
 Fetching Data
-==================
+=============
 
 At some point you'll want that data back. Using the same bucket and key you used before:
 
@@ -152,14 +149,10 @@ Like `put/3`, there is a `get/4` function that takes options.
     </tr>
 </table>
 
-If the data was originally stored using the distributed erlang client (riak_client), the server
-will automatically term_to_binary/1 the value before sending it, with the content
-type set to application/x-erlang-binary (replacing any user-set value).  The application is
-responsible for calling binary_to_term to access the content and calling term_to_binary
-when modifying it.
+If the data was originally stored using the distributed erlang client (riak_client), the server will automatically term_to_binary/1 the value before sending it, with the content type set to application/x-erlang-binary (replacing any user-set value).  The application is responsible for calling binary_to_term to access the content and calling term_to_binary when modifying it.
 
 Modifying Data
-==================
+==============
 
 Say you had the "grocery list" from the examples above, reminding you to get `<<"eggs & bacon">>`, and you want to add `<<"milk">>` to it. The easiest way is:
 
@@ -183,7 +176,7 @@ Say you had the "grocery list" from the examples above, reminding you to get `<<
 That is, fetch the object from Riak, modify its value with `riakc_obj:update_value/2`, then store the modified object back in Riak. You can get your updated object to convince yourself that your list is updated:
 
 Deleting Data
-==================
+=============
 
 Throwing away data is quick and simple: just use the `delete/3` function.
 
@@ -204,7 +197,7 @@ As with get and put, delete can also take options
 Issuing a delete for an object that does not exist returns just returns ok.
 
 Encoding
-==================
+========
 
 The initial release of the erlang protocol buffers client treats all values as binaries. The caller needs to make sure data is serialized and deserialized correctly. The content type stored along with the object may be used to store the encoding. For example
 
@@ -226,7 +219,7 @@ The initial release of the erlang protocol buffers client treats all values as b
       <<"application/x-erlang-term">>).
 
 Siblings
-==================
+========
 
 If a bucket is configured to allow conflicts (allow_mult=true) then the result object may contain more than one result. The number of values can be returned with
 
@@ -250,7 +243,7 @@ It is also possible to get a list of tuples representing all the siblings throug
 Once the correct combination of metadata and value has been determined, the record can be updated with these using the `riakc_obj:update_value` and `riakc_obj:update_metadata` functions. If the resulting content type needs to be updated, the `riakc_obj:update_content_type` can be used.
 
 Listing Keys
-=============
+============
 
 Most uses of key-value stores are structured in such a way that requests know which keys they want in a bucket. Sometimes, though, it's necessary to find out what keys are available (when debugging, for example). For that, there is list_keys:
 
@@ -271,7 +264,7 @@ Note that keylist updates are asynchronous to the object storage primitives, and
 See [`riakc_pb_socket:wait_for_listkeys`](https://github.com/basho/riak-erlang-client/blob/master/src/riakc_pb_socket.erl#L1087) for an example of receiving.
 
 Bucket Properties
-==================
+=================
 
 Bucket properties can be retrieved and modified using `get_bucket/2` and `set_bucket/3`. The bucket properties are represented as a proplist. Only a subset of the properties can be retrieved and set using the protocol buffers interface - currently only n_val and allow_mult.
 
@@ -290,7 +283,7 @@ Here's an example of getting/setting properties
 
 
 User Metadata
-==================
+=============
 
 User metadata are stored in the object metadata dictionary, and can be manipulated by using the `get_user_metadata_entry/2`, `get_user_metadata_entries/1`, `clear_user_metadata_entries/1`, `delete_user_metadata_entry/2` and `set_user_metadata_entry/2` functions.
 
@@ -350,7 +343,7 @@ The following example illustrates setting and getting metadata.
 
 
 Secondary Indexes
-==================
+=================
 
 Secondary indexes are set through the object metadata dictionary, and can be manipulated by using the `get_secondary_index/2`, `get_secondary_indexes/1`, `clear_secondary_indexes/1`, `delete_secondary_index/2`, `set_secondary_index/2` and `add_secondary_index/2` functions. These functions act upon the dictionary returned by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
@@ -463,10 +456,7 @@ Once client-side updates are completed, updating sets in Riak works just like up
 
 Now, a set with the elements `bar` and `baz` will be stored in `/types/set_bucket/buckets/all_my_sets/keys/odds_and_ends`.
 
-The functions `size/1`, `is_element/2`, and `fold/3` will work only on
-values stored in and retrieved from Riak. Any local modifications,
-including initial values when an object is created, will not be
-considered.
+The functions `size/1`, `is_element/2`, and `fold/3` will work only on values stored in and retrieved from Riak. Any local modifications, including initial values when an object is created, will not be considered.
 
     riakc_set:is_element(<<"bar">>, Set4).
     %% false
@@ -619,27 +609,11 @@ Create a qfun that returns the size of the record and feed this into the existin
 Security
 ========
 
-If you are using Riak's new [security
-feature](http://docs.basho.com/riak/latest/ops/running/authz/)
-introduced in version 2.0, you will need to configure your Riak Erlang
-client to use SSL when connecting to Riak. The required setup depends on
-the [security
-source](http://docs.basho.com/riak/latest/ops/running/security-sources/)
-that you choose. A general primer on Riak client security can be found
-in our [official
-docs](http://docs.basho.com/riak/latest/dev/advanced/client-security/).
+If you are using Riak's new [security feature](http://docs.basho.com/riak/latest/ops/running/authz/) introduced in version 2.0, you will need to configure your Riak Erlang client to use SSL when connecting to Riak. The required setup depends on the [security source](http://docs.basho.com/riak/latest/ops/running/security-sources/) that you choose. A general primer on Riak client security can be found in our [official docs](http://docs.basho.com/riak/latest/dev/advanced/client-security/).
 
-Regardless of which authentication source you use, your client will need
-to have access to a certificate authority (CA) shared by your Riak
-server. You will also need to provide a username that corresponds to the
-username for the user or role that you have [created in
-Riak](http://docs.basho.com/riak/latest/ops/running/authz/#User-Management).
+Regardless of which authentication source you use, your client will need to have access to a certificate authority (CA) shared by your Riak server. You will also need to provide a username that corresponds to the username for the user or role that you have [created in Riak](http://docs.basho.com/riak/latest/ops/running/authz/#User-Management).
 
-Let's say that your CA is stored in the `/ssl_dir` directory and bears
-the name `cacertfile.pem` and that you need provide a username of
-`riakuser` and a password of `rosebud`. You can input that information
-as a list of tuples when you create your process identifier (PID) for
-further connections to Riak:
+Let's say that your CA is stored in the `/ssl_dir` directory and bears the name `cacertfile.pem` and that you need provide a username of `riakuser` and a password of `rosebud`. You can input that information as a list of tuples when you create your process identifier (PID) for further connections to Riak:
 
 ```erlang
 CertDir = "/ssl_dir",
@@ -650,19 +624,9 @@ SecurityOptions = [
 {ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
 ```
 
-This setup will suffice for
-[password-](http://docs.basho.com/riak/latest/ops/running/security-sources/#Password-based-Authentication),
-[PAM-](http://docs.basho.com/riak/latest/ops/running/security-sources/#PAM-based-Authentication)
-and
-[trust](http://docs.basho.com/riak/latest/ops/running/security-sources/#Trust-based-Authentication)-based
-authentication.
+This setup will suffice for [password-](http://docs.basho.com/riak/latest/ops/running/security-sources/#Password-based-Authentication), [PAM-](http://docs.basho.com/riak/latest/ops/running/security-sources/#PAM-based-Authentication) and [trust](http://docs.basho.com/riak/latest/ops/running/security-sources/#Trust-based-Authentication)-based authentication.
 
-If you are using [certificate-based
-authentication](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/#Certificate-based-Authentication),
-you will also need to specify a cert and keyfile. The example below uses
-the same connection information from the sample above but also points to
-a cert called `cert.pem` and a keyfile called `key.pem` (both stored in
-the same `/ssl_dir` directory as the CA):
+If you are using [certificate-based authentication](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/#Certificate-based-Authentication), you will also need to specify a cert and keyfile. The example below uses the same connection information from the sample above but also points to a cert called `cert.pem` and a keyfile called `key.pem` (both stored in the same `/ssl_dir` directory as the CA):
 
 ```erlang
 CertDir = "/ssl_dir",
@@ -675,8 +639,7 @@ SecurityOptions = [
 {ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
 ```
 
-More detailed information can be found in our [official
-documentation](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/).
+More detailed information can be found in our [official documentation](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/).
 
 Troubleshooting
 ==================
