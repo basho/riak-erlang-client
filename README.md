@@ -642,6 +642,13 @@ Troubleshooting
 
 If `start/2` or `start_link/2` return `{error,econnrefused}` the client could not connect to the server - make sure the protocol buffers interface is enabled on the server and the address/port is correct.
 
+Contributors
+============
+
+This is not a comprehensive list, please see the commit history.
+
+* [Sam Tavakoli](https://github.com/sata)
+
 [basho_docs]: http://docs.basho.com/
 [kv_setup]: http://docs.basho.com/riak/kv/latest/setup/
 [erlang_client_edocs]: http://basho.github.com/riak-erlang-client/
