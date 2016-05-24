@@ -1,12 +1,9 @@
 language: erlang
-before_script:
-  - export RIAK_TEST_NODE_1=`egrep '^\-s?name' /etc/riak/vm.args | awk '{print $2}'`
-  - export RIAK_TEST_COOKIE=`egrep '^-setcookie' /etc/riak/vm.args | awk '{print $2}'`
 notifications:
   webhooks: http://basho-engbot.herokuapp.com/travis?key=8f07584549e458d4c83728f3397ecbd4368e60a8
   email: eng@basho.com
 otp_release:
-  - 18.1
+  - 18.3
   - 17.5
   - R16B03
   - R16B02
