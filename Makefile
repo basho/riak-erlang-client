@@ -14,9 +14,6 @@ clean:
 distclean: clean
 	./rebar delete-deps
 
-docs:
-	./rebar doc
-
 release: compile
 ifeq ($(VERSION),)
 	$(error VERSION must be set to build a release and deploy this package)
