@@ -24,7 +24,7 @@
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
 -define(DEFAULT_PB_TIMEOUT, 60000).
--define(FIRST_RECONNECT_INTERVAL, 100).
+-define(FIRST_RECONNECT_INTERVAL, 10).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
 -type client_option()  :: queue_if_disconnected |
