@@ -1,4 +1,4 @@
-.PHONY: all clean compile deps distclean release
+.PHONY: all clean compile deps distclean release docs
 
 all: deps compile
 
@@ -13,6 +13,9 @@ clean:
 
 distclean: clean
 	./rebar delete-deps
+
+docs:
+	./rebar doc
 
 release: compile
 ifeq ($(VERSION),)
