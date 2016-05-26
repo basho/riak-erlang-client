@@ -27,15 +27,14 @@
 
 -module(riakc_pb_socket).
 -include_lib("kernel/include/inet.hrl").
--include_lib("riak_pb/include/riak_pb.hrl").
--include_lib("riak_pb/include/riak_kv_pb.hrl").
--include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
--include_lib("riak_pb/include/riak_ts_pb.hrl").
--include_lib("riak_pb/include/riak_search_pb.hrl").
--include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
 -include_lib("riak_pb/include/riak_dt_pb.hrl").
+-include_lib("riak_pb/include/riak_kv_pb.hrl").
+-include_lib("riak_pb/include/riak_pb.hrl").
+-include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
+-include_lib("riak_pb/include/riak_search_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_ttb.hrl").
+-include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
 -include("riakc.hrl").
 -behaviour(gen_server).
 
@@ -1565,7 +1564,7 @@ put_options([{timeout, T} | Rest], Req) when is_integer(T) ->
 put_options([{timeout, _T} | _Rest], _Req) ->
     erlang:error(badarg);
 put_options([return_body | Rest], Req) ->
-    put_options(Rest, Req#rpbputreq{return_body = 1});
+    put_options(Rest, Req#rpbputreq{return_body = true});
 put_options([return_head | Rest], Req) ->
     put_options(Rest, Req#rpbputreq{return_head = true});
 put_options([if_not_modified | Rest], Req) ->
