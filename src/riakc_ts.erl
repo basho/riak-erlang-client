@@ -26,6 +26,7 @@
 
 -export([query/2, query/3, query/4, query/5,
          get_coverage/3,
+         replace_coverage/4, replace_coverage/5,
          put/3, put/4,
          get/4,
          delete/4,
@@ -96,6 +97,28 @@ get_coverage(Pid, Table, Query) ->
     Message =
         #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
                        replace_cover = undefined,
+                       table = iolist_to_binary(Table)},
+    case server_call(Pid, Message) of
+        {ok, Entries} ->
+            {ok, riak_pb_ts_codec:decode_cover_list(Entries)};
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+%% @doc Replace a component of a parallel coverage plan
+-spec replace_coverage(pid(), table_name(), QueryText::iolist(), Cover::binary()) ->
+                              {ok, Entries::[term()]} | {error, term()}.
+replace_coverage(Pid, Table, Query, Cover) ->
+    replace_coverage(Pid, Table, Query, Cover, []).
+
+-spec replace_coverage(pid(), table_name(), QueryText::iolist(), Cover::binary(),
+                       OtherCover::list(binary())) ->
+                              {ok, Entries::[term()]} | {error, term()}.
+replace_coverage(Pid, Table, Query, Cover, Other) ->
+    Message =
+        #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
+                       replace_cover = Cover,
+                       unavailable_cover = Other,
                        table = iolist_to_binary(Table)},
     case server_call(Pid, Message) of
         {ok, Entries} ->
