@@ -20,6 +20,7 @@
 %%
 %% -------------------------------------------------------------------
 
+%% @hidden
 %% @doc Helper functions for query requests to Riak TS
 
 -module(riakc_ts_query_operator).
@@ -28,14 +29,14 @@
 -include_lib("riak_pb/include/riak_ts_pb.hrl").
 -include_lib("riak_pb/include/riak_ts_ttb.hrl").
 
--export([serialize/2,
+-export([serialize/3,
          deserialize/1]).
 
-serialize(QueryText, Interpolations) ->
+serialize(QueryText, Interpolations, Stream) ->
     Content = #tsinterpolation{
                  base           = iolist_to_binary(QueryText),
                  interpolations = serialize_interpolations(Interpolations)},
-    #tsqueryreq{query = Content}.
+    #tsqueryreq{query = Content, stream = Stream}.
 
 serialize_interpolations(Interpolations) ->
     serialize_interpolations(Interpolations, []).

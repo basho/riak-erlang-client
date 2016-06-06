@@ -30,7 +30,8 @@
          put/3, put/4,
          get/4,
          delete/4,
-         stream_list_keys/3]).
+         stream_list_keys/3,
+         stream_query/2, stream_query/4]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -42,16 +43,23 @@
 -type ts_value() :: riak_pb_ts_codec:ldbvalue().
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
+%% @doc Message types sent to the calling process of stream_query/4
+-type stream_query_chunk() ::
+    {rows, Continuation::binary(), ColumnNames::[binary()], Rows::[tuple()]}.
+-type stream_result() ::
+    {ReqId::non_neg_integer(), stream_query_chunk() | done}.
+
+-export_type([stream_result/0, stream_query_chunk/0]).
 
 -spec query(pid(), Query::string()|binary()) ->
             {ok, {ColumnNames::[ts_columnname()], Rows::[tuple()]}} | {error, Reason::term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query) ->
     query(Pid, Query, [], undefined, []).
 
 -spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query, Interpolations) ->
     query(Pid, Query, Interpolations, undefined, []).
 
@@ -60,7 +68,7 @@ query(Pid, Query, Interpolations) ->
             Interpolations::[{binary(), binary()}],
             Cover::term()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query, Interpolations, Cover) ->
     query(Pid, Query, Interpolations, Cover, []).
 
@@ -70,25 +78,50 @@ query(Pid, Query, Interpolations, Cover) ->
             Cover::term(),
             Options::proplists:proplist()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @doc Execute a Query with client.  The result returned
+%% @doc Execute a Query.  The result returned
 %%      is a tuple containing a list of columns as binaries in the
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
 query(Pid, Query, Interpolations, undefined, Options) ->
-        query_common(Pid, Query, Interpolations, undefined, Options);
+    query_common(Pid, Query, Interpolations, undefined, Options);
 query(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
-        query_common(Pid, Query, Interpolations, Cover, Options).
+    query_common(Pid, Query, Interpolations, Cover, Options).
 
 query_common(Pid, Query, Interpolations, Cover, Options)
   when is_pid(Pid), is_list(Query) ->
-    Msg0 = riakc_ts_query_operator:serialize(
-                iolist_to_binary(Query), Interpolations),
+    Stream = false,
+    Msg0 = riakc_ts_query_operator:serialize(Query, Interpolations, Stream),
     Msg1 = Msg0#tsqueryreq{cover_context = Cover},
     Msg = {Msg1, {msgopts, Options}},
     Response = server_call(Pid, Msg),
     riakc_ts_query_operator:deserialize(Response).
 
+%% Convenience function for `stream_query/4'.
+-spec stream_query(ClientPid::pid(), QueryString::string()) ->
+    {ok, RequestId::non_neg_integer()}.
+stream_query(Pid, Query) when is_pid(Pid),
+                              is_list(Query) ->
+    stream_query(Pid, Query, [], []).
+
+%% @doc
+%% Execute a streamed query. The immediate result
+%% is a reference to the request ID. This will be used in messages
+%% sent asynchronously from the socket process.
+-spec stream_query(ClientPid::pid(),
+                   QueryString::string(),
+                   Interpolations::[{binary(), binary()}],
+                   Options::proplists:proplist()) ->
+    {ok, RequestId::non_neg_integer()}.
+stream_query(Pid, Query, Interpolations, _Options) when is_pid(Pid),
+                                                        is_list(Query),
+                                                        is_list(Interpolations),
+                                                        is_list(_Options) ->
+    Stream = true,
+    Msg = riakc_ts_query_operator:serialize(Query, Interpolations, Stream),
+    ReqId = riakc_pb_socket:mk_reqid(),
+    gen_server:call(
+        Pid, {req, Msg, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
 
 %% @doc Generate a parallel coverage plan for the specified query
 -spec get_coverage(pid(), table_name(), QueryText::iolist()) ->
@@ -131,7 +164,7 @@ replace_coverage(Pid, Table, Query, Cover, Other) ->
 -spec put(pid(),
           table_name(),
           [[ts_value()]]) -> ok | {error, Reason::term()}.
-%% @equiv put/4.
+%% @equiv put/4
 put(Pid, Table, Measurements) ->
     put(Pid, Table, Measurements, []).
 

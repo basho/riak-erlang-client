@@ -1977,6 +1977,28 @@ process_response(#request{msg = #tslistkeysreq{}} = Request,
             {pending, State}
     end;
 
+process_response(#request{msg = #tsqueryreq{ }} = Request,
+                 {tsresponse, RespProps},
+                 #state{ active = Req } = State) when Req /= undefined ->
+    ColNames = tsresponse_column_names(RespProps),
+    Done = tsresponse_done(RespProps),
+    Rows = tsresponse_rows(RespProps),
+    Continuation = tsresponse_cotinuation(RespProps),
+    %% match on an underscore to make dialyzer happy...
+    _ =
+        case Rows of
+            [_|_] ->
+                send_caller({rows, Continuation, ColNames, Rows}, Request);
+            _ ->
+                ok
+        end,
+    case Done of
+        true ->
+            {reply, done, State};
+        _ ->
+            {pending, State}
+    end;
+
 process_response(#request{msg = #tsqueryreq{}},
                  tsqueryresp, State) ->
     {reply, tsqueryresp, State};
@@ -2047,6 +2069,8 @@ after_send(#request{msg = #rpblistbucketsreq{}, ctx = {ReqId, _Client}},
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #tslistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #tsqueryreq{ stream = true }, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
@@ -2509,6 +2533,19 @@ set_index_create_req_timeout(Timeout, Req) when Timeout =:= infinity ->
 set_index_create_req_timeout(Timeout, _Req) when not is_integer(Timeout) ->
     erlang:error(badarg).
 
+
+
+tsresponse_column_names(RespProps) ->
+    proplists:get_value(column_names, RespProps).
+
+tsresponse_done(RespProps) ->
+    proplists:get_value(done, RespProps).
+
+tsresponse_rows(RespProps) ->
+    proplists:get_value(rows, RespProps).
+
+tsresponse_cotinuation(RespProps) ->
+    proplists:get_value(cotinuation, RespProps).
 
 %% ====================================================================
 %% unit tests
