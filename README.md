@@ -5,13 +5,12 @@
 
 [![Build Status](https://secure.travis-ci.org/basho/riak-erlang-client.png?branch=master)](http://travis-ci.org/basho/riak-erlang-client)
 
-## NOTE: This branch / version of the Riak Erlang Client is intended for use with a Riak Time Series instance. Use with a vanilla Riak instance may not work. 
 
 
 This document assumes that you have already started your Riak cluster.
-For instructions on that prerequisite, refer to
-[Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html)
-in the [Riak Wiki](https://wiki.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
+For instructions on that prerequisite, refer to the
+[Quick Start](http://docs.basho.com/riak/latest/quickstart/) guide
+in the [Basho Docs](https://docs.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
 
 Dependencies
 =========
@@ -89,18 +88,20 @@ The object is now stored in Riak. `put/2` uses default parameters for storing th
     <th>Description</th>
     <tr>
         <td><code>{w, W}</code></td>
-        <td>the minimum number of nodes that must respond with success for the write to be considered successful. The default is currently set on the server at 2</td>
+        <td>the minimum number of nodes that must respond with success for the write to be considered successful. The default is currently set on the server to quorum.</td>
     </tr>
     <tr>
         <td><code>{dw, DW}</code></td>
-        <td>  the minimum number of nodes that must respond with success * *after durably storing* the object for the write to be considered successful. The default is currently set on the server at 0. </td>
+        <td>  the minimum number of nodes that must respond with success * *after durably storing* the object for the write to be considered successful. The default is currently set on the server to quorum.</td>
     </tr>
     <tr>
-        <td><code>return_body </code></td>
-        <td> immediately do a get after the put and return a
-        riakc_obj.</td>
+        <td><code>return_body</code></td>
+        <td>immediately do a get after the put and return a riakc_obj.</td>
     </tr>
 </table>
+
+See [Default Bucket Properties](http://docs.basho.com/riak/latest/ops/advanced/configs/configuration-files/#Default-Bucket-Properties) for more details.
+
 
     6> AnotherObject = riakc_obj:new(<<"my bucket">>, <<"my key">>, <<"my binary data">>).
     7> riakc_pb_socket:put(Pid, AnotherObject, [{w, 2}, {dw, 1}, return_body]).
@@ -147,7 +148,7 @@ Like `put/3`, there is a `get/4` function that takes options.
     <th>Description</th>
     <tr>
         <td><code>{r, R}</code></td>
-        <td>the minimum number of nodes that must respond with success for the read to be considered successfu2</td>
+        <td>the minimum number of nodes that must respond with success for the read to be considered successful</td>
     </tr>
 </table>
 
@@ -293,7 +294,7 @@ User Metadata
 
 User metadata are stored in the object metadata dictionary, and can be manipulated by using the `get_user_metadata_entry/2`, `get_user_metadata_entries/1`, `clear_user_metadata_entries/1`, `delete_user_metadata_entry/2` and `set_user_metadata_entry/2` functions.
 
-These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+These functions act upon the dictionary returned by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
 The following example illustrates setting and getting metadata.
 
@@ -351,7 +352,7 @@ The following example illustrates setting and getting metadata.
 Secondary Indexes
 ==================
 
-Secondary indexes are set through the object metadata dictionary, and can be manipulated by using the `get_secondary_index/2`, `get_secondary_indexes/1`, `clear_secondary_indexes/1`, `delete_secondary_index/2`, `set_secondary_index/2` and `add_secondary_index/2` functions. These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+Secondary indexes are set through the object metadata dictionary, and can be manipulated by using the `get_secondary_index/2`, `get_secondary_indexes/1`, `clear_secondary_indexes/1`, `delete_secondary_index/2`, `set_secondary_index/2` and `add_secondary_index/2` functions. These functions act upon the dictionary returned by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
 When using these functions, secondary indexes are identified by a tuple, `{binary_index, string()}` or `{integer_index, string()}`, where the string is the name of the index. `{integer_index, "id"}` therefore corresponds to the index "id_int". As secondary indexes may have more than one value, the index values are specified as lists of integers or binaries, depending on index type.
 
@@ -396,7 +397,7 @@ The following example illustrates getting and setting secondary indexes.
            <<"John Robert Doe, 25">>}
     20> riakc_pb_socket:put(Pid, Obj2).
 
-In order to query based on secondary indexes, the `riakc_pb_socket:get_index/4`, `riakc_pb_socket:get_index/5`, `riakc_pb_socket:get_index/6` and `riakc_pb_socket:get_index/7` functions can be used. These functions also allows secondary indexes to be specifiued using the tuple described above.
+In order to query based on secondary indexes, the `riakc_pb_socket:get_index/4`, `riakc_pb_socket:get_index/5`, `riakc_pb_socket:get_index/6` and `riakc_pb_socket:get_index/7` functions can be used. These functions also allows secondary indexes to be specified using the tuple described above.
 
 The following example illustrates how to perform exact match as well as range queries based on the record and associated indexes created above.
 
@@ -491,7 +492,7 @@ Links
 
 Links are also stored in the object metadata dictionary, and can be manipulated by using the `get_links/2`, `get_all_links/1`, `clear_links/1`, `delete_links/2`, `set_link/2` and `add_link/2` functions. When using these functions, a link is identified by a tag, and may therefore contain multiple record IDs.
 
-These functions act upon the dictionary retuened by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
+These functions act upon the dictionary returned by the `get_metadata/1`, `get_metadatas/1` and `get_update_metadata/1` functions.
 
 The following example illustrates setting and getting links.
 
@@ -614,6 +615,68 @@ Create a qfun that returns the size of the record and feed this into the existin
     {ok,[{1,[15]}]}
 
  As expected, total size of data is 15 bytes.
+
+Security
+========
+
+If you are using Riak's new [security
+feature](http://docs.basho.com/riak/latest/ops/running/authz/)
+introduced in version 2.0, you will need to configure your Riak Erlang
+client to use SSL when connecting to Riak. The required setup depends on
+the [security
+source](http://docs.basho.com/riak/latest/ops/running/security-sources/)
+that you choose. A general primer on Riak client security can be found
+in our [official
+docs](http://docs.basho.com/riak/latest/dev/advanced/client-security/).
+
+Regardless of which authentication source you use, your client will need
+to have access to a certificate authority (CA) shared by your Riak
+server. You will also need to provide a username that corresponds to the
+username for the user or role that you have [created in
+Riak](http://docs.basho.com/riak/latest/ops/running/authz/#User-Management).
+
+Let's say that your CA is stored in the `/ssl_dir` directory and bears
+the name `cacertfile.pem` and that you need provide a username of
+`riakuser` and a password of `rosebud`. You can input that information
+as a list of tuples when you create your process identifier (PID) for
+further connections to Riak:
+
+```erlang
+CertDir = "/ssl_dir",
+SecurityOptions = [
+                   {credentials, "riakuser", "rosebud"},
+                   {cacertfile, filename:join([CertDir, "cacertfile.pem"])}
+                  ],
+{ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
+```
+
+This setup will suffice for
+[password-](http://docs.basho.com/riak/latest/ops/running/security-sources/#Password-based-Authentication),
+[PAM-](http://docs.basho.com/riak/latest/ops/running/security-sources/#PAM-based-Authentication)
+and
+[trust](http://docs.basho.com/riak/latest/ops/running/security-sources/#Trust-based-Authentication)-based
+authentication.
+
+If you are using [certificate-based
+authentication](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/#Certificate-based-Authentication),
+you will also need to specify a cert and keyfile. The example below uses
+the same connection information from the sample above but also points to
+a cert called `cert.pem` and a keyfile called `key.pem` (both stored in
+the same `/ssl_dir` directory as the CA):
+
+```erlang
+CertDir = "/ssl_dir",
+SecurityOptions = [
+                   {credentials, "riakuser", "rosebud"},
+                   {cacertfile, filename:join([CertDir, "cacertfile.pem"])},
+                   {certfile, filename:join([CertDir, "cert.pem"])},
+                   {keyfile, filename:join([CertDir, "key.pem"])}
+                  ],
+{ok, Pid} = riakc_pb_socket:start("127.0.0.1", 8087, SecurityOptions).
+```
+
+More detailed information can be found in our [official
+documentation](http://docs.basho.com/riak/latest/dev/advanced/client-security/erlang/).
 
 Timeseries
 ==========
