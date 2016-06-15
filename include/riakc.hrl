@@ -1,4 +1,3 @@
-
 %% -------------------------------------------------------------------
 %%
 %% riakc: protocol buffer client
@@ -150,14 +149,28 @@
         continuation :: continuation()
         }).
 -define(INDEX_RESULTS, #index_results_v1).
--type index_results() :: #index_results_v1{}.
 
 -record(index_stream_result_v1, {
         keys :: keys(),
         terms :: index_terms()
         }).
 -define(INDEX_STREAM_RESULT, #index_stream_result_v1).
--type index_stream_result() :: #index_stream_result_v1{}.
+
+-record(index_body_results_v1, {
+        objects = [] :: [riakc_obj()],
+        continuation :: continuation()
+        }).
+-define(INDEX_BODY_RESULTS, #index_body_results_v1).
+
+-record(index_stream_body_result_v1, {
+        objects = [] :: [riakc_obj()]
+        }).
+-define(INDEX_STREAM_BODY_RESULT, #index_stream_body_result_v1).
+
+-type index_results() :: #index_results_v1{} | #index_body_results_v1{}.
+
+-type index_stream_result() :: #index_stream_result_v1{} |
+                               #index_stream_body_result_v1{}.
 
 -type index_done() :: {'done', continuation()}.
 

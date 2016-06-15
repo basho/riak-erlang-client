@@ -7,6 +7,9 @@ Build Status
 
 * Master: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=master)](https://travis-ci.org/basho/riak-erlang-client)
 
+
+This document assumes that you have already started your Riak cluster.  For instructions on that prerequisite, refer to [Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html) in the [Riak Wiki](https://wiki.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
+
 Dependencies
 ============
 
@@ -602,6 +605,7 @@ Create a qfun that returns the size of the record and feed this into the existin
 
  As expected, total size of data is 15 bytes.
 
+
 Security
 ========
 
@@ -636,6 +640,52 @@ SecurityOptions = [
 ```
 
 More detailed information can be found in our [official documentation][kv_using_security_basics].
+
+
+Timeseries
+==========
+
+Assume the following table definition for the examples.
+
+```SQL
+CREATE TABLE GeoCheckin
+(
+   myfamily    varchar   not null,
+   myseries    varchar   not null,
+   time        timestamp not null,
+   weather     varchar   not null,
+   temperature double,
+   PRIMARY KEY (
+     (myfamily, myseries, quantum(time, 15, 'm')),
+     myfamily, myseries, time
+   )
+)
+```
+
+### Store TS Data
+
+To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition.
+
+
+```erlang
+{ok, Pid} = riakc_pb_socket:start_link("myriakdb.host", 10017).
+riakc_ts:put(Pid, "GeoCheckin", [[<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5], [<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8]]).
+```
+
+### Query TS Data
+
+To query TS data, simply use `riakc_ts:query/2` with a connection and a query string. All parts of a table's Primary Key must be included in the where clause. 
+
+```erlang
+{ok, Pid} = riakc_pb_socket:start_link("myriakdb.host", 10017).
+
+riakc_ts:query(Pid, "select * from GeoCheckin where time > 1234560 and time < 1234569 and myfamily = 'family1' and myseries = 'series1'").
+
+riakc_ts:query(Pid, "select weather, temperature from GeoCheckin where time > 1234560 and time < 1234569 and myfamily = 'family1' and myseries = 'series1'").
+
+riakc_ts:query(Pid, "select weather, temperature from GeoCheckin where time > 1234560 and time < 1234569 and myfamily = 'family1' and myseries = 'series1' and temperature > 27.0").
+```
+
 
 Troubleshooting
 ==================

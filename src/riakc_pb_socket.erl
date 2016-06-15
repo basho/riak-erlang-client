@@ -30,9 +30,12 @@
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
+-include_lib("riak_pb/include/riak_ts_pb.hrl").
 -include_lib("riak_pb/include/riak_search_pb.hrl").
 -include_lib("riak_pb/include/riak_yokozuna_pb.hrl").
 -include_lib("riak_pb/include/riak_dt_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_pb.hrl").
+-include_lib("riak_pb/include/riak_ts_ttb.hrl").
 -include("riakc.hrl").
 -behaviour(gen_server).
 
@@ -70,7 +73,9 @@
          cs_bucket_fold/3,
          default_timeout/1,
          tunnel/4,
-         get_preflist/3, get_preflist/4]).
+         get_preflist/3, get_preflist/4,
+         get_coverage/2, get_coverage/3,
+         replace_coverage/3, replace_coverage/4]).
 
 %% Counter API
 -export([counter_incr/4, counter_val/3]).
@@ -93,6 +98,8 @@
          update_type/4, update_type/5,
          modify_type/5]).
 
+%% supporting functions used in riakc_ts
+-export([mk_reqid/0]).
 
 -deprecated({get_index,'_', eventually}).
 
@@ -127,8 +134,13 @@
 %% can be overridden by setting the application environment variable
 %% of the same name on the `riakc' application, for example:
 %% `application:set_env(riakc, ping_timeout, 5000).'
--record(request, {ref :: reference(), msg :: rpb_req(), from, ctx :: ctx(), timeout :: timeout(),
-                  tref :: reference() | undefined }).
+-record(request, {ref :: reference(),
+                  msg :: rpb_req(),
+                  from, ctx :: ctx(),
+                  timeout :: timeout(),
+                  tref :: reference() | undefined,
+                  opts :: proplists:proplist()
+                 }).
 
 -ifdef(namespaced_types).
 -type request_queue_t() :: queue:queue(#request{}).
@@ -1028,6 +1040,8 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
     PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
+    ReturnBody = proplists:get_value(return_body, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1037,6 +1051,8 @@ get_index_eq(Pid, Bucket, Index, Key, Opts) ->
                        pagination_sort=PgSort,
                        stream=Stream,
                        continuation=Continuation,
+                       cover_context=Cover,
+                       return_body=ReturnBody,
                        timeout=Timeout},
     Call = case Stream of
                true ->
@@ -1079,6 +1095,8 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
     PgSort = proplists:get_value(pagination_sort, Opts),
     Stream = proplists:get_value(stream, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
+    ReturnBody = proplists:get_value(return_body, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1091,6 +1109,8 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        pagination_sort = PgSort,
                        stream=Stream,
                        continuation=Continuation,
+                       cover_context=Cover,
+                       return_body=ReturnBody,
                        timeout=Timeout},
     Call = case Stream of
                true ->
@@ -1119,6 +1139,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
     StartIncl = proplists:get_value(start_incl, Opts, true),
     EndIncl = proplists:get_value(end_incl, Opts, false),
     Continuation = proplists:get_value(continuation, Opts),
+    Cover = proplists:get_value(cover_context, Opts),
 
     {T, B} = maybe_bucket_type(Bucket),
 
@@ -1129,6 +1150,7 @@ cs_bucket_fold(Pid, Bucket, Opts) when is_pid(Pid), (is_binary(Bucket) orelse
                           end_incl=EndIncl,
                           max_results=MaxResults,
                           continuation=Continuation,
+                          cover_context=Cover,
                           timeout=Timeout},
     ReqId = mk_reqid(),
     Call = {req, Req, Timeout, {ReqId, self()}},
@@ -1262,6 +1284,32 @@ get_preflist(Pid, Bucket, Key, Timeout) ->
     Req = #rpbgetbucketkeypreflistreq{type = T, bucket = B, key = Key},
     call_infinity(Pid, {req, Req, Timeout}).
 
+%% @doc Get minimal coverage plan
+%% @equiv get_coverage(Pid, Bucket, undefined)
+-spec get_coverage(pid(), bucket()) -> {ok, term()}
+                                           | {error, term()}.
+get_coverage(Pid, Bucket) ->
+    get_coverage(Pid, Bucket, undefined).
+
+%% @doc Get parallel coverage plan if 3rd argument is >= 0
+-spec get_coverage(pid(), bucket(), undefined | non_neg_integer()) -> {ok, term()}
+                                                 | {error, term()}.
+get_coverage(Pid, Bucket, MinPartitions) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {T, B} = maybe_bucket_type(Bucket),
+    call_infinity(Pid,
+                  {req, #rpbcoveragereq{type=T, bucket=B, min_partitions=MinPartitions},
+                   Timeout}).
+
+replace_coverage(Pid, Bucket, Cover) ->
+    replace_coverage(Pid, Bucket, Cover, []).
+
+replace_coverage(Pid, Bucket, Cover, Other) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {T, B} = maybe_bucket_type(Bucket),
+    call_infinity(Pid,
+                  {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
+                   Timeout}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -1325,19 +1373,15 @@ handle_info({tcp_error, _Socket, Reason}, State) ->
     error_logger:error_msg("PBC client TCP error for ~p:~p - ~p\n",
                            [State#state.address, State#state.port, Reason]),
     disconnect(State);
-
 handle_info({tcp_closed, _Socket}, State) ->
     disconnect(State);
-
 handle_info({ssl_error, _Socket, Reason}, State) ->
     error_logger:error_msg("PBC client SSL error for ~p:~p - ~p\n",
                            [State#state.address, State#state.port, Reason]),
     disconnect(State);
-
 handle_info({ssl_closed, _Socket}, State) ->
     disconnect(State);
-
-%% Make sure the two Sock's match.  If a request timed out, but there was
+%% Make sure the two Socks match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
 %% it should drop through and be ignored.
 handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
@@ -1348,7 +1392,7 @@ handle_info({Proto, Sock, Data}, State=#state{sock = Sock, active = Active})
             %% don't decode tunneled replies, we may not recognize the msgid
             {MsgCode, MsgData};
         _ ->
-            riak_pb_codec:decode(MsgCode, MsgData)
+            decode(MsgCode, MsgData)
     end,
     NewState = case Resp of
         #rpberrorresp{} ->
@@ -1412,6 +1456,12 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %% ====================================================================
 %% internal functions
 %% ====================================================================
+
+%% @private
+decode(?TTB_MSG_CODE, MsgData) ->
+    riak_ttb_codec:decode(MsgData);
+decode(MsgCode, MsgData) ->
+    riak_pb_codec:decode(MsgCode, MsgData).
 
 %% @private
 %% Parse options
@@ -1753,20 +1803,57 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 process_response(#request{msg = #rpbindexreq{}}, rpbindexresp, State) ->
     Results = ?INDEX_RESULTS{keys=[], continuation=undefined},
     {reply, {ok, Results}, State};
-process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms}}=Request,
+process_response(#request{msg = #rpbindexreq{stream=true, return_terms=Terms, return_body=Body}}=Request,
                  #rpbindexresp{results=Results, keys=Keys, done=Done, continuation=Cont}, State) ->
-    ToSend = process_index_response(Terms, Keys, Results),
+    ToSend = process_index_response(response_type(Terms, Body), Keys, Results),
     _ = send_caller(ToSend, Request),
     DoneResponse = {reply, {done, Cont}, State},
     case Done of
                 true -> DoneResponse;
                 _ -> {pending, State}
     end;
-process_response(#request{msg = #rpbindexreq{return_terms=Terms}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
-    StreamResponse = process_index_response(Terms, Keys, Results),
+process_response(#request{msg = #rpbindexreq{return_terms=Terms, return_body=Body}}, #rpbindexresp{results=Results, keys=Keys, continuation=Cont}, State) ->
+    StreamResponse = process_index_response(response_type(Terms, Body), Keys, Results),
     RegularResponse = index_stream_result_to_index_result(StreamResponse),
     RegularResponseWithContinuation = RegularResponse?INDEX_RESULTS{continuation=Cont},
     {reply, {ok, RegularResponseWithContinuation}, State};
+process_response(#request{msg = #rpbindexreq{stream=true, bucket=Bucket}}=Request,
+                 #rpbindexbodyresp{objects=Objects, done=Done, continuation=Cont}, State) ->
+    ToSend =
+        case Objects of
+            undefined -> [];
+            _ ->
+                %% make client objects
+                lists:foldr(fun(#rpbindexobject{key=Key,
+                                                object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
+                                    DContents = riak_pb_kv_codec:decode_contents(Contents),
+                                    [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
+                            [],
+                            Objects)
+        end,
+    _ = send_caller({ok,
+                     ?INDEX_STREAM_BODY_RESULT{objects = ToSend}},
+                    Request),
+    DoneResponse = {reply, {done, Cont}, State},
+    case Done of
+        true -> DoneResponse;
+        _ -> {pending, State}
+    end;
+process_response(#request{msg = #rpbindexreq{bucket=Bucket}},
+                 #rpbindexbodyresp{objects=Objects, continuation=Cont}, State) ->
+    ToSend =
+        case Objects of
+            undefined -> [];
+            _ ->
+                %% make client objects
+                lists:foldr(fun(#rpbindexobject{key=Key,
+                                                object=#rpbgetresp{content=Contents, vclock=VClock}}, Acc) ->
+                                    DContents = riak_pb_kv_codec:decode_contents(Contents),
+                                    [riakc_obj:new_obj(Bucket, Key, VClock, DContents) | Acc] end,
+                            [],
+                            Objects)
+        end,
+    {reply, {ok, ?INDEX_BODY_RESULTS{objects=ToSend, continuation=Cont}}, State};
 process_response(#request{msg = #rpbcsbucketreq{}}, rpbcsbucketresp, State) ->
     {pending, State};
 process_response(#request{msg = #rpbcsbucketreq{bucket=Bucket}}=Request, #rpbcsbucketresp{objects=Objects, done=Done, continuation=Cont}, State) ->
@@ -1889,24 +1976,85 @@ process_response(#request{msg = #rpbgetbucketkeypreflistreq{}},
               || T <- Preflist],
     {reply, {ok, Result}, State};
 
+process_response(#request{msg = #tsputreq{}},
+                 #tsputresp{}, State) ->
+    {reply, ok, State};
+process_response(#request{msg = #tsputreq{}},
+                 tsputresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #tsdelreq{}},
+                 tsdelresp, State) ->
+    {reply, ok, State};
+
+process_response(#request{msg = #tslistkeysreq{}} = Request,
+                 #tslistkeysresp{done = Done, keys = Keys}, State) ->
+    _ = case Keys of
+            undefined ->
+                ok;
+            _ ->
+                CompoundKeys = riak_pb_ts_codec:decode_rows(Keys),
+                send_caller({keys, CompoundKeys}, Request)
+        end,
+    case Done of
+        true ->
+            {reply, done, State};
+        _ ->
+            {pending, State}
+    end;
+
+process_response(#request{msg = #tsqueryreq{}},
+                 tsqueryresp, State) ->
+    {reply, tsqueryresp, State};
+process_response(#request{msg = #tsqueryreq{}},
+                 Result = {tsqueryresp, _},
+                 State) ->
+    {reply, Result, State};
+process_response(#request{msg = #tsqueryreq{}},
+                 Result = #tsqueryresp{},
+                 State) ->
+    {reply, Result, State};
+process_response(#request{msg = #tscoveragereq{}},
+                 #tscoverageresp{entries = E}, State) ->
+    {reply, {ok, E}, State};
+process_response(#request{msg = #rpbcoveragereq{}},
+                 #rpbcoverageresp{entries = E}, State) ->
+    {reply, {ok, E}, State};
+process_response(#request{msg = #tsgetreq{}},
+                 tsgetresp, State) ->
+    {reply, tsgetresp, State};
+process_response(#request{msg = #tsgetreq{}},
+                 Result = {tsgetresp, _},
+                 State) ->
+    {reply, Result, State};
+process_response(#request{msg = #tsgetreq{}},
+                 Result = #tsgetresp{},
+                 State) ->
+    {reply, Result, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
 
+%% Return `keys', `terms', or `objects' depending on the value of
+%% `return_terms' and `return_body'. Values can be true, false, or
+%% undefined.
+response_type(_ReturnTerms, true) ->
+    objects;
+response_type(true, _ReturnBody) ->
+    terms;
+response_type(_ReturnTerms, _ReturnBody) ->
+    keys.
+
+
 %% Helper for index responses
--spec process_index_response(undefined | boolean(), list(), list()) ->
+-spec process_index_response('keys'|'terms'|'objects', list(), list()) ->
     index_stream_result().
-process_index_response(undefined, Keys, _) ->
+process_index_response(keys, Keys, _) ->
     ?INDEX_STREAM_RESULT{keys=Keys};
-process_index_response(false, Keys, _) ->
-    ?INDEX_STREAM_RESULT{keys=Keys};
-process_index_response(true, [], Results) ->
-    %% rpbpair is abused to send Value,Key pairs as Key, Value pairs
-    %% in a 2i query the 'key' is the index value and the 'value'
-    %% the indexed objects primary key
+process_index_response(_, [], Results) ->
     Res = [{V, K} ||  #rpbpair{key=V, value=K} <- Results],
     ?INDEX_STREAM_RESULT{terms=Res};
-process_index_response(true, Keys, []) ->
+process_index_response(_, Keys, []) ->
     ?INDEX_STREAM_RESULT{keys=Keys}.
 
 -spec index_stream_result_to_index_result(index_stream_result()) ->
@@ -1923,6 +2071,8 @@ after_send(#request{msg = #rpblistbucketsreq{}, ctx = {ReqId, _Client}},
            State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #tslistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
@@ -1976,14 +2126,22 @@ send_mapred_req(Pid, MapRed, ClientPid) ->
 
 %% @private
 %% Make a new request that can be sent or queued
+new_request({Msg, {msgopts, Options}}, From, Timeout) ->
+    Ref = make_ref(),
+    #request{ref = Ref,
+             msg = Msg,
+             from = From,
+             timeout = Timeout,
+             tref = create_req_timer(Timeout, Ref),
+             opts = Options};
 new_request(Msg, From, Timeout) ->
     Ref = make_ref(),
     #request{ref = Ref, msg = Msg, from = From, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
+             tref = create_req_timer(Timeout, Ref), opts = []}.
 new_request(Msg, From, Timeout, Context) ->
     Ref = make_ref(),
     #request{ref =Ref, msg = Msg, from = From, ctx = Context, timeout = Timeout,
-             tref = create_req_timer(Timeout, Ref)}.
+             tref = create_req_timer(Timeout, Ref), opts = []}.
 
 %% @private
 %% Create a request timer if desired, otherwise return undefined.
@@ -2151,13 +2309,24 @@ send_request(Request0, State) when State#state.active =:= undefined ->
             maybe_enqueue_and_reconnect(Request, State#state{sock=undefined})
     end.
 
+%% @private
+encode(Msg=#tsputreq{}, true) ->
+    riak_ttb_codec:encode(Msg);
+encode(Msg=#tsgetreq{}, true) ->
+    riak_ttb_codec:encode(Msg);
+encode(Msg=#tsqueryreq{}, true) ->
+    riak_ttb_codec:encode(Msg);
+encode(Msg, _UseTTB) ->
+    riak_pb_codec:encode(Msg).
+
 %% Already encoded (for tunneled messages), but must provide Message Id
 %% for responding to the second form of send_request.
 encode_request_message(#request{msg={tunneled,MsgId,Pkt}}=Req) ->
     {Req#request{msg={tunneled,MsgId}},[MsgId|Pkt]};
 %% Unencoded Request (the normal PB client path)
-encode_request_message(#request{msg=Msg}=Req) ->
-    {Req, riak_pb_codec:encode(Msg)}.
+encode_request_message(#request{msg=Msg,opts=Opts}=Req) ->
+    UseTTB = proplists:get_value(use_ttb, Opts, true),
+    {Req, encode(Msg, UseTTB)}.
 
 %% If the socket was closed, see if we can enqueue the request and
 %% trigger a reconnect. Otherwise, return an error to the requestor.
@@ -2207,7 +2376,7 @@ remove_queued_request(Ref, State) ->
     end.
 
 %% @private
-mk_reqid() -> erlang:phash2(?NOW). % only has to be unique per-pid
+mk_reqid() -> erlang:phash2(crypto:rand_bytes(10)). % only has to be unique per-pid
 
 %% @private
 wait_for_list(ReqId) ->
