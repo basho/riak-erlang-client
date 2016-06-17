@@ -45,13 +45,13 @@
 
 -spec query(pid(), Query::string()|binary()) ->
             {ok, {ColumnNames::[ts_columnname()], Rows::[tuple()]}} | {error, Reason::term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query) ->
     query(Pid, Query, [], undefined, []).
 
 -spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query, Interpolations) ->
     query(Pid, Query, Interpolations, undefined, []).
 
@@ -60,7 +60,7 @@ query(Pid, Query, Interpolations) ->
             Interpolations::[{binary(), binary()}],
             Cover::term()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5.
+%% @equiv query/5
 query(Pid, Query, Interpolations, Cover) ->
     query(Pid, Query, Interpolations, Cover, []).
 
@@ -131,7 +131,7 @@ replace_coverage(Pid, Table, Query, Cover, Other) ->
 -spec put(pid(),
           table_name(),
           [[ts_value()]]) -> ok | {error, Reason::term()}.
-%% @equiv put/4.
+%% @equiv put/4
 put(Pid, Table, Measurements) ->
     put(Pid, Table, Measurements, []).
 
