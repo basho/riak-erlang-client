@@ -154,6 +154,12 @@
 -define(NOW, erlang:now()).
 -endif.
 
+-ifdef(namespaced_types).
+-type request_queue_t() :: queue:queue(#request{}).
+-else.
+-type request_queue_t() :: queue().
+-endif.
+
 -type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
 -type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
 -record(state, {address :: address(),    % address to connect to
@@ -178,6 +184,8 @@
                 ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
                                % documentation.
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
+
+-export_type([address/0, portnum/0]).
 
 %% @private Like `gen_server:call/3', but with the timeout hardcoded
 %% to `infinity'.
