@@ -1,0 +1,197 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module riakc_map</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module riakc_map</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>Encapsulates a map data-type.
+
+<p><b>Behaviours:</b> <a href="riakc_datatype.html"><tt>riakc_datatype</tt></a>.</p>
+
+<h2><a name="description">Description</a></h2><p>Encapsulates a map data-type. Maps differ from Erlang's dict
+  types in several ways:</p>
+  <ul>
+  <li>Maps are special key-value structures where the key is a pair
+  of a binary name and data type, and the value is a container of the
+  specified type, e.g. <code>{&lt;&lt;"friends"&gt;&gt;, set} -&gt; riakc_set:set()</code>.
+  Regular Erlang terms may not be values in the map, but could be
+  serialized into <code>register</code> fields if last-write-wins semantics are
+  sufficient.</li>
+  <li>Like the other eventually-consistent types, updates are not
+  applied to local state. Instead, removals, and
+  modifications are captured for later application by Riak.</li>
+  <li>You may not "store" values in a map.
+   Existing or non-existing entries can be modified
+  using <code>update/3</code>, which is analogous to <code>dict:update/3</code>. If the
+  entry is not present, it will be populated with a new value before
+  the update function is applied. The update function will receive
+  the appropriate container type as its sole argument.</li>
+  <li>Like sets, removals will be processed before additions and
+  updates in Riak. Removals performed without a context may result in
+  failure.</li>
+  <li> Updating an entry followed by removing that same
+  entry will result in no operation being recorded. Likewise,
+  removing an entry followed by updating that entry will
+  cancel the removal operation.</li>
+  </ul>
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-crdt_map">crdt_map()</a></h3>
+<p><tt>crdt_map() = #map{value = [<a href="#type-raw_entry">raw_entry()</a>], updates = [<a href="#type-entry">entry()</a>], removes = <a href="ordsets.html#type-ordset">ordsets:ordset</a>(<a href="#type-key">key()</a>), context = <a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-datatype">datatype()</a></h3>
+<p><tt>datatype() = counter | flag | register | set | map</tt></p>
+
+
+<h3 class="typedecl"><a name="type-embedded_type_op">embedded_type_op()</a></h3>
+<p><tt>embedded_type_op() = <a href="riakc_counter.html#type-counter_op">riakc_counter:counter_op()</a> | <a href="riakc_set.html#type-set_op">riakc_set:set_op()</a> | <a href="riakc_flag.html#type-flag_op">riakc_flag:flag_op()</a> | <a href="riakc_register.html#type-register_op">riakc_register:register_op()</a> | <a href="#type-map_op">map_op()</a></tt></p>
+
+
+<h3 class="typedecl"><a name="type-entry">entry()</a></h3>
+<p><tt>entry() = {<a href="#type-key">key()</a>, <a href="riakc_datatype.html#type-datatype">riakc_datatype:datatype()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-field_update">field_update()</a></h3>
+<p><tt>field_update() = {update, <a href="#type-key">key()</a>, <a href="#type-embedded_type_op">embedded_type_op()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-key">key()</a></h3>
+<p><tt>key() = {binary(), <a href="#type-datatype">datatype()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-map_op">map_op()</a></h3>
+<p><tt>map_op() = {update, [<a href="#type-simple_map_op">simple_map_op()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-raw_entry">raw_entry()</a></h3>
+<p><tt>raw_entry() = {<a href="#type-key">key()</a>, term()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-simple_map_op">simple_map_op()</a></h3>
+<p><tt>simple_map_op() = {remove, <a href="#type-key">key()</a>} | <a href="#type-field_update">field_update()</a></tt></p>
+
+
+<h3 class="typedecl"><a name="type-update_fun">update_fun()</a></h3>
+<p><tt>update_fun() = fun((<a href="riakc_datatype.html#type-datatype">riakc_datatype:datatype()</a>) -&gt; <a href="riakc_datatype.html#type-datatype">riakc_datatype:datatype()</a>)</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#erase-2">erase/2</a></td><td>Removes a key and its value from the map.</td></tr>
+<tr><td valign="top"><a href="#fetch-2">fetch/2</a></td><td>Returns the "unwrapped" value associated with the key in the
+  map.</td></tr>
+<tr><td valign="top"><a href="#fetch_keys-1">fetch_keys/1</a></td><td>Returns a list of all keys in the map.</td></tr>
+<tr><td valign="top"><a href="#find-2">find/2</a></td><td>Searches for a key in the map.</td></tr>
+<tr><td valign="top"><a href="#fold-3">fold/3</a></td><td>Folds over the entries in the map.</td></tr>
+<tr><td valign="top"><a href="#is_key-2">is_key/2</a></td><td>Test if the key is contained in the map.</td></tr>
+<tr><td valign="top"><a href="#is_type-1">is_type/1</a></td><td>Determines whether the passed term is a map container.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>Creates a new, empty map container type.</td></tr>
+<tr><td valign="top"><a href="#new-1">new/1</a></td><td>Creates a new map with the specified context.</td></tr>
+<tr><td valign="top"><a href="#new-2">new/2</a></td><td>Creates a new map with the specified key-value pairs and context.</td></tr>
+<tr><td valign="top"><a href="#size-1">size/1</a></td><td>Returns the number of entries in the map.</td></tr>
+<tr><td valign="top"><a href="#to_op-1">to_op/1</a></td><td>Extracts an operation from the map that can be encoded into an
+  update request.</td></tr>
+<tr><td valign="top"><a href="#type-0">type/0</a></td><td>Returns the symbolic name of this container.</td></tr>
+<tr><td valign="top"><a href="#update-3">update/3</a></td><td>Updates the value stored at the key by calling the passed
+  function to get the new value.</td></tr>
+<tr><td valign="top"><a href="#value-1">value/1</a></td><td>Gets the original value of the map.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="erase-2">erase/2</a></h3>
+<div class="spec">
+<p><tt>erase(Key::<a href="#type-key">key()</a>, Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; <a href="#type-crdt_map">crdt_map()</a></tt><br></p>
+</div><p>throws <tt>context_required</tt></p>
+<p>Removes a key and its value from the map. Removing a key that
+  does not exist simply records a remove operation.</p>
+
+<h3 class="function"><a name="fetch-2">fetch/2</a></h3>
+<div class="spec">
+<p><tt>fetch(Key::<a href="#type-key">key()</a>, Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; term()</tt><br></p>
+</div><p>Returns the "unwrapped" value associated with the key in the
+  map. If the key is not present, an exception is generated.</p>
+
+<h3 class="function"><a name="fetch_keys-1">fetch_keys/1</a></h3>
+<div class="spec">
+<p><tt>fetch_keys(Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; [<a href="#type-key">key()</a>]</tt><br></p>
+</div><p>Returns a list of all keys in the map.</p>
+
+<h3 class="function"><a name="find-2">find/2</a></h3>
+<div class="spec">
+<p><tt>find(Key::<a href="#type-key">key()</a>, Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; {ok, term()} | error</tt><br></p>
+</div><p>Searches for a key in the map. Returns <code>{ok, UnwrappedValue}</code>
+  when the key is present, or <code>error</code> if the key is not present in
+  the map.</p>
+
+<h3 class="function"><a name="fold-3">fold/3</a></h3>
+<div class="spec">
+<p><tt>fold(Fun::fun((<a href="#type-key">key()</a>, term(), term()) -&gt; term()), Acc0::term(), Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; term()</tt><br></p>
+</div><p>Folds over the entries in the map. This yields raw values,
+  not container types.</p>
+
+<h3 class="function"><a name="is_key-2">is_key/2</a></h3>
+<div class="spec">
+<p><tt>is_key(Key::<a href="#type-key">key()</a>, Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; boolean()</tt><br></p>
+</div><p>Test if the key is contained in the map.</p>
+
+<h3 class="function"><a name="is_type-1">is_type/1</a></h3>
+<div class="spec">
+<p><tt>is_type(T::term()) -&gt; boolean()</tt><br></p>
+</div><p>Determines whether the passed term is a map container.</p>
+
+<h3 class="function"><a name="new-0">new/0</a></h3>
+<div class="spec">
+<p><tt>new() -&gt; <a href="#type-crdt_map">crdt_map()</a></tt><br></p>
+</div><p>Creates a new, empty map container type.</p>
+
+<h3 class="function"><a name="new-1">new/1</a></h3>
+<div class="spec">
+<p><tt>new(Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-crdt_map">crdt_map()</a></tt><br></p>
+</div><p>Creates a new map with the specified context.</p>
+
+<h3 class="function"><a name="new-2">new/2</a></h3>
+<div class="spec">
+<p><tt>new(Values::[<a href="#type-raw_entry">raw_entry()</a>], Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-crdt_map">crdt_map()</a></tt><br></p>
+</div><p>Creates a new map with the specified key-value pairs and context.</p>
+
+<h3 class="function"><a name="size-1">size/1</a></h3>
+<div class="spec">
+<p><tt>size(Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; pos_integer()</tt><br></p>
+</div><p>Returns the number of entries in the map.</p>
+
+<h3 class="function"><a name="to_op-1">to_op/1</a></h3>
+<div class="spec">
+<p><tt>to_op(Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; <a href="riakc_datatype.html#type-update">riakc_datatype:update</a>(<a href="#type-map_op">map_op()</a>)</tt><br></p>
+</div><p>Extracts an operation from the map that can be encoded into an
+  update request.</p>
+
+<h3 class="function"><a name="type-0">type/0</a></h3>
+<div class="spec">
+<p><tt>type() -&gt; atom()</tt><br></p>
+</div><p>Returns the symbolic name of this container.</p>
+
+<h3 class="function"><a name="update-3">update/3</a></h3>
+<div class="spec">
+<p><tt>update(Key::<a href="#type-key">key()</a>, Fun::<a href="#type-update_fun">update_fun()</a>, Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; <a href="#type-crdt_map">crdt_map()</a></tt><br></p>
+</div><p>Updates the value stored at the key by calling the passed
+  function to get the new value. If the key did not previously exist,
+  it will be initialized to the empty value for its type before being
+  passed to the function.</p>
+
+<h3 class="function"><a name="value-1">value/1</a></h3>
+<div class="spec">
+<p><tt>value(Map::<a href="#type-crdt_map">crdt_map()</a>) -&gt; [<a href="#type-raw_entry">raw_entry()</a>]</tt><br></p>
+</div><p>Gets the original value of the map.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 17 2016, 06:39:45.</i></p>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module riakc_flag</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module riakc_flag</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>Encapsulates a flag data-type.
+
+<p><b>Behaviours:</b> <a href="riakc_datatype.html"><tt>riakc_datatype</tt></a>.</p>
+
+<h2><a name="description">Description</a></h2>Encapsulates a flag data-type. Flags are boolean values that
+  can be enabled or disabled. Like the other eventually-consistent
+  types, the original fetched value is unmodified by enabling or
+  disabling. Instead, the effective operation (<code>enable</code> or <code>disable</code>)
+  is captured for later application in Riak. Note that it is
+  possible to <code>enable</code> a flag that is already <code>true</code> and <code>disable</code> a
+  flag that is already <code>false</code>. Flags are only available as values in
+  maps.
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-flag">flag()</a></h3>
+<p><b>abstract datatype</b>: <tt>flag()</tt></p>
+
+
+<h3 class="typedecl"><a name="type-flag_op">flag_op()</a></h3>
+<p><tt>flag_op() = enable | disable</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#disable-1">disable/1</a></td><td>Disables the flag, setting its value to false.</td></tr>
+<tr><td valign="top"><a href="#enable-1">enable/1</a></td><td>Enables the flag, setting its value to true.</td></tr>
+<tr><td valign="top"><a href="#is_type-1">is_type/1</a></td><td>Determines whether the passed term is a flag container.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>Creates a new, empty flag container type.</td></tr>
+<tr><td valign="top"><a href="#new-1">new/1</a></td><td>Creates a new flag with the passed context.</td></tr>
+<tr><td valign="top"><a href="#new-2">new/2</a></td><td>Creates a new flag with the specified value and context.</td></tr>
+<tr><td valign="top"><a href="#to_op-1">to_op/1</a></td><td>Extracts an operation from the flag that can be encoded into
+  an update request.</td></tr>
+<tr><td valign="top"><a href="#type-0">type/0</a></td><td>Returns the symbolic name of this container.</td></tr>
+<tr><td valign="top"><a href="#value-1">value/1</a></td><td>Extracts the original value of the flag.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="disable-1">disable/1</a></h3>
+<div class="spec">
+<p><tt>disable(Flag::<a href="#type-flag">flag()</a>) -&gt; <a href="#type-flag">flag()</a></tt><br></p>
+</div><p>throws <tt>context_required</tt></p>
+<p>Disables the flag, setting its value to false.</p>
+
+<h3 class="function"><a name="enable-1">enable/1</a></h3>
+<div class="spec">
+<p><tt>enable(Flag::<a href="#type-flag">flag()</a>) -&gt; <a href="#type-flag">flag()</a></tt><br></p>
+</div><p>Enables the flag, setting its value to true.</p>
+
+<h3 class="function"><a name="is_type-1">is_type/1</a></h3>
+<div class="spec">
+<p><tt>is_type(T::term()) -&gt; boolean()</tt><br></p>
+</div><p>Determines whether the passed term is a flag container.</p>
+
+<h3 class="function"><a name="new-0">new/0</a></h3>
+<div class="spec">
+<p><tt>new() -&gt; <a href="#type-flag">flag()</a></tt><br></p>
+</div><p>Creates a new, empty flag container type.</p>
+
+<h3 class="function"><a name="new-1">new/1</a></h3>
+<div class="spec">
+<p><tt>new(Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-flag">flag()</a></tt><br></p>
+</div><p>Creates a new flag with the passed context.</p>
+
+<h3 class="function"><a name="new-2">new/2</a></h3>
+<div class="spec">
+<p><tt>new(Value::boolean(), Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-flag">flag()</a></tt><br></p>
+</div><p>Creates a new flag with the specified value and context.</p>
+
+<h3 class="function"><a name="to_op-1">to_op/1</a></h3>
+<div class="spec">
+<p><tt>to_op(Flag::<a href="#type-flag">flag()</a>) -&gt; <a href="riakc_datatype.html#type-update">riakc_datatype:update</a>(<a href="#type-flag_op">flag_op()</a>)</tt><br></p>
+</div><p>Extracts an operation from the flag that can be encoded into
+  an update request.</p>
+
+<h3 class="function"><a name="type-0">type/0</a></h3>
+<div class="spec">
+<p><tt>type() -&gt; atom()</tt><br></p>
+</div><p>Returns the symbolic name of this container.</p>
+
+<h3 class="function"><a name="value-1">value/1</a></h3>
+<div class="spec">
+<p><tt>value(Flag::<a href="#type-flag">flag()</a>) -&gt; boolean()</tt><br></p>
+</div><p>Extracts the original value of the flag. true is enabled,
+  false is disabled.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 17 2016, 06:39:45.</i></p>
+</body>
+</html>

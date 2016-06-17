@@ -1,0 +1,156 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module riakc_ts</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module riakc_ts</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>protobuf requests to Riak TS.
+
+
+<h2><a name="description">Description</a></h2>protobuf requests to Riak TS
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-req_id">req_id()</a></h3>
+<p><tt>req_id() = non_neg_integer()</tt></p>
+
+
+<h3 class="typedecl"><a name="type-table_name">table_name()</a></h3>
+<p><tt>table_name() = string() | binary()</tt></p>
+
+
+<h3 class="typedecl"><a name="type-ts_columnname">ts_columnname()</a></h3>
+<p><tt>ts_columnname() = <a href="riak_pb_ts_codec.html#type-tscolumnname">riak_pb_ts_codec:tscolumnname()</a></tt></p>
+
+
+<h3 class="typedecl"><a name="type-ts_value">ts_value()</a></h3>
+<p><tt>ts_value() = <a href="riak_pb_ts_codec.html#type-ldbvalue">riak_pb_ts_codec:ldbvalue()</a></tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#delete-4">delete/4</a></td><td>Delete a record, if there is one, having the fields
+       constituting the primary key in the Table equal to the
+       composite Key (given as a list), using client Pid.</td></tr>
+<tr><td valign="top"><a href="#get-4">get/4</a></td><td>Get a record, if there is one, having the fields constituting
+       the primary key in the Table equal to the composite Key
+       (supplied as a list), using client Pid.</td></tr>
+<tr><td valign="top"><a href="#get_coverage-3">get_coverage/3</a></td><td>Generate a parallel coverage plan for the specified query.</td></tr>
+<tr><td valign="top"><a href="#put-3">put/3</a></td><td>Equivalent to <tt>put / 4</tt>.
+</td></tr>
+<tr><td valign="top"><a href="#put-4">put/4</a></td><td>Make data records from Data and insert them, individually,       
+into a time-series Table, using client Pid.</td></tr>
+<tr><td valign="top"><a href="#query-2">query/2</a></td><td>Equivalent to <tt>query / 5</tt>.
+</td></tr>
+<tr><td valign="top"><a href="#query-3">query/3</a></td><td>Equivalent to <tt>query / 5</tt>.
+</td></tr>
+<tr><td valign="top"><a href="#query-4">query/4</a></td><td>Equivalent to <tt>query / 5</tt>.
+</td></tr>
+<tr><td valign="top"><a href="#query-5">query/5</a></td><td>Execute a Query with client.</td></tr>
+<tr><td valign="top"><a href="#replace_coverage-4">replace_coverage/4</a></td><td>Replace a component of a parallel coverage plan.</td></tr>
+<tr><td valign="top"><a href="#replace_coverage-5">replace_coverage/5</a></td><td></td></tr>
+<tr><td valign="top"><a href="#stream_list_keys-3">stream_list_keys/3</a></td><td>Streaming lists keys in Table, using client Pid.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="delete-4">delete/4</a></h3>
+<div class="spec">
+<p><tt>delete(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, Key::[<a href="#type-ts_value">ts_value()</a>], Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; ok | {error, Reason::term()}</tt><br></p>
+</div><p>Delete a record, if there is one, having the fields
+       constituting the primary key in the Table equal to the
+       composite Key (given as a list), using client Pid.  Options is
+       a proplist which can include values for 'vclock' and
+       'timeout'.  Unless vclock is supplied, a get (@see get/4) is
+       called in order to obtain one.</p>
+
+<h3 class="function"><a name="get-4">get/4</a></h3>
+<div class="spec">
+<p><tt>get(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, Key::[<a href="#type-ts_value">ts_value()</a>], Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; {ok, {Columns::[binary()], Record::[<a href="#type-ts_value">ts_value()</a>]}} | {error, {ErrCode::integer(), ErrMsg::binary()}}</tt><br></p>
+</div><p>Get a record, if there is one, having the fields constituting
+       the primary key in the Table equal to the composite Key
+       (supplied as a list), using client Pid.  Options is a proplist
+       which can include a value for 'timeout'.  Returns {ok,
+       {Columns, Record}} where Columns has column names, and
+       Record is the record found as a list of values, further as a
+       single element in enclosing list. If no record is found, the
+       return value is {ok, {[], []}}. On error, the function
+       returns {error, {ErrCode, ErrMsg}}.</p>
+
+<h3 class="function"><a name="get_coverage-3">get_coverage/3</a></h3>
+<div class="spec">
+<p><tt>get_coverage(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, QueryText::iolist()) -&gt; {ok, Entries::[term()]} | {error, term()}</tt><br></p>
+</div><p>Generate a parallel coverage plan for the specified query</p>
+
+<h3 class="function"><a name="put-3">put/3</a></h3>
+<div class="spec">
+<p><tt>put(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, Measurements::[[<a href="#type-ts_value">ts_value()</a>]]) -&gt; ok | {error, Reason::term()}</tt><br></p>
+</div><p>Equivalent to <tt>put / 4</tt>.</p>
+
+
+<h3 class="function"><a name="put-4">put/4</a></h3>
+<div class="spec">
+<p><tt>put(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, Measurements::[[<a href="#type-ts_value">ts_value()</a>]], Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; ok | {error, Reason::term()}</tt><br></p>
+</div><p><p>Make data records from Data and insert them, individually,       
+into a time-series Table, using client Pid. Each record is a       
+list of values of appropriate types for the complete set of       
+table column names, in the order in which they appear in table's       
+DDL.  On success, 'ok' is returned, else an {error, Reason}       
+tuple.</p>
+ 
+       As of 2015-11-05, ColumnNames parameter is ignored, the function
+       expects the full set of fields in each element of Data.</p>
+
+<h3 class="function"><a name="query-2">query/2</a></h3>
+<div class="spec">
+<p><tt>query(Pid::pid(), Query::string() | binary()) -&gt; {ok, {ColumnNames::[<a href="#type-ts_columnname">ts_columnname()</a>], Rows::[tuple()]}} | {error, Reason::term()}</tt><br></p>
+</div><p>Equivalent to <tt>query / 5</tt>.</p>
+
+
+<h3 class="function"><a name="query-3">query/3</a></h3>
+<div class="spec">
+<p><tt>query(Pid::pid(), Query::string() | binary(), Interpolations::[{binary(), binary()}]) -&gt; {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}</tt><br></p>
+</div><p>Equivalent to <tt>query / 5</tt>.</p>
+
+
+<h3 class="function"><a name="query-4">query/4</a></h3>
+<div class="spec">
+<p><tt>query(Pid::pid(), Query::string(), Interpolations::[{binary(), binary()}], Cover::term()) -&gt; {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}</tt><br></p>
+</div><p>Equivalent to <tt>query / 5</tt>.</p>
+
+
+<h3 class="function"><a name="query-5">query/5</a></h3>
+<div class="spec">
+<p><tt>query(Pid::pid(), Query::string(), Interpolations::[{binary(), binary()}], Cover::term(), Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}</tt><br></p>
+</div><p>Execute a Query with client.  The result returned
+       is a tuple containing a list of columns as binaries in the
+       first element, and a list of records, each represented as a
+       list of values, in the second element, or an {error, Reason}
+       tuple.</p>
+
+<h3 class="function"><a name="replace_coverage-4">replace_coverage/4</a></h3>
+<div class="spec">
+<p><tt>replace_coverage(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, QueryText::iolist(), Cover::binary()) -&gt; {ok, Entries::[term()]} | {error, term()}</tt><br></p>
+</div><p>Replace a component of a parallel coverage plan</p>
+
+<h3 class="function"><a name="replace_coverage-5">replace_coverage/5</a></h3>
+<div class="spec">
+<p><tt>replace_coverage(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, QueryText::iolist(), Cover::binary(), OtherCover::[binary()]) -&gt; {ok, Entries::[term()]} | {error, term()}</tt><br></p>
+</div>
+
+<h3 class="function"><a name="stream_list_keys-3">stream_list_keys/3</a></h3>
+<div class="spec">
+<p><tt>stream_list_keys(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, Timeout::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; {ok, <a href="#type-req_id">req_id()</a>} | {error, term()}</tt><br></p>
+</div><p>Streaming lists keys in Table, using client Pid.  Parameter
+       Options is a proplist that can include a value for
+       'timeout'. Returns {ok, ReqId} or {error, Reason}.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 17 2016, 06:39:46.</i></p>
+</body>
+</html>
