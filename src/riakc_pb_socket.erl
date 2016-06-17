@@ -154,12 +154,6 @@
 -define(NOW, erlang:now()).
 -endif.
 
--ifdef(namespaced_types).
--type request_queue_t() :: queue:queue(#request{}).
--else.
--type request_queue_t() :: queue().
--endif.
-
 -type portnum() :: non_neg_integer(). %% The TCP port number of the Riak node's Protocol Buffers interface
 -type address() :: string() | atom() | inet:ip_address(). %% The TCP/IP host name or address of the Riak node
 -record(state, {address :: address(),    % address to connect to
