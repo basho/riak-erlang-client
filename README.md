@@ -697,7 +697,68 @@ Contributors
 
 This is not a comprehensive list, please see the commit history.
 
-* [Sam Tavakoli](https://github.com/sata)
+* [Aaron France]("https://github.com/AeroNotix")
+* [Akash Manohar]("https://github.com/HashNuke")
+* [Alex Moore]("https://github.com/alexmoore")
+* [Andreas Hasselberg]("https://github.com/anha0825")
+* [Andrei Zavada]("https://github.com/hmmr")
+* [Andrew Thompson]("https://github.com/Vagabond")
+* [Andrzej Kajetanowicz]("https://github.com/kajetanowicz")
+* [Andy Gross]("https://github.com/argv0")
+* [Anthony Molinaro]("https://github.com/djnym")
+* [Brett Hazen]("https://github.com/javajolt")
+* [Brian McClain]("https://github.com/BrianMMcClain")
+* [Brian Roach]("https://github.com/broach")
+* [Bryan Fink]("https://github.com/beerriot")
+* [Bryce Kerley]("https://github.com/bkerley")
+* [Christian Dahlqvist]("https://github.com/cdahlqvist")
+* [Christopher Meiklejohn]("https://github.com/cmeiklejohn")
+* [Daniel Fernandez]("https://github.com/danielfernandez")
+* [Daniel Néri]("https://github.com/dne")
+* [Daniel Reverri]("https://github.com/dreverri")
+* [Daniel White]("https://github.com/danielwhite")
+* [Dave Parfitt]("https://github.com/metadave")
+* [Dave Smith]("https://github.com/djsmith42")
+* [Dmitry Demeshchuk]("https://github.com/doubleyou")
+* [Drew]("https://github.com/drew")
+* [Eduardo Gurgel]("https://github.com/edgurgel")
+* Engel A. Sanchez
+* [Eric Redmond]("https://github.com/coderoshi")
+* Erik Leitch
+* Evan Vigil-McClanahan
+* [Fred Dushin]("https://github.com/fadushin")
+* [Jared Morrow]("https://github.com/jaredmorrow")
+* [Jeffrey Massung]("https://github.com/massung")
+* [Jeremy Raymond]("https://github.com/jeraymond")
+* [John Daily]("https://github.com/macintux")
+* [Jon Meredith]("https://github.com/jonmeredith")
+* [Joseph Blomstedt]("https://github.com/jtuple")
+* [Kelly McLaughlin]("https://github.com/kellymclaughlin")
+* [Kevin Smith]("https://github.com/kevsmith")
+* [Luc Perkins]("https://github.com/lucperkins")
+* [Lukasz Milewski]("https://github.com/milek")
+* [Luke Bakken]("https://github.com/lukebakken")
+* [Mark Phillips]("https://github.com/phips")
+* [Matt Heitzenroder]("https://github.com/roder")
+* [Mikhail Sobolev]("https://github.com/sa2ajj")
+* Olav Frengstad
+* [Paulo Almeida]("https://github.com/pma")
+* [Paul Oliver]("https://github.com/puzza007")
+* [Piotr Nosek]("https://github.com/fenek")
+* [Reid Draper]("https://github.com/reiddraper")
+* [Russell Brown]("https://github.com/russelldb")
+* [Rusty Klophaus]("https://github.com/rustyio")
+* [Ryan Zezeski]("https://github.com/rzezeski")
+* [Sam Tavakoli]("https://github.com/sata")
+* [Scott Fritchie]("https://github.com/slfritchie")
+* [Sean Cribbs]("https://github.com/seancribbs")
+* [Sebastian Probst Eide]("https://github.com/sebastian")
+* [Srijan Choudhary]("https://github.com/srijan")
+* [Steve Vinoski]("https://github.com/vinoski")
+* [Tuncer Ayaz]("https://github.com/tuncer")
+* [UENISHI Kota]("https://github.com/kuenishi")
+* [Wade Mealing]("https://github.com/wmealing")
+* [Zeeshan Lakhani]("https://github.com/zeeshanlakhani")
 
 [basho_docs]: http://docs.basho.com/
 [kv_setup]: http://docs.basho.com/riak/kv/latest/setup/
@@ -712,3 +773,4 @@ This is not a comprehensive list, please see the commit history.
 [kv_developing_usage_security]: https://docs.basho.com/riak/kv/latest/developing/usage/security/
 [kv_using_security_basics_user_mgmt]: https://docs.basho.com/riak/kv/latest/using/security/basics/#user-management
 [kv_using_security_basics_certs]: https://docs.basho.com/riak/kv/latest/using/security/basics/#certificate-configuration
+
