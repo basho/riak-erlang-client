@@ -1,0 +1,4 @@
+[submodule "doc"]
+	path = doc
+	url = git@github.com:basho/riak-erlang-client.git
+	branch = gh-pages
