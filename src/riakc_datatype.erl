@@ -34,7 +34,8 @@
 -endif.
 
 
--define(MODULES, [riakc_set, riakc_counter, riakc_flag, riakc_register, riakc_map]).
+-define(MODULES, [riakc_set, riakc_counter, riakc_flag, riakc_register, riakc_map,
+                  riakc_range]).
 
 -export([module_for_type/1,
          module_for_term/1]).
@@ -78,6 +79,15 @@
 %% set, map, counter.
 -callback type() -> typename().
 
+
+-ifdef(EQC).
+
+-callback gen_type() -> eqc_gen:gen(datatype()).
+
+-callback gen_op()   -> eqc_gen:gen({atom(), [term()]}).
+
+-endif.
+
 %% Returns the module that is a container for the given abstract
 %% type.
 -spec module_for_type(Type::atom()) -> module().
@@ -85,7 +95,8 @@ module_for_type(set)      -> riakc_set;
 module_for_type(counter)  -> riakc_counter;
 module_for_type(flag)     -> riakc_flag;
 module_for_type(register) -> riakc_register;
-module_for_type(map)      -> riakc_map.
+module_for_type(map)      -> riakc_map;
+module_for_type(range)    -> riakc_range.
 
 %% @doc Returns the appropriate container module for the given term,
 %% if possible.

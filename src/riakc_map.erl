@@ -53,6 +53,7 @@
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eunit/include/eunit.hrl").
+-export([gen_type/0, gen_op/0]).
 -compile(export_all).
 -endif.
 
@@ -89,6 +90,7 @@
                             riakc_set:set_op() |
                             riakc_flag:flag_op() |
                             riakc_register:register_op() |
+                            riakc_rangereg:rangereg_op() |
                             map_op().
 -type field_update() :: {update, key(), embedded_type_op()}.
 -type simple_map_op() :: {remove, key()} | field_update().
@@ -260,6 +262,7 @@ gen_entry(S) ->
                             {5, riakc_register},
                             {5, riakc_counter},
                             {5, riakc_set},
+                            {5, riakc_rangereg},
                             {1, riakc_map}
                            ],
               Fr >= 5 orelse S >= 5]).
