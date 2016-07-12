@@ -82,7 +82,7 @@
 %% type.
 -spec module_for_type(Type::atom()) -> module().
 module_for_type(set)      -> riakc_set;
-module_for_type(gset)      -> riakc_gset;
+module_for_type(gset)     -> riakc_gset;
 module_for_type(counter)  -> riakc_counter;
 module_for_type(flag)     -> riakc_flag;
 module_for_type(register) -> riakc_register;
