@@ -664,12 +664,12 @@ CREATE TABLE GeoCheckin
 
 ### Store TS Data
 
-To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition.
+To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition, and note that each row is a tuple of values corresponding to the columns in the table.
 
 
 ```erlang
 {ok, Pid} = riakc_pb_socket:start_link("myriakdb.host", 10017).
-riakc_ts:put(Pid, "GeoCheckin", [[<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5], [<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8]]).
+riakc_ts:put(Pid, "GeoCheckin", [{<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5}, {<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8}]).
 ```
 
 ### Query TS Data
