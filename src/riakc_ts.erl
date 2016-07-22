@@ -87,7 +87,8 @@ query_common(Pid, Query, Interpolations, Cover, Options)
     Msg1 = Msg0#tsqueryreq{cover_context = Cover},
     Msg = {Msg1, {msgopts, Options}},
     Response = server_call(Pid, Msg),
-    riakc_ts_query_operator:deserialize(Response).
+    riakc_ts_query_operator:deserialize(Response,
+                                        proplists:get_value(datatypes, Options, false)).
 
 
 %% @doc Generate a parallel coverage plan for the specified query

@@ -29,7 +29,7 @@
 -include_lib("riak_pb/include/riak_ts_ttb.hrl").
 
 -export([serialize/2,
-         deserialize/1]).
+         deserialize/1, deserialize/2]).
 
 serialize(QueryText, Interpolations) ->
     Content = #tsinterpolation{
@@ -47,17 +47,26 @@ serialize_interpolations([{Key, Value} | RemainingInterps],
     UpdatedInterps = [#rpbpair{key=Key, value=Value} | SerializedInterps],
     serialize_interpolations(RemainingInterps, UpdatedInterps).
 
-deserialize({error, {Code, Message}}) when is_integer(Code), is_list(Message) ->
+deserialize(Response) ->
+    deserialize(Response, false).
+
+deserialize({error, {Code, Message}}, _Types) when is_integer(Code), is_list(Message) ->
     {error, {Code, iolist_to_binary(Message)}};
-deserialize({error, {Code, Message}}) when is_integer(Code), is_atom(Message) ->
+deserialize({error, {Code, Message}}, _Types) when is_integer(Code), is_atom(Message) ->
     {error, {Code, iolist_to_binary(atom_to_list(Message))}};
-deserialize({error, Message}) ->
+deserialize({error, Message}, _Types) ->
     {error, Message};
-deserialize(tsqueryresp) ->
+deserialize(tsqueryresp, _Types) ->
     {ok, {[], []}};
-deserialize({tsqueryresp, {ColumnNames, _ColumnTypes, Rows}}) ->
+deserialize({tsqueryresp, {ColumnNames, _ColumnTypes, Rows}}, false) ->
     {ok, {ColumnNames, Rows}};
-deserialize(#tsqueryresp{columns = C, rows = R}) ->
+deserialize({tsqueryresp, {ColumnNames, ColumnTypes, Rows}}, true) ->
+    {ok, {lists:zip(ColumnNames, ColumnTypes), Rows}};
+deserialize(#tsqueryresp{columns = C, rows = R}, false) ->
     ColumnNames = [ColName || #tscolumndescription{name = ColName} <- C],
     Rows = riak_pb_ts_codec:decode_rows(R),
-    {ok, {ColumnNames, Rows}}.
+    {ok, {ColumnNames, Rows}};
+deserialize(#tsqueryresp{columns = C, rows = R}, true) ->
+    Columns = [{ColName, ColType} || #tscolumndescription{name = ColName, type = ColType} <- C],
+    Rows = riak_pb_ts_codec:decode_rows(R),
+    {ok, {Columns, Rows}}.
