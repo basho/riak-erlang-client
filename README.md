@@ -260,7 +260,7 @@ Note that keylist updates are asynchronous to the object storage primitives, and
     4> receive Msg2 \-> Msg2 end.
     {87009603,done}
 
-See [`riakc_pb_socket:wait_for_listkeys`](https://github.com/basho/riak-erlang-client/blob/master/src/riakc_pb_socket.erl#L1087) for an example of receiving.
+See [`riakc_utils:wait_for_list`](https://github.com/basho/riak-erlang-client/blob/develop/src/riakc_utils.erl) for a function to receive data.
 
 Bucket Properties
 =================

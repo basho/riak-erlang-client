@@ -13,3 +13,4 @@ ebin/*
 test-unchanged.escript
 .idea
 *.iml
+*.dump
