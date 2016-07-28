@@ -24,7 +24,7 @@
 
 -module(riakc_ts).
 
--export([query/2, query/3, query/4, query/5,
+-export(['query'/2, 'query'/3, 'query'/4, 'query'/5,
          get_coverage/3,
          replace_coverage/4, replace_coverage/5,
          put/3, put/4,
@@ -43,28 +43,28 @@
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
 
--spec query(pid(), Query::string()|binary()) ->
+-spec 'query'(pid(), Query::string()|binary()) ->
             {ok, {ColumnNames::[ts_columnname()], Rows::[tuple()]}} | {error, Reason::term()}.
-%% @equiv query/5
-query(Pid, Query) ->
-    query(Pid, Query, [], undefined, []).
+%% @equiv 'query'/5
+'query'(Pid, Query) ->
+    'query'(Pid, Query, [], undefined, []).
 
--spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
+-spec 'query'(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5
-query(Pid, Query, Interpolations) ->
-    query(Pid, Query, Interpolations, undefined, []).
+%% @equiv 'query'/5
+'query'(Pid, Query, Interpolations) ->
+    'query'(Pid, Query, Interpolations, undefined, []).
 
--spec query(Pid::pid(),
+-spec 'query'(Pid::pid(),
             Query::string(),
             Interpolations::[{binary(), binary()}],
             Cover::term()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5
-query(Pid, Query, Interpolations, Cover) ->
-    query(Pid, Query, Interpolations, Cover, []).
+%% @equiv 'query'/5
+'query'(Pid, Query, Interpolations, Cover) ->
+    'query'(Pid, Query, Interpolations, Cover, []).
 
--spec query(Pid::pid(),
+-spec 'query'(Pid::pid(),
             Query::string(),
             Interpolations::[{binary(), binary()}],
             Cover::term(),
@@ -75,9 +75,9 @@ query(Pid, Query, Interpolations, Cover) ->
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
-query(Pid, Query, Interpolations, undefined, Options) ->
+'query'(Pid, Query, Interpolations, undefined, Options) ->
         query_common(Pid, Query, Interpolations, undefined, Options);
-query(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
+'query'(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
         query_common(Pid, Query, Interpolations, Cover, Options).
 
 query_common(Pid, Query, Interpolations, Cover, Options)
@@ -91,12 +91,12 @@ query_common(Pid, Query, Interpolations, Cover, Options)
                                         proplists:get_value(datatypes, Options, false)).
 
 
-%% @doc Generate a parallel coverage plan for the specified query
+%% @doc Generate a parallel coverage plan for the specified 'query'
 -spec get_coverage(pid(), table_name(), QueryText::iolist()) ->
                           {ok, Entries::[term()]} | {error, term()}.
 get_coverage(Pid, Table, Query) ->
     Message =
-        #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
+        #tscoveragereq{'query' = #tsinterpolation{base = iolist_to_binary(Query)},
                        replace_cover = undefined,
                        table = iolist_to_binary(Table)},
     case server_call(Pid, Message) of
@@ -117,7 +117,7 @@ replace_coverage(Pid, Table, Query, Cover) ->
                               {ok, Entries::[term()]} | {error, term()}.
 replace_coverage(Pid, Table, Query, Cover, Other) ->
     Message =
-        #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
+        #tscoveragereq{'query' = #tsinterpolation{base = iolist_to_binary(Query)},
                        replace_cover = Cover,
                        unavailable_cover = Other,
                        table = iolist_to_binary(Table)},
