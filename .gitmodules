@@ -2,3 +2,6 @@
 	path = doc
 	url = https://github.com/basho/riak-erlang-client.git
 	branch = gh-pages
+[submodule "tools"]
+	path = tools
+	url = https://github.com/basho/riak-client-tools.git
