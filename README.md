@@ -260,7 +260,7 @@ Note that keylist updates are asynchronous to the object storage primitives, and
     4> receive Msg2 \-> Msg2 end.
     {87009603,done}
 
-See [`riakc_pb_socket:wait_for_listkeys`](https://github.com/basho/riak-erlang-client/blob/master/src/riakc_pb_socket.erl#L1087) for an example of receiving.
+See [`riakc_utils:wait_for_list`](https://github.com/basho/riak-erlang-client/blob/develop/src/riakc_utils.erl) for a function to receive data.
 
 Bucket Properties
 =================
@@ -664,12 +664,12 @@ CREATE TABLE GeoCheckin
 
 ### Store TS Data
 
-To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition.
+To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition, and note that each row is a tuple of values corresponding to the columns in the table.
 
 
 ```erlang
 {ok, Pid} = riakc_pb_socket:start_link("myriakdb.host", 10017).
-riakc_ts:put(Pid, "GeoCheckin", [[<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5], [<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8]]).
+riakc_ts:put(Pid, "GeoCheckin", [{<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5}, {<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8}]).
 ```
 
 ### Query TS Data

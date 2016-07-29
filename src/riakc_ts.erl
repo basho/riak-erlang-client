@@ -30,7 +30,7 @@
          put/3, put/4,
          get/4,
          delete/4,
-         stream_list_keys/3]).
+         stream_list_keys/2, stream_list_keys/3]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -56,7 +56,7 @@
     'query'(Pid, Query, Interpolations, undefined, []).
 
 -spec 'query'(Pid::pid(),
-            Query::string(),
+            Query::string()|binary(),
             Interpolations::[{binary(), binary()}],
             Cover::term()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
@@ -65,7 +65,7 @@
     'query'(Pid, Query, Interpolations, Cover, []).
 
 -spec 'query'(Pid::pid(),
-            Query::string(),
+            Query::string()|binary(),
             Interpolations::[{binary(), binary()}],
             Cover::term(),
             Options::proplists:proplist()) ->
@@ -82,8 +82,11 @@
 
 query_common(Pid, Query, Interpolations, Cover, Options)
   when is_pid(Pid), is_list(Query) ->
-    Msg0 = riakc_ts_query_operator:serialize(
-                iolist_to_binary(Query), Interpolations),
+    QueryBin = unicode:characters_to_binary(Query),
+    query_common(Pid, QueryBin, Interpolations, Cover, Options);
+query_common(Pid, Query, Interpolations, Cover, Options)
+  when is_pid(Pid), is_binary(Query) ->
+    Msg0 = riakc_ts_query_operator:serialize(Query, Interpolations),
     Msg1 = Msg0#tsqueryreq{cover_context = Cover},
     Msg = {Msg1, {msgopts, Options}},
     Response = server_call(Pid, Msg),
@@ -202,7 +205,14 @@ get(Pid, Table, Key, Options)
     riakc_ts_get_operator:deserialize(Response).
 
 
--spec stream_list_keys(pid(), table_name(), proplists:proplist()) ->
+-spec stream_list_keys(pid(), table_name()) ->
+                       {ok, req_id()} | {error, term()}.
+%% @doc Streaming lists keys in Table, using client Pid, with no timeout.
+%%      Returns @{ok, ReqId@} or @{error, Reason@}.
+stream_list_keys(Pid, Table) ->
+    stream_list_keys(Pid, Table, infinity).
+
+-spec stream_list_keys(pid(), table_name(), proplists:proplist()|infinity) ->
                               {ok, req_id()} | {error, term()}.
 %% @doc Streaming lists keys in Table, using client Pid.  Parameter
 %%      Options is a proplist that can include a value for

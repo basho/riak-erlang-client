@@ -1,26 +1,26 @@
-RIAK_CONF = ${RIAK_DIR}/etc/riak.conf
-ADVANCED_CONF = ${RIAK_DIR}/etc/advanced.config
-# RIAK = ${RIAK_DIR}/bin/riak
-RIAK_ADMIN = ${RIAK_DIR}/bin/riak-admin
-# CERTS_DIR = $(shell pwd)/../src/test/resources
+PROJDIR = $(realpath $(CURDIR)/..)
+
+TOOLS_DIR = $(PROJDIR)/tools/devrel
+RIAK_CONF = $(RIAK_DIR)/etc/riak.conf
+ADV_CONF = $(RIAK_DIR)/etc/advanced.config
+RIAK_ADMIN = $(RIAK_DIR)/bin/riak-admin
+
+export RIAK_TEST_HOST_1 = 127.0.0.1
+export RIAK_TEST_NODE_1 = dev1@127.0.0.1
+export RIAK_TEST_PBC_1 = 8087
 
 preconfigure:
-	echo "storage_backend = memory" >> ${RIAK_CONF}
-	echo "anti_entropy = passive" >> ${RIAK_CONF}
-	./add_to_advanced_config ${ADVANCED_CONF} '{riak_kv,[{test,true}]}.'
-	echo "search = on" >> ${RIAK_CONF}
-	echo "listener.protobuf.internal = 127.0.0.1:8087" >> ${RIAK_CONF}
-	echo "distributed_cookie = riak" >> ${RIAK_CONF}
-	echo "nodename = riak@127.0.0.1" >> ${RIAK_CONF}
+	$(TOOLS_DIR)/gen-riak-conf $(RIAK_CONF) 8098 8087
+	$(TOOLS_DIR)/gen-adv-conf $(ADV_CONF)
 
 configure:
-	./crdt-setup ${RIAK_ADMIN}
+	$(TOOLS_DIR)/riak-cluster-config $(RIAK_ADMIN) 8098 true false
 
 compile:
-	@${MAKE} -C .. compile
+	@${MAKE} -C $(PROJDIR) compile
 
 lint:
-	@${MAKE} -C .. xref dialyzer
+	@${MAKE} -C $(PROJDIR) xref dialyzer
 
 test:
-	@${MAKE} -C .. test
+	@${MAKE} -C $(PROJDIR) test
