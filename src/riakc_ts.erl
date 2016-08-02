@@ -81,11 +81,7 @@
         query_common(Pid, Query, Interpolations, Cover, Options).
 
 query_common(Pid, Query, Interpolations, Cover, Options)
-  when is_pid(Pid), is_list(Query) ->
-    QueryBin = unicode:characters_to_binary(Query),
-    query_common(Pid, QueryBin, Interpolations, Cover, Options);
-query_common(Pid, Query, Interpolations, Cover, Options)
-  when is_pid(Pid), is_binary(Query) ->
+  when is_pid(Pid) ->
     Msg0 = riakc_ts_query_operator:serialize(Query, Interpolations),
     Msg1 = Msg0#tsqueryreq{cover_context = Cover},
     Msg = {Msg1, {msgopts, Options}},
@@ -98,10 +94,12 @@ query_common(Pid, Query, Interpolations, Cover, Options)
 -spec get_coverage(pid(), table_name(), QueryText::iolist()) ->
                           {ok, Entries::[term()]} | {error, term()}.
 get_coverage(Pid, Table, Query) ->
+    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
+    {ok, Q} = riakc_utils:characters_to_unicode_binary(Query),
     Message =
-        #tscoveragereq{'query' = #tsinterpolation{base = iolist_to_binary(Query)},
+        #tscoveragereq{'query' = #tsinterpolation{base = Q},
                        replace_cover = undefined,
-                       table = iolist_to_binary(Table)},
+                       table = T},
     case server_call(Pid, Message) of
         {ok, Entries} ->
             {ok, riak_pb_ts_codec:decode_cover_list(Entries)};
@@ -119,11 +117,13 @@ replace_coverage(Pid, Table, Query, Cover) ->
                        OtherCover::list(binary())) ->
                               {ok, Entries::[term()]} | {error, term()}.
 replace_coverage(Pid, Table, Query, Cover, Other) ->
+    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
+    {ok, Q} = riakc_utils:characters_to_unicode_binary(Query),
     Message =
-        #tscoveragereq{'query' = #tsinterpolation{base = iolist_to_binary(Query)},
+        #tscoveragereq{'query' = #tsinterpolation{base = Q},
                        replace_cover = Cover,
                        unavailable_cover = Other,
-                       table = iolist_to_binary(Table)},
+                       table = T},
     case server_call(Pid, Message) of
         {ok, Entries} ->
             {ok, riak_pb_ts_codec:decode_cover_list(Entries)};
@@ -174,7 +174,8 @@ put(Pid, Table, Measurements, Options)
 delete(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsdelreq{table   = iolist_to_binary(Table),
+    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
+    Message = #tsdelreq{table   = T,
                         key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
                         vclock  = proplists:get_value(vclock, Options),
                         timeout = proplists:get_value(timeout, Options)},
@@ -223,9 +224,9 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Table, [{timeout, Timeout}]);
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
+    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
     ReqTimeout = proplists:get_value(timeout, Options),
-    Req = #tslistkeysreq{table   = iolist_to_binary(Table),
-                         timeout = ReqTimeout},
+    Req = #tslistkeysreq{table = T, timeout = ReqTimeout},
     ReqId = riakc_pb_socket:mk_reqid(),
     gen_server:call(Pid, {req, Req, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
 

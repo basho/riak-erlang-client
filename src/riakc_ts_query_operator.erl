@@ -31,9 +31,12 @@
 -export([serialize/2,
          deserialize/1, deserialize/2]).
 
-serialize(QueryText, Interpolations) ->
+
+serialize(QueryText, Interpolations)
+  when is_binary(QueryText) orelse is_list(QueryText) ->
+    {ok, Q} = riakc_utils:characters_to_unicode_binary(QueryText),
     Content = #tsinterpolation{
-                 base           = iolist_to_binary(QueryText),
+                 base           = Q,
                  interpolations = serialize_interpolations(Interpolations)},
     #tsqueryreq{'query' = Content}.
 

@@ -22,7 +22,7 @@
 
 -module(riakc_utils).
 
--export([wait_for_list/1]).
+-export([wait_for_list/1, characters_to_unicode_binary/1]).
 
 %% @doc Wait for the results of a listing operation
 wait_for_list(ReqId) ->
@@ -32,4 +32,18 @@ wait_for_list(ReqId, Acc) ->
         {ReqId, done} -> {ok, lists:flatten(Acc)};
         {ReqId, {error, Reason}} -> {error, Reason};
         {ReqId, {_, Res}} -> wait_for_list(ReqId, [Res|Acc])
+    end.
+
+%% @doc Convert to unicode binary with informative errors
+%% @throws {unicode_error, ErrMsg}
+characters_to_unicode_binary(String) ->
+    case unicode:characters_to_binary(String) of
+        {incomplete, Encoded, Rest} ->
+            ErrMsg = io_lib:format("Incomplete unicode data provided. Encoded: ~p Rest: ~p", [Encoded, Rest]),
+            throw({unicode_error, ErrMsg});
+        {error, Encoded, Rest} ->
+            ErrMsg = io_lib:format("Unicode encoding error. Encoded: ~p Rest: ~p", [Encoded, Rest]),
+            throw({unicode_error, ErrMsg});
+        Binary ->
+            {ok, Binary}
     end.

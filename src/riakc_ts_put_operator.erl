@@ -35,12 +35,14 @@
 %% As of 2015-11-05, columns parameter is ignored, Riak TS
 %% expects the full set of fields in each element of Data.
 serialize(TableName, Measurements, true) ->
-    #tsputreq{table   = iolist_to_binary(TableName),
+    {ok, T} = riakc_utils:characters_to_unicode_binary(TableName),
+    #tsputreq{table   = T,
               columns = [],
               rows    = Measurements};
 serialize(TableName, Measurements, false) ->
+    {ok, T} = riakc_utils:characters_to_unicode_binary(TableName),
     SerializedRows = riak_pb_ts_codec:encode_rows_non_strict(Measurements),
-    #tsputreq{table   = TableName,
+    #tsputreq{table   = T,
               columns = [],
               rows    = SerializedRows}.
 
