@@ -33,10 +33,10 @@
 
 
 serialize(Table, Key, true) ->
-    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
+    T = riakc_utils:characters_to_unicode_binary(Table),
     #tsgetreq{table = T, key = Key};
 serialize(Table, Key, false) ->
-    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
+    T = riakc_utils:characters_to_unicode_binary(Table),
     SerializedKey = riak_pb_ts_codec:encode_cells_non_strict(Key),
     #tsgetreq{table = T, key = SerializedKey}.
 

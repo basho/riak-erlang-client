@@ -24,6 +24,7 @@
 
 -export([wait_for_list/1, characters_to_unicode_binary/1]).
 
+-spec wait_for_list(non_neg_integer()) -> {ok, list()} | {error, any()}.
 %% @doc Wait for the results of a listing operation
 wait_for_list(ReqId) ->
     wait_for_list(ReqId, []).
@@ -34,16 +35,17 @@ wait_for_list(ReqId, Acc) ->
         {ReqId, {_, Res}} -> wait_for_list(ReqId, [Res|Acc])
     end.
 
+-spec characters_to_unicode_binary(string()|binary()) -> binary().
 %% @doc Convert to unicode binary with informative errors
 %% @throws {unicode_error, ErrMsg}
 characters_to_unicode_binary(String) ->
     case unicode:characters_to_binary(String) of
         {incomplete, Encoded, Rest} ->
-            ErrMsg = io_lib:format("Incomplete unicode data provided. Encoded: ~p Rest: ~p", [Encoded, Rest]),
+            ErrMsg = lists:flatten(io_lib:format("Incomplete unicode data provided. Encoded: ~p Rest: ~p", [Encoded, Rest])),
             throw({unicode_error, ErrMsg});
         {error, Encoded, Rest} ->
-            ErrMsg = io_lib:format("Unicode encoding error. Encoded: ~p Rest: ~p", [Encoded, Rest]),
+            ErrMsg = lists:flatten(io_lib:format("Unicode encoding error. Encoded: ~p Rest: ~p", [Encoded, Rest])),
             throw({unicode_error, ErrMsg});
         Binary ->
-            {ok, Binary}
+            Binary
     end.
