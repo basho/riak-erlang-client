@@ -39,10 +39,10 @@ wait_for_list(ReqId, Acc) ->
 characters_to_unicode_binary(String) ->
     case unicode:characters_to_binary(String) of
         {incomplete, Encoded, Rest} ->
-            ErrMsg = io_lib:format("Incomplete unicode data provided. Encoded: ~p Rest: ~p", [Encoded, Rest]),
+            ErrMsg = lists:flatten(io_lib:format("Incomplete unicode data provided. Encoded: ~p Rest: ~p", [Encoded, Rest])),
             throw({unicode_error, ErrMsg});
         {error, Encoded, Rest} ->
-            ErrMsg = io_lib:format("Unicode encoding error. Encoded: ~p Rest: ~p", [Encoded, Rest]),
+            ErrMsg = lists:flatten(io_lib:format("Unicode encoding error. Encoded: ~p Rest: ~p", [Encoded, Rest])),
             throw({unicode_error, ErrMsg});
         Binary ->
             Binary
