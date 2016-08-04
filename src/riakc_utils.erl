@@ -45,5 +45,5 @@ characters_to_unicode_binary(String) ->
             ErrMsg = io_lib:format("Unicode encoding error. Encoded: ~p Rest: ~p", [Encoded, Rest]),
             throw({unicode_error, ErrMsg});
         Binary ->
-            {ok, Binary}
+            Binary
     end.

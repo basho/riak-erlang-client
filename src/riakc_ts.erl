@@ -94,8 +94,8 @@ query_common(Pid, Query, Interpolations, Cover, Options)
 -spec get_coverage(pid(), table_name(), QueryText::iolist()) ->
                           {ok, Entries::[term()]} | {error, term()}.
 get_coverage(Pid, Table, Query) ->
-    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
-    {ok, Q} = riakc_utils:characters_to_unicode_binary(Query),
+    T = riakc_utils:characters_to_unicode_binary(Table),
+    Q = riakc_utils:characters_to_unicode_binary(Query),
     Message =
         #tscoveragereq{'query' = #tsinterpolation{base = Q},
                        replace_cover = undefined,
@@ -117,8 +117,8 @@ replace_coverage(Pid, Table, Query, Cover) ->
                        OtherCover::list(binary())) ->
                               {ok, Entries::[term()]} | {error, term()}.
 replace_coverage(Pid, Table, Query, Cover, Other) ->
-    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
-    {ok, Q} = riakc_utils:characters_to_unicode_binary(Query),
+    T = riakc_utils:characters_to_unicode_binary(Table),
+    Q = riakc_utils:characters_to_unicode_binary(Query),
     Message =
         #tscoveragereq{'query' = #tsinterpolation{base = Q},
                        replace_cover = Cover,
@@ -174,7 +174,7 @@ put(Pid, Table, Measurements, Options)
 delete(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
+    T = riakc_utils:characters_to_unicode_binary(Table),
     Message = #tsdelreq{table   = T,
                         key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
                         vclock  = proplists:get_value(vclock, Options),
@@ -224,7 +224,7 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Table, [{timeout, Timeout}]);
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
-    {ok, T} = riakc_utils:characters_to_unicode_binary(Table),
+    T = riakc_utils:characters_to_unicode_binary(Table),
     ReqTimeout = proplists:get_value(timeout, Options),
     Req = #tslistkeysreq{table = T, timeout = ReqTimeout},
     ReqId = riakc_pb_socket:mk_reqid(),
