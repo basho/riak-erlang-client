@@ -10,6 +10,7 @@ ADMIN=$1
 
 $ADMIN bucket-type create map_bucket '{"props":{"datatype":"map"}}' || exit 1
 $ADMIN bucket-type create set_bucket '{"props":{"datatype":"set"}}' || exit 1
+$ADMIN bucket-type create hll_bucket '{"props":{"datatype":"hll"}}' || exit 1
 $ADMIN bucket-type create counter_bucket '{"props":{"datatype":"counter"}}' || exit 1
 
 loop_counter=0
@@ -17,6 +18,7 @@ loop_counter=0
 until
     $ADMIN bucket-type activate map_bucket && \
     $ADMIN bucket-type activate set_bucket && \
+    $ADMIN bucket-type activate hll_bucket && \
     $ADMIN bucket-type activate counter_bucket
 do
     echo "Waiting until activation"

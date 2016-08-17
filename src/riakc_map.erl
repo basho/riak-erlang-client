@@ -53,7 +53,7 @@
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eunit/include/eunit.hrl").
--compile(export_all).
+-export([gen_type/0, gen_op/0]).
 -endif.
 
 %% Callbacks
@@ -310,6 +310,6 @@ prop_nested_defaults() ->
             end).
 
 prop_nested_defaults_test() ->
-    ?assert(eqc:quickcheck(?QC_OUT(prop_nested_defaults()))).
+    {timeout, 120, [?_assert(eqc:quickcheck(?QC_OUT(prop_nested_defaults())))]}.
 
 -endif.
