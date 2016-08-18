@@ -49,7 +49,7 @@
 
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
--compile(export_all).
+-export([gen_type/0, gen_op/0]).
 -endif.
 
 %% Callbacks
@@ -61,6 +61,7 @@
 
 %% Operations
 -export([add_element/2,
+         add_elements/2,
          del_element/2]).
 
 %% Query functions
@@ -125,6 +126,11 @@ type() -> set.
 -spec add_element(binary(), riakc_set()) -> riakc_set().
 add_element(Bin, #set{adds=A0}=Set) when is_binary(Bin) ->
     Set#set{adds=ordsets:add_element(Bin, A0)}.
+
+%% @doc Adds elements to the set.
+-spec add_elements(list(binary()), riakc_set()) -> riakc_set().
+add_elements(Elems, Set) when is_list(Elems) ->
+    lists:foldl(fun add_element/2, Set, Elems).
 
 %% @doc Removes an element from the set.
 %% @throws context_required
