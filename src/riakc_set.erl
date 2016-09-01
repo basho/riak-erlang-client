@@ -54,6 +54,7 @@
 
 %% Callbacks
 -export([new/0, new/1, new/2,
+         context/1,
          value/1,
          to_op/1,
          is_type/1,
@@ -96,6 +97,10 @@ new(Context) ->
 new(Value, Context) when is_list(Value) ->
     #set{value=ordsets:from_list(Value),
          context=Context}.
+
+%% @doc Returns the original context of the set.
+-spec context(riakc_set()) -> riakc_datatype:context().
+context(#set{context=C}) -> C.
 
 %% @doc Returns the original value of the set as an ordset.
 -spec value(riakc_set()) -> ordsets:ordset(binary()).
