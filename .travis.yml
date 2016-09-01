@@ -1,3 +1,4 @@
+sudo: required
 language: erlang
 notifications:
   webhooks: http://basho-engbot.herokuapp.com/travis?key=8f07584549e458d4c83728f3397ecbd4368e60a8
@@ -11,3 +12,13 @@ otp_release:
 - R15B03
 services:
   - riak
+before_install:
+  - ls -l "$(command -v riak-admin)"
+  - mkdir tmp
+  - mkdir tmp/bin
+  - echo 'exec sudo riak-admin "$@"' > tmp/bin/riak-admin
+  - chmod u+x tmp/bin/riak-admin
+  - cat tmp/bin/riak-admin
+  - ls -l tmp/bin
+before_script:
+  - make -C buildbot configure RIAK_DIR="$(pwd)/tmp"
