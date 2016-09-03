@@ -13,8 +13,14 @@ otp_release:
 services:
   - riak
 before_install:
-  - ls -l "$(command -v riak-admin)"
   - mkdir tmp
+  - test ! -e /etc/riak/advanced.config
+  - echo "[{riak_kv, [{allow_strfun, true}]}]." > tmp/advanced.config
+  - sudo cp -p tmp/advanced.config /etc/riak/advanced.config
+  - cat /etc/riak/advanced.config
+  - ls -l /etc/riak/advanced.config
+  - sudo service riak --full-restart
+  - ls -l "$(command -v riak-admin)"
   - mkdir tmp/bin
   - echo 'exec sudo riak-admin "$@"' > tmp/bin/riak-admin
   - chmod u+x tmp/bin/riak-admin
