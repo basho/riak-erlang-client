@@ -63,6 +63,9 @@
 %% internally by the client code.
 -callback new(Value::term(), context()) -> datatype().
 
+%% Returns the context.
+%-callback context(datatype()) -> context().
+
 %% Returns the original, unmodified value of the type. This does
 %% not include the application of any locally-queued operations.
 -callback value(datatype()) -> term().
