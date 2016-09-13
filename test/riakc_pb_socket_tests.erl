@@ -1344,26 +1344,26 @@ integration_tests() ->
       ?_test(begin
                  riakc_test_utils:reset_riak(),
                  {ok, Pid} = riakc_test_utils:start_link(),
-                 ok = riakc_pb_socket:update_type(Pid,
-                                                  {<<"hlls">>, <<"bucket">>}, <<"key">>,
-                                                  riakc_hll:to_op(
-                                                    riakc_hll:add_elements([<<"X">>, <<"Y">>],
-                                                                           riakc_hll:new()))),
-                 {ok, Hll0} = riakc_pb_socket:fetch_type(Pid, {<<"hlls">>, <<"bucket">>},
-                                                         <<"key">>),
-                 ?assertEqual(riakc_hll:value(Hll0), 2),
-                 ok = riakc_pb_socket:update_type(Pid,
-                                                  {<<"hlls">>, <<"bucket">>}, <<"key">>,
-                                                  riakc_hll:to_op(
-                                                    riakc_hll:add_element(<<"X">>, Hll0))),
-                 {ok, Hll1} = riakc_pb_socket:fetch_type(Pid, {<<"hlls">>, <<"bucket">>},
-                                                         <<"key">>),
-                 ?assert(riakc_hll:is_type(Hll1)),
-                 Value = riakc_hll:value(Hll1),
-                 ?assertEqual(Value, 2),
-
-                 %% Make sure card and value are the same
-                 ?assertEqual(riakc_hll:card(Hll1), Value)
+                 HB = {<<"hlls">>, <<"bucket">>},
+                 HK = <<"key">>,
+                 case riakc_pb_socket:get_bucket(Pid, HB) of
+                     {ok, _} ->
+                         Hll0 = riakc_hll:new(),
+                         HllOp0 = riakc_hll:to_op(riakc_hll:add_elements([<<"X">>, <<"Y">>], Hll0)),
+                         ok = riakc_pb_socket:update_type(Pid, HB, HK, HllOp0),
+                         {ok, Hll1} = riakc_pb_socket:fetch_type(Pid, HB, HK),
+                         HllOp1 = riakc_hll:to_op(riakc_hll:add_element(<<"X">>, Hll1)),
+                         ok = riakc_pb_socket:update_type(Pid, HB, HK, HllOp1),
+                         {ok, Hll2} = riakc_pb_socket:fetch_type(Pid, HB, HK),
+                         ?assertEqual(riakc_hll:value(Hll1), 2),
+                         ?assert(riakc_hll:is_type(Hll2)),
+                         Value = riakc_hll:value(Hll2),
+                         ?assertEqual(Value, 2),
+                         %% Make sure card and value are the same
+                         ?assertEqual(riakc_hll:card(Hll2), Value);
+                     Rsp ->
+                         ?debugFmt("hlls bucket is not present, skipping (~p)", [Rsp])
+                 end
              end)}
      ].
 
