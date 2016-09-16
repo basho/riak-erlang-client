@@ -125,6 +125,13 @@ dead_socket_pid_returns_to_caller_test() ->
     ok = gen_tcp:close(Sock),
     ok = gen_tcp:close(Listen).
 
+adding_hll_to_map_throws_error_test() ->
+    UpdateFun = fun(H) ->
+                    riakc_hll:add_elements([<<"X">>, <<"Y">>], H)
+                end,
+    HllKey = {<<"hll">>, hll},
+    ?assertError(badarg, riakc_map:update(HllKey, UpdateFun, riakc_map:new())).
+
 %%
 %% Tests to run against a live node - NB the node gets reconfigured and generally messed with
 %%

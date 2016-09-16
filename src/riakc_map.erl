@@ -155,6 +155,8 @@ erase(Key, #map{removes=R}=M) ->
 %% it will be initialized to the empty value for its type before being
 %% passed to the function.
 -spec update(key(), update_fun(), crdt_map()) -> crdt_map().
+update({_Name, hll}, _Fun, _M) ->
+    erlang:error(badarg, ["maps may not contain hll datatype"]);
 update(Key, Fun, #map{updates=U}=M) ->
     %% In order, search for key in 1) batched updates, then 2) values
     %% taken from Riak, and otherwise 3) create a new, empty data type
