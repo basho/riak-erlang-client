@@ -1,19 +1,15 @@
 sudo: required
-
 dist: trusty
-
 language: erlang
-
 otp_release:
-  - 18.3
-  - 17.5
-  - R16B03
-  - R15B03
-
+- 18.3
+- 17.5
+- R16B03
+- R15B03
 before_script:
-  - sudo ./tools/travis-ci/riak-install
-  - sudo ./tools/devrel/riak-cluster-config "$(which riak-admin)" 8098 false false
-
+- sudo ./tools/travis-ci/riak-install
+- sudo ./tools/devrel/riak-cluster-config "$(which riak-admin)" 8098 false false
 notifications:
   slack:
-    secure: CQHpKSbvzvGOKfQ8GdYdK0Huaz0y2xLbwhUWNH/xkrxO/OuqvYvZn7SlJRCLIYobj+zSiwsQRrz9G19gXGZMaDCwtdVVgEnddzm15bLjsUsrWU0FgRufJuATre+AVFByngvhAmdDIvcxVVhobIYo+F6m/8/OWRGhnQvvWOVtnMA=
+    rooms:
+      secure: mOed7NgfVS1ZeuiSYRtH88b2+GEEd3H6YP3Pu42PodIHQQ/Xb1lelNcpOMKvTU7WjcdZLcrNz9z7i+cxOV95v7zA38/UhIHEGSmOHWKl+IRVFjojjipl9h/X2p4ZI0xMVl2bOzio8M1x5IOAOReLwZd8RFbX5SqT8k5UFiATNx4=
