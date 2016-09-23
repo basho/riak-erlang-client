@@ -11,5 +11,4 @@ before_script:
 - sudo ./tools/devrel/riak-cluster-config "$(which riak-admin)" 8098 false false
 notifications:
   slack:
-    rooms:
-      secure: mOed7NgfVS1ZeuiSYRtH88b2+GEEd3H6YP3Pu42PodIHQQ/Xb1lelNcpOMKvTU7WjcdZLcrNz9z7i+cxOV95v7zA38/UhIHEGSmOHWKl+IRVFjojjipl9h/X2p4ZI0xMVl2bOzio8M1x5IOAOReLwZd8RFbX5SqT8k5UFiATNx4=
+    secure: JVsrhRuWRTQauP7OjSc1XO6+P3eiOZtkjYhU2R53Hn9dK1KmJRBR5MzO1nq6BUs+bViXiAyW0YOoDTWF0eUw5gdd6sqnvx0+mYJVfYDTfbjp46yqj03Nj+J5HZ1KWPM78NSZ8jpZvdwk35ZpHqhsh/zWOY2RYmIVQKLB9EthHLU=
