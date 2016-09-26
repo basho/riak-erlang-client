@@ -39,7 +39,7 @@
 -include("riakc.hrl").
 -behaviour(gen_server).
 
--export([start_link/2, start_link/3,
+-export([start_link/1, start_link/2, start_link/3,
          start/2, start/3,
          stop/1,
          set_options/2, set_options/3,
@@ -185,6 +185,22 @@
 %% to `infinity'.
 call_infinity(Pid, Msg) ->
     gen_server:call(Pid, Msg, infinity).
+
+%% @doc This module can be used as a poolboy worker. Args are provided by poolboy
+%%      Start as a poolboy worker like this:
+%%      poolboy:start_link([{name, {local, riakc_pool}}, {size, 10},
+%%                          {worker_module, riakc_pb_socket},
+%%                          {riak_nodes, [{"127.0.0.1", 8087}, {"127.0.0.1", 8088}]},
+%%                          {riakc_options, [{auto_reconnect, true}]}]).
+-spec start_link(PoolboyArgs::list()) -> {ok, Pid::pid()} | {error, Reason::term()}.
+start_link(PoolboyArgs) ->
+    RiakNodes = proplists:get_value(riak_nodes, PoolboyArgs, [{"127.0.0.1", 8087}]),
+    Options = proplists:get_value(riakc_options, PoolboyArgs, []),
+
+    random:seed(now()),
+    {Address, Port} = lists:nth(random:uniform(length(RiakNodes)), RiakNodes),
+
+    start_link(Address, Port, Options).
 
 %% @doc Create a linked process to talk with the riak server on Address:Port
 %%      Client id will be assigned by the server.
@@ -1444,6 +1460,8 @@ handle_info(reconnect, State) ->
             NewState = State#state{failed = orddict:update_counter(Reason, 1, State#state.failed)},
             disconnect(NewState)
     end;
+handle_info(stop, State) ->
+    {stop, shutdown, State};
 handle_info(_, State) ->
     {noreply, State}.
 
