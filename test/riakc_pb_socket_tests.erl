@@ -1330,22 +1330,29 @@ integration_tests() ->
                     ?assert(lists:member(<<"Z">>, L1)),
                     ?assertEqual(length(L1), 1)
                 end)},
-     {"get preflist test",
+     {"get-preflist",
       ?_test(begin
                  riakc_test_utils:reset_riak(),
                  Node = atom_to_binary(riakc_test_utils:test_riak_node(), latin1),
                  {ok, Pid} = riakc_test_utils:start_link(),
-                 {ok, Preflist} = riakc_pb_socket:get_preflist(Pid, <<"b">>, <<"f">>),
-                 ?assertEqual([#preflist_item{partition = 52,
-                                              node = Node,
-                                              primary = true},
-                               #preflist_item{partition = 53,
-                                              node = Node,
-                                              primary = true},
-                               #preflist_item{partition = 54,
-                                              node = Node,
-                                              primary = true}],
-                              Preflist)
+                 {ok, ServerInfo} = riakc_pb_socket:get_server_info(Pid),
+                 [{node, _}, {server_version, SV}] = lists:sort(ServerInfo),
+                 Ver = binary_to_list(SV),
+                 if Ver < "2.1" ->
+                        ?debugFmt("preflists are not supported in version ~p", [Ver]);
+                    true ->
+                        {ok, Preflist} = riakc_pb_socket:get_preflist(Pid, <<"b">>, <<"f">>),
+                        ?assertEqual([#preflist_item{partition = 52,
+                                                    node = Node,
+                                                    primary = true},
+                                    #preflist_item{partition = 53,
+                                                    node = Node,
+                                                    primary = true},
+                                    #preflist_item{partition = 54,
+                                                    node = Node,
+                                                    primary = true}],
+                                    Preflist)
+                 end
              end)},
      {"add redundant and multiple items to hll(set)",
       ?_test(begin
