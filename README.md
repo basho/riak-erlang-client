@@ -6,6 +6,7 @@ Build Status
 ============
 
 * Master: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=master)](https://travis-ci.org/basho/riak-erlang-client)
+* Develop: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=develop)](https://travis-ci.org/basho/riak-erlang-client)
 
 
 This document assumes that you have already started your Riak cluster.  For instructions on that prerequisite, refer to [Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html) in the [Riak Wiki](https://wiki.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
