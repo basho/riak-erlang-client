@@ -1,6 +1,8 @@
-.PHONY: all clean compile deps distclean release docs
+.PHONY: all lint clean compile deps distclean release docs
 
 all: deps compile
+
+lint: xref dialyzer
 
 compile: deps
 	./rebar compile
