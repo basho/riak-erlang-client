@@ -12,7 +12,10 @@ env:
   - RIAK_DOWNLOAD_URL=http://s3.amazonaws.com/downloads.basho.com/riak/2.1/2.1.4/ubuntu/trusty/riak_2.1.4-1_amd64.deb
 before_script:
   - sudo ./tools/travis-ci/riak-install -d "$RIAK_DOWNLOAD_URL"
-  - sudo ./tools/devrel/riak-cluster-config "$(which riak-admin)" 8098 false false
+  - sudo ./tools/setup-riak
+script:
+  - make lint
+  - make test
 notifications:
   slack:
     secure: JVsrhRuWRTQauP7OjSc1XO6+P3eiOZtkjYhU2R53Hn9dK1KmJRBR5MzO1nq6BUs+bViXiAyW0YOoDTWF0eUw5gdd6sqnvx0+mYJVfYDTfbjp46yqj03Nj+J5HZ1KWPM78NSZ8jpZvdwk35ZpHqhsh/zWOY2RYmIVQKLB9EthHLU=
