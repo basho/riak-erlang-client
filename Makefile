@@ -26,10 +26,10 @@ endif
 	@echo "==> Tagging version $(VERSION)"
 	# NB: Erlang client version strings do NOT start with 'v'. Le Sigh.
 	# validate VERSION and allow pre-releases
-	@bash ./build/publish $(VERSION) validate
+	@./tools/build/publish $(VERSION) master validate
 	@git tag --sign -a "$(VERSION)" -m "riak-erlang-client $(VERSION)" --local-user "$(RELEASE_GPG_KEYNAME)"
 	@git push --tags
-	@bash ./build/publish $(VERSION)
+	@./tools/build/publish $(VERSION) master 'Riak Erlang Client' 'riak-erlang-client'
 
 
 DIALYZER_APPS = kernel stdlib sasl erts eunit ssl tools crypto \
