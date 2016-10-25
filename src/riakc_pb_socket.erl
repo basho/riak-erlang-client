@@ -438,14 +438,14 @@ delete_obj(Pid, Obj, Options, Timeout) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), Options, Timeout).
 
-%% @doc List all buckets on the server.
+%% @doc List all buckets on the server in the "default" bucket type.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 %% @equiv list_buckets(Pid, default_timeout(list_buckets_timeout))
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid) ->
     list_buckets(Pid, <<"default">>, []).
 
-%% @doc List all buckets on the server specifying server-side timeout.
+%% @doc List all buckets in a bucket type, specifying server-side timeout.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 -spec list_buckets(pid(), timeout()|list()|binary()) -> {ok, [bucket()]} |
                                                    {error, term()}.
