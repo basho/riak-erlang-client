@@ -737,6 +737,7 @@ This is not a comprehensive list, please see the commit history.
 * [Kelly McLaughlin](https://github.com/kellymclaughlin)
 * [Kevin Smith](https://github.com/kevsmith)
 * [Luc Perkins](https://github.com/lucperkins)
+* [Luca Favatella](https://github.com/lucafavatella)
 * [Lukasz Milewski](https://github.com/milek)
 * [Luke Bakken](https://github.com/lukebakken)
 * [Mark Phillips](https://github.com/phips)
