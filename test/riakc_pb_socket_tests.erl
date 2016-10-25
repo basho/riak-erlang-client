@@ -1391,7 +1391,9 @@ integration_test_() ->
     GenFun = fun() ->
                  case catch net_adm:ping(riakc_test_utils:test_riak_node()) of
                      pong -> integration_tests();
-                     _ -> []
+                     _ ->
+                         ?debugMsg("Skipped - needs live server"),
+                         []
                  end
              end,
     {setup, SetupFun, CleanupFun, {generator, GenFun}}.
