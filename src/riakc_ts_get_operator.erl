@@ -33,12 +33,12 @@
 
 
 serialize(Table, Key, true) ->
-    #tsgetreq{table = iolist_to_binary(Table),
-              key   = Key};
+    T = riakc_utils:characters_to_unicode_binary(Table),
+    #tsgetreq{table = T, key = Key};
 serialize(Table, Key, false) ->
+    T = riakc_utils:characters_to_unicode_binary(Table),
     SerializedKey = riak_pb_ts_codec:encode_cells_non_strict(Key),
-    #tsgetreq{table = iolist_to_binary(Table),
-              key   = SerializedKey}.
+    #tsgetreq{table = T, key = SerializedKey}.
 
 deserialize({error, {Code, Message}}) when is_integer(Code), is_list(Message) ->
     {error, {Code, iolist_to_binary(Message)}};

@@ -24,13 +24,13 @@
 
 -module(riakc_ts).
 
--export([query/2, query/3, query/4, query/5,
+-export(['query'/2, 'query'/3, 'query'/4, 'query'/5,
          get_coverage/3,
          replace_coverage/4, replace_coverage/5,
          put/3, put/4,
          get/4,
          delete/4,
-         stream_list_keys/3]).
+         stream_list_keys/2, stream_list_keys/3]).
 
 -include_lib("riak_pb/include/riak_pb.hrl").
 -include_lib("riak_pb/include/riak_kv_pb.hrl").
@@ -43,29 +43,29 @@
 -type ts_columnname() :: riak_pb_ts_codec:tscolumnname().
 
 
--spec query(pid(), Query::string()|binary()) ->
+-spec 'query'(pid(), Query::string()|binary()) ->
             {ok, {ColumnNames::[ts_columnname()], Rows::[tuple()]}} | {error, Reason::term()}.
-%% @equiv query/5
-query(Pid, Query) ->
-    query(Pid, Query, [], undefined, []).
+%% @equiv 'query'/5
+'query'(Pid, Query) ->
+    'query'(Pid, Query, [], undefined, []).
 
--spec query(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
+-spec 'query'(pid(), Query::string()|binary(), Interpolations::[{binary(), binary()}]) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5
-query(Pid, Query, Interpolations) ->
-    query(Pid, Query, Interpolations, undefined, []).
+%% @equiv 'query'/5
+'query'(Pid, Query, Interpolations) ->
+    'query'(Pid, Query, Interpolations, undefined, []).
 
--spec query(Pid::pid(),
-            Query::string(),
+-spec 'query'(Pid::pid(),
+            Query::string()|binary(),
             Interpolations::[{binary(), binary()}],
             Cover::term()) ->
             {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}.
-%% @equiv query/5
-query(Pid, Query, Interpolations, Cover) ->
-    query(Pid, Query, Interpolations, Cover, []).
+%% @equiv 'query'/5
+'query'(Pid, Query, Interpolations, Cover) ->
+    'query'(Pid, Query, Interpolations, Cover, []).
 
--spec query(Pid::pid(),
-            Query::string(),
+-spec 'query'(Pid::pid(),
+            Query::string()|binary(),
             Interpolations::[{binary(), binary()}],
             Cover::term(),
             Options::proplists:proplist()) ->
@@ -75,29 +75,31 @@ query(Pid, Query, Interpolations, Cover) ->
 %%      first element, and a list of records, each represented as a
 %%      list of values, in the second element, or an @{error, Reason@}
 %%      tuple.
-query(Pid, Query, Interpolations, undefined, Options) ->
+'query'(Pid, Query, Interpolations, undefined, Options) ->
         query_common(Pid, Query, Interpolations, undefined, Options);
-query(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
+'query'(Pid, Query, Interpolations, Cover, Options) when is_binary(Cover) ->
         query_common(Pid, Query, Interpolations, Cover, Options).
 
 query_common(Pid, Query, Interpolations, Cover, Options)
-  when is_pid(Pid), is_list(Query) ->
-    Msg0 = riakc_ts_query_operator:serialize(
-                iolist_to_binary(Query), Interpolations),
+  when is_pid(Pid) ->
+    Msg0 = riakc_ts_query_operator:serialize(Query, Interpolations),
     Msg1 = Msg0#tsqueryreq{cover_context = Cover},
     Msg = {Msg1, {msgopts, Options}},
     Response = server_call(Pid, Msg),
-    riakc_ts_query_operator:deserialize(Response).
+    riakc_ts_query_operator:deserialize(Response,
+                                        proplists:get_value(datatypes, Options, false)).
 
 
-%% @doc Generate a parallel coverage plan for the specified query
+%% @doc Generate a parallel coverage plan for the specified 'query'
 -spec get_coverage(pid(), table_name(), QueryText::iolist()) ->
                           {ok, Entries::[term()]} | {error, term()}.
 get_coverage(Pid, Table, Query) ->
+    T = riakc_utils:characters_to_unicode_binary(Table),
+    Q = riakc_utils:characters_to_unicode_binary(Query),
     Message =
-        #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
+        #tscoveragereq{'query' = #tsinterpolation{base = Q},
                        replace_cover = undefined,
-                       table = iolist_to_binary(Table)},
+                       table = T},
     case server_call(Pid, Message) of
         {ok, Entries} ->
             {ok, riak_pb_ts_codec:decode_cover_list(Entries)};
@@ -115,11 +117,13 @@ replace_coverage(Pid, Table, Query, Cover) ->
                        OtherCover::list(binary())) ->
                               {ok, Entries::[term()]} | {error, term()}.
 replace_coverage(Pid, Table, Query, Cover, Other) ->
+    T = riakc_utils:characters_to_unicode_binary(Table),
+    Q = riakc_utils:characters_to_unicode_binary(Query),
     Message =
-        #tscoveragereq{query = #tsinterpolation{base = iolist_to_binary(Query)},
+        #tscoveragereq{'query' = #tsinterpolation{base = Q},
                        replace_cover = Cover,
                        unavailable_cover = Other,
-                       table = iolist_to_binary(Table)},
+                       table = T},
     case server_call(Pid, Message) of
         {ok, Entries} ->
             {ok, riak_pb_ts_codec:decode_cover_list(Entries)};
@@ -170,7 +174,8 @@ put(Pid, Table, Measurements, Options)
 delete(Pid, Table, Key, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)),
        is_list(Key), is_list(Options) ->
-    Message = #tsdelreq{table   = iolist_to_binary(Table),
+    T = riakc_utils:characters_to_unicode_binary(Table),
+    Message = #tsdelreq{table   = T,
                         key     = riak_pb_ts_codec:encode_cells_non_strict(Key),
                         vclock  = proplists:get_value(vclock, Options),
                         timeout = proplists:get_value(timeout, Options)},
@@ -201,7 +206,14 @@ get(Pid, Table, Key, Options)
     riakc_ts_get_operator:deserialize(Response).
 
 
--spec stream_list_keys(pid(), table_name(), proplists:proplist()) ->
+-spec stream_list_keys(pid(), table_name()) ->
+                       {ok, req_id()} | {error, term()}.
+%% @doc Streaming lists keys in Table, using client Pid, with no timeout.
+%%      Returns @{ok, ReqId@} or @{error, Reason@}.
+stream_list_keys(Pid, Table) ->
+    stream_list_keys(Pid, Table, infinity).
+
+-spec stream_list_keys(pid(), table_name(), proplists:proplist()|infinity) ->
                               {ok, req_id()} | {error, term()}.
 %% @doc Streaming lists keys in Table, using client Pid.  Parameter
 %%      Options is a proplist that can include a value for
@@ -212,9 +224,9 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Table, [{timeout, Timeout}]);
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
+    T = riakc_utils:characters_to_unicode_binary(Table),
     ReqTimeout = proplists:get_value(timeout, Options),
-    Req = #tslistkeysreq{table   = iolist_to_binary(Table),
-                         timeout = ReqTimeout},
+    Req = #tslistkeysreq{table = T, timeout = ReqTimeout},
     ReqId = riakc_pb_socket:mk_reqid(),
     gen_server:call(Pid, {req, Req, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
 

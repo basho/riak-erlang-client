@@ -6,6 +6,7 @@ Build Status
 ============
 
 * Master: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=master)](https://travis-ci.org/basho/riak-erlang-client)
+* Develop: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=develop)](https://travis-ci.org/basho/riak-erlang-client)
 
 
 This document assumes that you have already started your Riak cluster.  For instructions on that prerequisite, refer to [Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html) in the [Riak Wiki](https://wiki.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
@@ -260,7 +261,7 @@ Note that keylist updates are asynchronous to the object storage primitives, and
     4> receive Msg2 \-> Msg2 end.
     {87009603,done}
 
-See [`riakc_pb_socket:wait_for_listkeys`](https://github.com/basho/riak-erlang-client/blob/master/src/riakc_pb_socket.erl#L1087) for an example of receiving.
+See [`riakc_utils:wait_for_list`](https://github.com/basho/riak-erlang-client/blob/develop/src/riakc_utils.erl) for a function to receive data.
 
 Bucket Properties
 =================
@@ -664,12 +665,12 @@ CREATE TABLE GeoCheckin
 
 ### Store TS Data
 
-To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition.
+To write data to your table, put the data in a list, and use the `riakc_ts:put/3` function.  Please ensure the the order of the data is the same as the table definition, and note that each row is a tuple of values corresponding to the columns in the table.
 
 
 ```erlang
 {ok, Pid} = riakc_pb_socket:start_link("myriakdb.host", 10017).
-riakc_ts:put(Pid, "GeoCheckin", [[<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5], [<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8]]).
+riakc_ts:put(Pid, "GeoCheckin", [{<<"family1">>, <<"series1">>, 1234567, <<"hot">>, 23.5}, {<<"family2">>, <<"series99">>, 1234567, <<"windy">>, 19.8}]).
 ```
 
 ### Query TS Data
@@ -736,6 +737,7 @@ This is not a comprehensive list, please see the commit history.
 * [Kelly McLaughlin](https://github.com/kellymclaughlin)
 * [Kevin Smith](https://github.com/kevsmith)
 * [Luc Perkins](https://github.com/lucperkins)
+* [Luca Favatella](https://github.com/lucafavatella)
 * [Lukasz Milewski](https://github.com/milek)
 * [Luke Bakken](https://github.com/lukebakken)
 * [Mark Phillips](https://github.com/phips)

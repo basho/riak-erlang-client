@@ -41,7 +41,7 @@ test: compile
 	@echo "        Tests will _not_ run correctly if allow_mult=true."
 	@echo "        Also, it would be great to document here what other"
 	@echo "        Riak configuration bits are prerequisites for running"
-	@echo "        the riak_pb_socket:live_node_tests suite..........."
+	@echo "        the integration test suite..........."
 	@echo ""
 	${REBAR} eunit skip_deps=true
 
