@@ -2,7 +2,7 @@
 %%
 %% riakc_gset: Eventually-consistent set type
 %%
-%% Copyright (c) 2013 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2016 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -21,7 +21,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc <p>Encapsulates a gset data-type. Riak's gsets differ from Erlang
-%% gset types in several ways:</p>
+%% set types in several ways:</p>
 %% <ul>
 %% <li>Only binaries are allowed as elements. Convert other terms to a
 %% binary before adding them.</li>
@@ -40,7 +40,7 @@
 
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
--compile(export_all).
+-export([gen_type/0, gen_op/0]).
 -endif.
 
 %% Callbacks
