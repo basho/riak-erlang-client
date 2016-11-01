@@ -1382,7 +1382,7 @@ integration_tests() ->
      {"add item to gset, twice",
       ?_test(begin
                  riakc_test_utils:reset_riak(),
-                 {ok, Pid} = riakc_test_utils:start_link(test_ip(), test_port()),
+                 {ok, Pid} = riakc_test_utils:start_link(),
                  ok = riakc_pb_socket:update_type(Pid,
                                                   {<<"gset_bucket">>, <<"bucket">>}, <<"key">>,
                                                   riakc_gset:to_op(riakc_gset:add_element(<<"X">>, riakc_gset:new()))),
@@ -1390,7 +1390,7 @@ integration_tests() ->
                  ?assert(riakc_gset:is_element(<<"X">>, S0)),
                  ?assertEqual(riakc_gset:size(S0), 1),
                  ok = riakc_pb_socket:update_type(Pid,
-                                  {<<"set_bucket">>, <<"bucket">>}, <<"key">>,
+                                  {<<"gset_bucket">>, <<"bucket">>}, <<"key">>,
                                   riakc_gset:to_op(riakc_gset:add_element(<<"X">>, S0))),
                  {ok, S1} = riakc_pb_socket:fetch_type(Pid, {<<"gset_bucket">>, <<"bucket">>}, <<"key">>),
                  ?assert(riakc_gset:is_element(<<"X">>, S1)),
