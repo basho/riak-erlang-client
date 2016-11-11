@@ -77,10 +77,6 @@
          get_coverage/2, get_coverage/3,
          replace_coverage/3, replace_coverage/4]).
 
-%% Counter API
--export([counter_incr/4, counter_val/3]).
-%% with options
--export([counter_incr/5, counter_val/4]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
@@ -92,6 +88,10 @@
          set_search_index/3,
          get_search_schema/2, get_search_schema/3,
          create_search_schema/3, create_search_schema/4]).
+
+%% Pre-Riak 2.0 Counter API - NOT for CRDT counters
+-export([counter_incr/4, counter_val/3]).
+-export([counter_incr/5, counter_val/4]).
 
 %% Datatypes API
 -export([fetch_type/3, fetch_type/4,
@@ -438,14 +438,14 @@ delete_obj(Pid, Obj, Options, Timeout) ->
     delete_vclock(Pid, riakc_obj:bucket(Obj), riakc_obj:key(Obj),
         riakc_obj:vclock(Obj), Options, Timeout).
 
-%% @doc List all buckets on the server.
+%% @doc List all buckets on the server in the "default" bucket type.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 %% @equiv list_buckets(Pid, default_timeout(list_buckets_timeout))
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid) ->
     list_buckets(Pid, <<"default">>, []).
 
-%% @doc List all buckets on the server specifying server-side timeout.
+%% @doc List all buckets in a bucket type, specifying server-side timeout.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
 -spec list_buckets(pid(), timeout()|list()|binary()) -> {ok, [bucket()]} |
                                                    {error, term()}.
@@ -1181,12 +1181,12 @@ tunnel(Pid, MsgId, Pkt, Timeout) ->
     Req = {tunneled, MsgId, Pkt},
     call_infinity(Pid, {req, Req, Timeout}).
 
-%% @doc increment the counter at `bucket', `key' by `amount'
+%% @doc increment the pre-Riak 2 counter at `bucket', `key' by `amount'
 -spec counter_incr(pid(), bucket() | bucket_and_type(), key(), integer()) -> ok.
 counter_incr(Pid, Bucket, Key, Amount) ->
     counter_incr(Pid, Bucket, Key, Amount, []).
 
-%% @doc increment the counter at `Bucket', `Key' by `Amount'.
+%% @doc increment the pre-Riak 2 counter at `Bucket', `Key' by `Amount'.
 %% use the provided `write_quorum()' `Options' for the operation.
 %% A counter increment is a lot like a riak `put' so the semantics
 %% are the same for the given options.
@@ -1197,13 +1197,13 @@ counter_incr(Pid, Bucket, Key, Amount, Options) ->
     Req = counter_incr_options(Options, #rpbcounterupdatereq{bucket=B, key=Key, amount=Amount}),
     call_infinity(Pid, {req, Req, default_timeout(put_timeout)}).
 
-%% @doc get the current value of the counter at `Bucket', `Key'.
+%% @doc get the current value of the pre-Riak 2 counter at `Bucket', `Key'.
 -spec counter_val(pid(), bucket() | bucket_and_type(), key()) ->
                          {ok, integer()} | {error, notfound}.
 counter_val(Pid, Bucket, Key) ->
     counter_val(Pid, Bucket, Key, []).
 
-%% @doc get the current value of the counter at `Bucket', `Key' using
+%% @doc get the current value of the pre-Riak 2 counter at `Bucket', `Key' using
 %% the `read_qurom()' `Options' provided.
 -spec counter_val(pid(), bucket() | bucket_and_type(), key(), [read_quorum()]) ->
                          {ok, integer()} | {error, term()}.
