@@ -1397,7 +1397,7 @@ integration_tests() ->
                         ok = riakc_pb_socket:update_type(Pid, B, K, GSetOp1),
                         {ok, S1} = riakc_pb_socket:fetch_type(Pid, B, K),
                         ?assert(riakc_gset:is_element(<<"X">>, S1)),
-                        ?assertEqual(riakc_gset:size(S1), 1)
+                        ?assertEqual(riakc_gset:size(S1), 1);
                      Rsp ->
                          ?debugFmt("gsets bucket is not present, skipping (~p)", [Rsp])
                  end
