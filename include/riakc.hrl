@@ -44,6 +44,7 @@
 -type bucket_type() :: binary().
 -type bucket_and_type() :: {bucket_type(), bucket()}.
 -type key() :: binary(). %% A key name.
+-type key_data() :: undefined | term().
 -type riakc_obj() :: riakc_obj:riakc_obj(). %% An object (bucket, key, metadata, value) stored in Riak.
 -type req_id() :: non_neg_integer(). %% Request identifier for streaming requests.
 -type server_prop() :: {node, binary()} | {server_version, binary()}. %% Server properties, as returned by the `get_server_info/1' call.
@@ -116,9 +117,10 @@
 %% function, that when evaluated points to a built-in javascript function.
 -type mapred_result() :: [term()].
 %% The results of a MapReduce job.
--type mapred_inputs() :: [{bucket(), key()} | {{bucket(), key()}, term()}] |
+-type mapred_inputs() :: bucket() |
+                         bucket_and_type() |
+                         [{bucket(), key()} | {{bucket_and_type(), key()}, key_data()} | {{bucket(), key()}, key_data()}] |
                          {modfun, Module::atom(), Function::atom(), [term()]} |
-                         bucket() |
                          {index, bucket(), Index::binary()|secondary_index_id(), key()|integer()} |
                          {index, bucket(), Index::binary()|secondary_index_id(), StartKey::key()|integer(), EndKey::key()|integer()}.
 %% Inputs for a MapReduce job.
