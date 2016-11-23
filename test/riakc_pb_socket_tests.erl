@@ -1383,18 +1383,23 @@ integration_tests() ->
       ?_test(begin
                  riakc_test_utils:reset_riak(),
                  {ok, Pid} = riakc_test_utils:start_link(),
-                 ok = riakc_pb_socket:update_type(Pid,
-                                                  {<<"gset_bucket">>, <<"bucket">>}, <<"key">>,
-                                                  riakc_gset:to_op(riakc_gset:add_element(<<"X">>, riakc_gset:new()))),
-                 {ok, S0} = riakc_pb_socket:fetch_type(Pid, {<<"gset_bucket">>, <<"bucket">>}, <<"key">>),
-                 ?assert(riakc_gset:is_element(<<"X">>, S0)),
-                 ?assertEqual(riakc_gset:size(S0), 1),
-                 ok = riakc_pb_socket:update_type(Pid,
-                                  {<<"gset_bucket">>, <<"bucket">>}, <<"key">>,
-                                  riakc_gset:to_op(riakc_gset:add_element(<<"X">>, S0))),
-                 {ok, S1} = riakc_pb_socket:fetch_type(Pid, {<<"gset_bucket">>, <<"bucket">>}, <<"key">>),
-                 ?assert(riakc_gset:is_element(<<"X">>, S1)),
-                 ?assertEqual(riakc_gset:size(S1), 1)
+                 GSB = {<<"gset_bucket">>, <<"bucket">>},
+                 GSK = <<"key">>,
+                 case riakc_pb_socket:get_bucket(Pid, GSB) of
+                     {ok, _} ->
+                         ok = riakc_pb_socket:update_type(Pid, GSB, GSK,
+                                                          riakc_gset:to_op(riakc_gset:add_element(<<"X">>, riakc_gset:new()))),
+                         {ok, S0} = riakc_pb_socket:fetch_type(Pid, GSB, GSK),
+                         ?assert(riakc_gset:is_element(<<"X">>, S0)),
+                         ?assertEqual(riakc_gset:size(S0), 1),
+                         ok = riakc_pb_socket:update_type(Pid, GSB, GSK,
+                                                          riakc_gset:to_op(riakc_gset:add_element(<<"X">>, S0))),
+                         {ok, S1} = riakc_pb_socket:fetch_type(Pid, GSB, GSK),
+                         ?assert(riakc_gset:is_element(<<"X">>, S1)),
+                         ?assertEqual(riakc_gset:size(S1), 1);
+                     Rsp ->
+                         ?debugFmt("gset_bucket bucket is not present, skipping (~p)", [Rsp])
+                 end
              end)}
      ].
 
