@@ -1320,7 +1320,12 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
 %% ====================================================================
 
 %% @private
-init([Address, Port, Options]) ->
+init([Address, Port, InOptions]) ->
+    %% If callback then send the startup of the child
+    CallbackMod = proplists:get_value(mod_callback, InOptions),   
+ 
+    Options = proplists:delete(mod_callback, InOptions), 
+
     %% Schedule a reconnect as the first action.  If the server is up then
     %% the handle_info(reconnect) will run before any requests can be sent.
     State = parse_options(Options, #state{address = Address,
@@ -1333,6 +1338,12 @@ init([Address, Port, Options]) ->
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {ok, State};
         Ok ->
+            % Only if ok then Mod:Fun
+            case CallbackMod of
+                undefined  -> ok;
+                [Mod, Fun] -> 
+                    Mod:Fun(self(), Address, Port) 
+            end,
             Ok
     end.
 
