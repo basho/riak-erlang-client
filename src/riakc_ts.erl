@@ -82,10 +82,8 @@
 
 query_common(Pid, Query, Interpolations, Cover, Options)
   when is_pid(Pid) ->
-    AllowQBufReuse = (true == proplists:get_value(allow_qbuf_reuse, Options)),
     Msg0 = riakc_ts_query_operator:serialize(Query, Interpolations),
-    Msg1 = Msg0#tsqueryreq{cover_context = Cover,
-                           allow_qbuf_reuse = AllowQBufReuse},
+    Msg1 = Msg0#tsqueryreq{cover_context = Cover},
     Msg = {Msg1, {msgopts, Options}},
     Response = server_call(Pid, Msg),
     riakc_ts_query_operator:deserialize(Response,
