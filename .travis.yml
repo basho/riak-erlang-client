@@ -11,6 +11,7 @@ env:
   - RIAK_DOWNLOAD_URL=http://s3.amazonaws.com/downloads.basho.com/riak/2.0/2.0.7/ubuntu/trusty/riak_2.0.7-1_amd64.deb
   - RIAK_DOWNLOAD_URL=http://s3.amazonaws.com/downloads.basho.com/riak/2.2/2.2.0/ubuntu/trusty/riak_2.2.0-1_amd64.deb
 before_script:
+  - jdk_switcher use oraclejdk8
   - sudo ./tools/travis-ci/riak-install -d "$RIAK_DOWNLOAD_URL"
   - sudo ./tools/setup-riak
 notifications:
