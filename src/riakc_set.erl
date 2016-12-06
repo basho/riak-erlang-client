@@ -65,7 +65,8 @@
          del_element/2]).
 
 %% Query functions
--export([size/1,
+-export([context/1,
+         size/1,
          is_element/2,
          fold/3]).
 
@@ -139,6 +140,10 @@ del_element(_Bin, #set{context=undefined}) ->
     throw(context_required);
 del_element(Bin, #set{removes=R0}=Set) when is_binary(Bin) ->
     Set#set{removes=ordsets:add_element(Bin, R0)}.
+
+%% @doc Returns the original context of the set.
+-spec context(riakc_set()) -> riakc_datatype:context().
+context(#set{context=C}) -> C.
 
 %% @doc Returns the cardinality (size) of the set. <em>Note: this only
 %% operates on the original value as retrieved from Riak.</em>
