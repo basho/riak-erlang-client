@@ -1,6 +1,9 @@
 Release Notes
 =============
 
+* [`2.5.1`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.5.1)
+ * Adds GSet CRDT data type support
+ * Support for Riak TS 1.5
 * [`2.5.0`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.5.0)
  * Adds HyperLogLog CRDT data type support
 * [`2.4.1`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.4.1)
