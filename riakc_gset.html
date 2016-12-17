@@ -1,0 +1,127 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module riakc_gset</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module riakc_gset</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>Encapsulates a gset data-type.
+
+<p><b>Behaviours:</b> <a href="riakc_datatype.html"><tt>riakc_datatype</tt></a>.</p>
+
+<h2><a name="description">Description</a></h2><p>Encapsulates a gset data-type. Riak's gsets differ from Erlang
+  set types in several ways:</p>
+  <ul>
+  <li>Only binaries are allowed as elements. Convert other terms to a
+  binary before adding them.</li>
+  <li>Like the other eventually-consistent types, update %% (<code>add_element/2</code>)
+  is not applied to local state. Instead, additions are captured for later
+  application by Riak.</li>
+  <li>You may add an element that already exists in the original set
+  value.</li>
+  <li>The query functions <code>size/1</code>, <code>is_element/1</code> and <code>fold/3</code> only
+  operate on the original value of the set, disregarding local
+  updates.</li>
+  </ul>
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-gset_op">gset_op()</a></h3>
+<p><tt>gset_op() = <a href="#type-simple_gset_op">simple_gset_op()</a> | {update, [<a href="#type-simple_gset_op">simple_gset_op()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-riakc_gset">riakc_gset()</a></h3>
+<p><b>abstract datatype</b>: <tt>riakc_gset()</tt></p>
+
+
+<h3 class="typedecl"><a name="type-simple_gset_op">simple_gset_op()</a></h3>
+<p><tt>simple_gset_op() = {add_all, [binary()]}</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#add_element-2">add_element/2</a></td><td>Adds an element to the set.</td></tr>
+<tr><td valign="top"><a href="#fold-3">fold/3</a></td><td>Folds over the members of the set.</td></tr>
+<tr><td valign="top"><a href="#is_element-2">is_element/2</a></td><td>Test whether an element is a member of the set.</td></tr>
+<tr><td valign="top"><a href="#is_type-1">is_type/1</a></td><td>Determines whether the passed term is a gset container.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>Creates a new, empty set container type.</td></tr>
+<tr><td valign="top"><a href="#new-1">new/1</a></td><td>Creates a new sset container with the opaque context.</td></tr>
+<tr><td valign="top"><a href="#new-2">new/2</a></td><td>Creates a new gset container with the given members and opaque
+  context.</td></tr>
+<tr><td valign="top"><a href="#size-1">size/1</a></td><td>Returns the cardinality (size) of the set.</td></tr>
+<tr><td valign="top"><a href="#to_op-1">to_op/1</a></td><td>Extracts an operation from the gset that can be encoded into an
+  update request.</td></tr>
+<tr><td valign="top"><a href="#type-0">type/0</a></td><td>Returns the symbolic name of this container.</td></tr>
+<tr><td valign="top"><a href="#value-1">value/1</a></td><td>Returns the original value of the set as an ordset.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="add_element-2">add_element/2</a></h3>
+<div class="spec">
+<p><tt>add_element(Bin::binary(), Gset::<a href="#type-riakc_gset">riakc_gset()</a>) -&gt; <a href="#type-riakc_gset">riakc_gset()</a></tt><br></p>
+</div><p>Adds an element to the set.</p>
+
+<h3 class="function"><a name="fold-3">fold/3</a></h3>
+<div class="spec">
+<p><tt>fold(Fun::fun((binary(), term()) -&gt; term()), Acc0::term(), Gset::<a href="#type-riakc_gset">riakc_gset()</a>) -&gt; term()</tt><br></p>
+</div><p>Folds over the members of the set. <em>Note: this only
+  operates on the original value as retrieved from Riak.</em></p>
+
+<h3 class="function"><a name="is_element-2">is_element/2</a></h3>
+<div class="spec">
+<p><tt>is_element(Bin::binary(), Gset::<a href="#type-riakc_gset">riakc_gset()</a>) -&gt; boolean()</tt><br></p>
+</div><p>Test whether an element is a member of the set. <em>Note: this
+  only operates on the original value as retrieved from Riak.</em></p>
+
+<h3 class="function"><a name="is_type-1">is_type/1</a></h3>
+<div class="spec">
+<p><tt>is_type(T::term()) -&gt; boolean()</tt><br></p>
+</div><p>Determines whether the passed term is a gset container.</p>
+
+<h3 class="function"><a name="new-0">new/0</a></h3>
+<div class="spec">
+<p><tt>new() -&gt; <a href="#type-riakc_gset">riakc_gset()</a></tt><br></p>
+</div><p>Creates a new, empty set container type.</p>
+
+<h3 class="function"><a name="new-1">new/1</a></h3>
+<div class="spec">
+<p><tt>new(Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-riakc_gset">riakc_gset()</a></tt><br></p>
+</div><p>Creates a new sset container with the opaque context.</p>
+
+<h3 class="function"><a name="new-2">new/2</a></h3>
+<div class="spec">
+<p><tt>new(Value::[binary()], Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-riakc_gset">riakc_gset()</a></tt><br></p>
+</div><p>Creates a new gset container with the given members and opaque
+  context.</p>
+
+<h3 class="function"><a name="size-1">size/1</a></h3>
+<div class="spec">
+<p><tt>size(Gset::<a href="#type-riakc_gset">riakc_gset()</a>) -&gt; pos_integer()</tt><br></p>
+</div><p>Returns the cardinality (size) of the set. <em>Note: this only
+  operates on the original value as retrieved from Riak.</em></p>
+
+<h3 class="function"><a name="to_op-1">to_op/1</a></h3>
+<div class="spec">
+<p><tt>to_op(Gset::<a href="#type-riakc_gset">riakc_gset()</a>) -&gt; <a href="riakc_datatype.html#type-update">riakc_datatype:update</a>(<a href="#type-gset_op">gset_op()</a>)</tt><br></p>
+</div><p>Extracts an operation from the gset that can be encoded into an
+  update request.</p>
+
+<h3 class="function"><a name="type-0">type/0</a></h3>
+<div class="spec">
+<p><tt>type() -&gt; atom()</tt><br></p>
+</div><p>Returns the symbolic name of this container.</p>
+
+<h3 class="function"><a name="value-1">value/1</a></h3>
+<div class="spec">
+<p><tt>value(Gset::<a href="#type-riakc_gset">riakc_gset()</a>) -&gt; <a href="ordsets.html#type-ordset">ordsets:ordset</a>(binary())</tt><br></p>
+</div><p>Returns the original value of the set as an ordset.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Dec 16 2016, 16:33:18.</i></p>
+</body>
+</html>

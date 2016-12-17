@@ -1,0 +1,98 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module riakc_hll</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module riakc_hll</h1>
+<ul class="index"><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>
+
+<p><b>Behaviours:</b> <a href="riakc_datatype.html"><tt>riakc_datatype</tt></a>.</p>
+
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-hll_op">hll_op()</a></h3>
+<p><tt>hll_op() = {add_all, [binary()]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-riakc_hll">riakc_hll()</a></h3>
+<p><b>abstract datatype</b>: <tt>riakc_hll()</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#add_element-2">add_element/2</a></td><td>Adds an element to the hll(set).</td></tr>
+<tr><td valign="top"><a href="#add_elements-2">add_elements/2</a></td><td>Adds elements to the hll(set).</td></tr>
+<tr><td valign="top"><a href="#card-1">card/1</a></td><td>Same as value, but better for users.</td></tr>
+<tr><td valign="top"><a href="#is_type-1">is_type/1</a></td><td>Determines whether the passed term is a hll type.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>Creates a new, empty hll type.</td></tr>
+<tr><td valign="top"><a href="#new-1">new/1</a></td><td>Creates a new hll.</td></tr>
+<tr><td valign="top"><a href="#new-2">new/2</a></td><td>Creates a new hll.</td></tr>
+<tr><td valign="top"><a href="#to_op-1">to_op/1</a></td><td>Extracts an operation from the hll that can be encoded into an
+  update request.</td></tr>
+<tr><td valign="top"><a href="#type-0">type/0</a></td><td>Returns the symbolic name of this type.</td></tr>
+<tr><td valign="top"><a href="#value-1">value/1</a></td><td>Returns the.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="add_element-2">add_element/2</a></h3>
+<div class="spec">
+<p><tt>add_element(Elem::binary(), Hll::<a href="#type-riakc_hll">riakc_hll()</a>) -&gt; <a href="#type-riakc_hll">riakc_hll()</a></tt><br></p>
+</div><p>Adds an element to the hll(set).</p>
+
+<h3 class="function"><a name="add_elements-2">add_elements/2</a></h3>
+<div class="spec">
+<p><tt>add_elements(Elems::[binary()], Hll::<a href="#type-riakc_hll">riakc_hll()</a>) -&gt; <a href="#type-riakc_hll">riakc_hll()</a></tt><br></p>
+</div><p>Adds elements to the hll(set).</p>
+
+<h3 class="function"><a name="card-1">card/1</a></h3>
+<div class="spec">
+<p><tt>card(Hll::<a href="#type-riakc_hll">riakc_hll()</a>) -&gt; number()</tt><br></p>
+</div><p>Same as value, but better for users.</p>
+
+<h3 class="function"><a name="is_type-1">is_type/1</a></h3>
+<div class="spec">
+<p><tt>is_type(T::term()) -&gt; boolean()</tt><br></p>
+</div><p>Determines whether the passed term is a hll type.</p>
+
+<h3 class="function"><a name="new-0">new/0</a></h3>
+<div class="spec">
+<p><tt>new() -&gt; <a href="#type-riakc_hll">riakc_hll()</a></tt><br></p>
+</div><p>Creates a new, empty hll type.</p>
+
+<h3 class="function"><a name="new-1">new/1</a></h3>
+<div class="spec">
+<p><tt>new(Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-riakc_hll">riakc_hll()</a></tt><br></p>
+</div><p>Creates a new hll</p>
+
+<h3 class="function"><a name="new-2">new/2</a></h3>
+<div class="spec">
+<p><tt>new(Value::number(), Context::<a href="riakc_datatype.html#type-context">riakc_datatype:context()</a>) -&gt; <a href="#type-riakc_hll">riakc_hll()</a></tt><br></p>
+</div><p>Creates a new hll</p>
+
+<h3 class="function"><a name="to_op-1">to_op/1</a></h3>
+<div class="spec">
+<p><tt>to_op(Hll::<a href="#type-riakc_hll">riakc_hll()</a>) -&gt; <a href="riakc_datatype.html#type-update">riakc_datatype:update</a>(<a href="#type-hll_op">hll_op()</a>)</tt><br></p>
+</div><p>Extracts an operation from the hll that can be encoded into an
+  update request.</p>
+
+<h3 class="function"><a name="type-0">type/0</a></h3>
+<div class="spec">
+<p><tt>type() -&gt; atom()</tt><br></p>
+</div><p>Returns the symbolic name of this type.</p>
+
+<h3 class="function"><a name="value-1">value/1</a></h3>
+<div class="spec">
+<p><tt>value(Hll::<a href="#type-riakc_hll">riakc_hll()</a>) -&gt; number()</tt><br></p>
+</div><p>Returns the</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Dec 16 2016, 16:33:18.</i></p>
+</body>
+</html>

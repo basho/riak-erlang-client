@@ -39,7 +39,7 @@
 <tr><td valign="top"><a href="#get-4">get/4</a></td><td>Get a record, if there is one, having the fields constituting
        the primary key in the Table equal to the composite Key
        (supplied as a list), using client Pid.</td></tr>
-<tr><td valign="top"><a href="#get_coverage-3">get_coverage/3</a></td><td>Generate a parallel coverage plan for the specified query.</td></tr>
+<tr><td valign="top"><a href="#get_coverage-3">get_coverage/3</a></td><td>Generate a parallel coverage plan for the specified 'query'.</td></tr>
 <tr><td valign="top"><a href="#put-3">put/3</a></td><td>Equivalent to <tt>put / 4</tt>.
 </td></tr>
 <tr><td valign="top"><a href="#put-4">put/4</a></td><td>Make data records from Data and insert them, individually,       
@@ -53,6 +53,7 @@ into a time-series Table, using client Pid.</td></tr>
 <tr><td valign="top"><a href="#query-5">query/5</a></td><td>Execute a Query with client.</td></tr>
 <tr><td valign="top"><a href="#replace_coverage-4">replace_coverage/4</a></td><td>Replace a component of a parallel coverage plan.</td></tr>
 <tr><td valign="top"><a href="#replace_coverage-5">replace_coverage/5</a></td><td></td></tr>
+<tr><td valign="top"><a href="#stream_list_keys-2">stream_list_keys/2</a></td><td>Streaming lists keys in Table, using client Pid, with no timeout.</td></tr>
 <tr><td valign="top"><a href="#stream_list_keys-3">stream_list_keys/3</a></td><td>Streaming lists keys in Table, using client Pid.</td></tr>
 </table>
 
@@ -84,7 +85,7 @@ into a time-series Table, using client Pid.</td></tr>
 <h3 class="function"><a name="get_coverage-3">get_coverage/3</a></h3>
 <div class="spec">
 <p><tt>get_coverage(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, QueryText::iolist()) -&gt; {ok, Entries::[term()]} | {error, term()}</tt><br></p>
-</div><p>Generate a parallel coverage plan for the specified query</p>
+</div><p>Generate a parallel coverage plan for the specified 'query'</p>
 
 <h3 class="function"><a name="put-3">put/3</a></h3>
 <div class="spec">
@@ -119,13 +120,13 @@ tuple.</p>
 
 <h3 class="function"><a name="query-4">query/4</a></h3>
 <div class="spec">
-<p><tt>query(Pid::pid(), Query::string(), Interpolations::[{binary(), binary()}], Cover::term()) -&gt; {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}</tt><br></p>
+<p><tt>query(Pid::pid(), Query::string() | binary(), Interpolations::[{binary(), binary()}], Cover::term()) -&gt; {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}</tt><br></p>
 </div><p>Equivalent to <tt>query / 5</tt>.</p>
 
 
 <h3 class="function"><a name="query-5">query/5</a></h3>
 <div class="spec">
-<p><tt>query(Pid::pid(), Query::string(), Interpolations::[{binary(), binary()}], Cover::term(), Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}</tt><br></p>
+<p><tt>query(Pid::pid(), Query::string() | binary(), Interpolations::[{binary(), binary()}], Cover::term(), Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; {ok, {ColumnNames::[binary()], Rows::[tuple()]}} | {error, term()}</tt><br></p>
 </div><p>Execute a Query with client.  The result returned
        is a tuple containing a list of columns as binaries in the
        first element, and a list of records, each represented as a
@@ -142,15 +143,21 @@ tuple.</p>
 <p><tt>replace_coverage(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, QueryText::iolist(), Cover::binary(), OtherCover::[binary()]) -&gt; {ok, Entries::[term()]} | {error, term()}</tt><br></p>
 </div>
 
+<h3 class="function"><a name="stream_list_keys-2">stream_list_keys/2</a></h3>
+<div class="spec">
+<p><tt>stream_list_keys(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>) -&gt; {ok, <a href="#type-req_id">req_id()</a>} | {error, term()}</tt><br></p>
+</div><p>Streaming lists keys in Table, using client Pid, with no timeout.
+       Returns {ok, ReqId} or {error, Reason}.</p>
+
 <h3 class="function"><a name="stream_list_keys-3">stream_list_keys/3</a></h3>
 <div class="spec">
-<p><tt>stream_list_keys(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, Timeout::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; {ok, <a href="#type-req_id">req_id()</a>} | {error, term()}</tt><br></p>
+<p><tt>stream_list_keys(Pid::pid(), Table::<a href="#type-table_name">table_name()</a>, Timeout::<a href="proplists.html#type-proplist">proplists:proplist()</a> | infinity) -&gt; {ok, <a href="#type-req_id">req_id()</a>} | {error, term()}</tt><br></p>
 </div><p>Streaming lists keys in Table, using client Pid.  Parameter
        Options is a proplist that can include a value for
        'timeout'. Returns {ok, ReqId} or {error, Reason}.</p>
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Jun 17 2016, 06:39:46.</i></p>
+<p><i>Generated by EDoc, Dec 16 2016, 16:33:18.</i></p>
 </body>
 </html>

@@ -2,34 +2,34 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
-<title>Module riakc_ts_get_operator</title>
+<title>Module riakc_utils</title>
 <link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
 </head>
 <body bgcolor="white">
 <div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
 <hr>
 
-<h1>Module riakc_ts_get_operator</h1>
-<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>Helper functions for put requests to Riak TS.
+<h1>Module riakc_utils</h1>
+<ul class="index"><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>
 
 
-<h2><a name="description">Description</a></h2>Helper functions for put requests to Riak TS
 <h2><a name="index">Function Index</a></h2>
-<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#deserialize-1">deserialize/1</a></td><td></td></tr>
-<tr><td valign="top"><a href="#serialize-3">serialize/3</a></td><td></td></tr>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#characters_to_unicode_binary-1">characters_to_unicode_binary/1</a></td><td>Convert to unicode binary with informative errors.</td></tr>
+<tr><td valign="top"><a href="#wait_for_list-1">wait_for_list/1</a></td><td>Wait for the results of a listing operation.</td></tr>
 </table>
 
 <h2><a name="functions">Function Details</a></h2>
 
-<h3 class="function"><a name="deserialize-1">deserialize/1</a></h3>
+<h3 class="function"><a name="characters_to_unicode_binary-1">characters_to_unicode_binary/1</a></h3>
 <div class="spec">
-<p><tt>deserialize(Tsgetresp) -&gt; any()</tt></p>
-</div>
+<p><tt>characters_to_unicode_binary(String::string() | binary()) -&gt; binary()</tt><br></p>
+</div><p>throws <tt>{unicode_error, ErrMsg}</tt></p>
+<p>Convert to unicode binary with informative errors</p>
 
-<h3 class="function"><a name="serialize-3">serialize/3</a></h3>
+<h3 class="function"><a name="wait_for_list-1">wait_for_list/1</a></h3>
 <div class="spec">
-<p><tt>serialize(Table, Key, X3) -&gt; any()</tt></p>
-</div>
+<p><tt>wait_for_list(ReqId::non_neg_integer()) -&gt; {ok, list()} | {error, any()}</tt><br></p>
+</div><p>Wait for the results of a listing operation</p>
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
