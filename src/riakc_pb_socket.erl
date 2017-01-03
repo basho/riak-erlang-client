@@ -176,7 +176,9 @@
                                % certificate authentication
                 ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
                                % documentation.
-                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
+                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer(),
+                tls = false :: boolean(), % if true, encrypt connection via TLS
+                start_tls = true :: boolean()}). % if true, send RpbStartTls to begin TLS session
 
 -export_type([address/0, portnum/0]).
 
@@ -1502,7 +1504,11 @@ parse_options([{cacertfile, File}|Options], State) ->
 parse_options([{keyfile, File}|Options], State) ->
     parse_options(Options, State#state{keyfile=File});
 parse_options([{ssl_opts, Opts}|Options], State) ->
-    parse_options(Options, State#state{ssl_opts=Opts}).
+    parse_options(Options, State#state{ssl_opts=Opts});
+parse_options([{tls, Tls}|Options], State) ->
+    parse_options(Options, State#state{tls=Tls});
+parse_options([{start_tls, StartTls}|Options], State) ->
+    parse_options(Options, State#state{start_tls=StartTls}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -2180,7 +2186,9 @@ restart_req_timer(Request) ->
 %% @private
 %% Connect the socket if disconnected
 connect(State) when State#state.sock =:= undefined ->
-    #state{address = Address, port = Port, connects = Connects} = State,
+    #state{address=Address, port=Port, connects=Connects,
+           credentials=Credentials,
+           tls=Tls, start_tls=StartTls} = State,
     case gen_tcp:connect(Address, Port,
                          [binary, {active, once}, {packet, 4},
                           {keepalive, State#state.keepalive}],
@@ -2188,18 +2196,36 @@ connect(State) when State#state.sock =:= undefined ->
         {ok, Sock} ->
             State1 = State#state{sock = Sock, connects = Connects+1,
                                  reconnect_interval = ?FIRST_RECONNECT_INTERVAL},
-            case State#state.credentials of
-                undefined ->
+            case {Tls, Credentials} of
+                {true, _} ->
+                    start_tls(StartTls, State1);
+                {false, undefined} ->
                     {ok, State1};
-                _ ->
-                    start_tls(State1)
+                {false, _} ->
+                    start_auth(State1)
             end;
         Error ->
             Error
     end.
 
--spec start_tls(#state{}) -> {ok, #state{}} | {error, term()}.
-start_tls(State=#state{sock=Sock}) ->
+-spec start_tls(boolean(), #state{}) -> {ok, #state{}} | {error, term()}.
+start_tls(false, State=#state{sock=Sock}) ->
+    Options = [{verify, verify_peer},
+                {cacertfile, State#state.cacertfile}] ++
+                [{K, V} || {K, V} <- [{certfile,
+                                        State#state.certfile},
+                                    {keyfile,
+                                        State#state.keyfile}],
+                            V /= undefined] ++
+                State#state.ssl_opts,
+    case ssl:connect(Sock, Options, 1000) of
+        {ok, SSLSock} ->
+            ok = ssl:setopts(SSLSock, [{active, once}]),
+            start_auth(State#state{sock=SSLSock, transport=ssl});
+        {error, Reason2} ->
+            {error, Reason2}
+    end;
+start_tls(true, State=#state{sock=Sock}) ->
     %% Send STARTTLS
     StartTLSCode = riak_pb_codec:msg_code(rpbstarttls),
     ok = gen_tcp:send(Sock, <<StartTLSCode:8>>),
@@ -2212,21 +2238,7 @@ start_tls(State=#state{sock=Sock}) ->
             <<MsgCode:8, MsgData/binary>> = Data,
             case riak_pb_codec:decode(MsgCode, MsgData) of
                 rpbstarttls ->
-                    Options = [{verify, verify_peer},
-                               {cacertfile, State#state.cacertfile}] ++
-                              [{K, V} || {K, V} <- [{certfile,
-                                                     State#state.certfile},
-                                                    {keyfile,
-                                                     State#state.keyfile}],
-                                         V /= undefined] ++
-                              State#state.ssl_opts,
-                    case ssl:connect(Sock, Options, 1000) of
-                        {ok, SSLSock} ->
-                            ok = ssl:setopts(SSLSock, [{active, once}]),
-                            start_auth(State#state{sock=SSLSock, transport=ssl});
-                        {error, Reason2} ->
-                            {error, Reason2}
-                    end;
+                    start_tls(false, State);
                 #rpberrorresp{} ->
                     %% Server doesn't know about STARTTLS or security is
                     %% disabled. We can't fall back to the regular old
@@ -2238,21 +2250,29 @@ start_tls(State=#state{sock=Sock}) ->
             end
     end.
 
-start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
-    ok = ssl:send(Sock, riak_pb_codec:encode(#rpbauthreq{user=User,
-                                                         password=Pass})),
+start_auth(State=#state{credentials={User,Pass},sock=Sock,transport=Transport}) ->
+    AuthReq = riak_pb_codec:encode(#rpbauthreq{user=User,password=Pass}),
+    ok = Transport:send(Sock, AuthReq),
     receive
+        {tcp_error, Sock, Reason} ->
+            {error, Reason};
+        {tcp_closed, Sock} ->
+            {error, closed};
         {ssl_error, Sock, Reason} ->
             {error, Reason};
         {ssl_closed, Sock} ->
             {error, closed};
-        {ssl, Sock, Data} ->
+        {Msg, Sock, Data} ->
             <<MsgCode:8, MsgData/binary>> = Data,
-            case riak_pb_codec:decode(MsgCode, MsgData) of
-                rpbauthresp ->
+            MsgAtom = riak_pb_codec:decode(MsgCode, MsgData),
+            case {Msg, MsgAtom} of
+                {ssl, rpbauthresp} ->
                     ok = ssl:setopts(Sock, [{active, once}]),
                     {ok, State};
-                #rpberrorresp{} = Err ->
+                {tcp, rpbauthresp} ->
+                    ok = inet:setopts(Sock, [{active, once}]),
+                    {ok, State};
+                {_, #rpberrorresp{}=Err} ->
                     fmt_err_msg(Err)
             end
     end.

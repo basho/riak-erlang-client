@@ -1,0 +1,37 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -smp enable -sname secex -pa ./ebin -pa ./deps/riak_pb/ebin debug verbose
+%%
+%% This is an example escript to show how to use TLS with the Erlang
+%% client. When tls is true, but start_tls is false, this requires
+%% connecting to the port configured by listener.tls.internal in Riak.
+%%
+%% If you wish to connect using TLS to the port configured by
+%% listener.pb.internal, you must set start_tls to true to enable the
+%% RpbStartTls message indicating that the socket should be upgraded
+%% to TLS/SSL
+%%
+main([Arg]) ->
+    try
+        ok = ssl:start(),
+        Port = list_to_integer(Arg),
+        io:format("riakc_pb_socket: ~p~n", [code:which(riakc_pb_socket)]),
+		Opts = [
+			       {credentials, "riakpass", "Test1234"},
+			       {cacertfile, "./tools/test-ca/certs/cacert.pem"},
+			       {tls, true},
+			       {start_tls, false}
+			   ],
+        {ok, Pid} = riakc_pb_socket:start_link("127.0.0.1", Port, Opts),
+        io:format("ping response: ~p~n", [riakc_pb_socket:ping(Pid)]),
+        riakc_pb_socket:stop(Pid)
+    catch
+        _:_ ->
+            usage()
+    end;
+main(_) ->
+    usage().
+
+usage() ->
+    io:format("usage: secex riak-port\n"),
+    halt(1).
