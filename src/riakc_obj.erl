@@ -127,17 +127,18 @@
 %% ====================================================================
 
 %% @doc Constructor for new riak client objects.
--spec new(bucket(), key()) -> riakc_obj().
+-spec new(bucket(), key()) -> riakc_obj() | {error, atom()}.
 new(Bucket, Key) ->
     build_client_object(Bucket, Key, undefined).
 
 %% @doc Constructor for new riak client objects with an update value.
--spec new(bucket(), key(), value()) -> riakc_obj().
+-spec new(bucket(), key(), value()) -> riakc_obj() | {error, atom()}.
 new(Bucket, Key, Value) ->
     build_client_object(Bucket, Key, Value).
 
 %% @doc Constructor for new riak client objects with an update value and content type.
--spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
+-spec new(bucket(), key(), value(), content_type()) ->
+    riakc_obj() | {error, atom()}.
 new(Bucket, Key, Value, ContentType) ->
     case build_client_object(Bucket, Key, Value) of
         {error, Reason} ->
@@ -148,7 +149,7 @@ new(Bucket, Key, Value, ContentType) ->
 
 %% @doc Build a new riak client object with non-empty key
 -spec build_client_object(bucket(), key(), undefined | value()) ->
-                                 riakc_obj() | {error, atom()}.
+    riakc_obj() | {error, atom()}.
 build_client_object(<<>>, K, _) when is_binary(K) ->
     {error, zero_length_bucket};
 build_client_object(B, <<>>, _) when is_binary(B) ->

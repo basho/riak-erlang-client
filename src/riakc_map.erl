@@ -53,7 +53,7 @@
 -ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eunit/include/eunit.hrl").
--compile(export_all).
+-export([gen_type/0, gen_op/0]).
 -endif.
 
 %% Callbacks
@@ -155,6 +155,8 @@ erase(Key, #map{removes=R}=M) ->
 %% it will be initialized to the empty value for its type before being
 %% passed to the function.
 -spec update(key(), update_fun(), crdt_map()) -> crdt_map().
+update({_Name, hll}, _Fun, _M) ->
+    erlang:error(badarg, ["maps may not contain hll datatype"]);
 update(Key, Fun, #map{updates=U}=M) ->
     %% In order, search for key in 1) batched updates, then 2) values
     %% taken from Riak, and otherwise 3) create a new, empty data type
@@ -310,6 +312,6 @@ prop_nested_defaults() ->
             end).
 
 prop_nested_defaults_test() ->
-    ?assert(eqc:quickcheck(?QC_OUT(prop_nested_defaults()))).
+    {timeout, 120, [?_assert(eqc:quickcheck(?QC_OUT(prop_nested_defaults())))]}.
 
 -endif.

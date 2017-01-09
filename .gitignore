@@ -1,3 +1,4 @@
+.rebar/
 .eunit/*
 deps/*
 priv/*
@@ -9,3 +10,7 @@ ebin/*
 /.eqc-info
 /current_counterexample.eqc
 .local_dialyzer_plt
+test-unchanged.escript
+.idea
+*.iml
+*.dump
