@@ -504,7 +504,7 @@ clear_ttl(MD) ->
     dict:erase(?MD_TTL, MD).
 
 %% @doc  Get TTL
--spec get_ttl(metadata()) -> ttl() | undefined.
+-spec get_ttl(metadata()) -> ttl() | false.
 get_ttl(MD) ->
     case dict:find(?MD_TTL, MD) of
         {ok, TTL} ->
