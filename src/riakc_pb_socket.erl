@@ -474,26 +474,23 @@ stream_list_buckets(Pid, Options) ->
     stream_list_buckets(Pid, <<"default">>, Options).
 
 stream_list_buckets(Pid, Type, Options) ->
-    ServerTimeout =
-        case proplists:get_value(timeout, Options, none) of
-            none -> ?DEFAULT_PB_TIMEOUT;
-            ST -> ST
-        end,
+    ST = case proplists:get_value(timeout, Options) of
+             undefined -> ?DEFAULT_PB_TIMEOUT;
+             T -> T
+         end,
     ReqId = mk_reqid(),
-    call_infinity(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout,
-                                                  type=Type,
-                                                  stream=true},
-                          ServerTimeout, {ReqId, self()}}).
+    CT = ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT,
+    Req = #rpblistbucketsreq{timeout=ST, type=Type, stream=true},
+    call_infinity(Pid, {req, Req, CT, {ReqId, self()}}).
 
 legacy_list_buckets(Pid, Options) ->
-    ServerTimeout =
-        case proplists:get_value(timeout, Options, none) of
-            none -> ?DEFAULT_PB_TIMEOUT;
-            ST -> ST
-        end,
-    call_infinity(Pid, {req, #rpblistbucketsreq{timeout=ServerTimeout},
-                        ServerTimeout}).
-
+    ST = case proplists:get_value(timeout, Options) of
+             undefined -> ?DEFAULT_PB_TIMEOUT;
+             T -> T
+         end,
+    CT = ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT,
+    Req = #rpblistbucketsreq{timeout=ST},
+    call_infinity(Pid, {req, Req, CT}).
 
 %% @doc List all keys in a bucket
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
@@ -545,15 +542,15 @@ stream_list_keys(Pid, Bucket, infinity) ->
 stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Bucket, [{timeout, Timeout}]);
 stream_list_keys(Pid, Bucket, Options) ->
-    ServerTimeout =
-        case proplists:get_value(timeout, Options, none) of
-            none -> ?DEFAULT_PB_TIMEOUT;
-            ST -> ST
-        end,
-    {T, B} = maybe_bucket_type(Bucket),
-    ReqMsg = #rpblistkeysreq{type = T, bucket = B, timeout = ServerTimeout},
+    ST = case proplists:get_value(timeout, Options) of
+             undefined -> ?DEFAULT_PB_TIMEOUT;
+             T -> T
+         end,
+    {BT, B} = maybe_bucket_type(Bucket),
+    CT = ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT,
+    Req = #rpblistkeysreq{type=BT, bucket=B, timeout=ST},
     ReqId = mk_reqid(),
-    call_infinity(Pid, {req, ReqMsg, ServerTimeout, {ReqId, self()}}).
+    call_infinity(Pid, {req, Req, CT, {ReqId, self()}}).
 
 %% @doc Get bucket properties.
 %% @equiv get_bucket(Pid, Bucket, default_timeout(get_bucket_timeout))
@@ -925,27 +922,27 @@ create_search_index(Pid, Index, SchemaName, Timeout)
   when is_integer(Timeout); Timeout =:= infinity  ->
     create_search_index(Pid, Index, SchemaName, [{timeout, Timeout}]);
 create_search_index(Pid, Index, SchemaName, Opts) ->
-    Timeout = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
+    ST = proplists:get_value(timeout, Opts, default_timeout(search_timeout)),
     NVal = proplists:get_value(n_val, Opts),
     Req = set_index_create_req_nval(NVal, Index, SchemaName),
     Req1 = case proplists:is_defined(timeout, Opts) of
                true ->
-                   set_index_create_req_timeout(Timeout, Req);
+                   set_index_create_req_timeout(ST, Req);
                _ ->
                    Req
            end,
 
-    Timeout1 = if
-                   is_integer(Timeout) ->
-                       %% Add an extra 500ms to the create_search_index timeout
-                       %% and use that for the socket timeout.
-                       %% This should give the creation process time to throw
-                       %% back a proper response.
-                       Timeout + 500;
-                   true ->
-                       Timeout
-               end,
-    call_infinity(Pid, {req, Req1, Timeout1}).
+    CT = if
+             is_integer(ST) ->
+                 %% Add an extra 500ms to the create_search_index timeout
+                 %% and use that for the client-side timeout.
+                 %% This should give the creation process time to throw
+                 %% back a proper response.
+                 ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT;
+             true ->
+                 ST
+         end,
+    call_infinity(Pid, {req, Req1, CT}).
 
 %% @doc Delete a search index.
 -spec delete_search_index(pid(), binary()) ->
