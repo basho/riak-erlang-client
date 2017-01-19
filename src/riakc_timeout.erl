@@ -113,7 +113,7 @@ get_default(Op) ->
 	 mapred_bucket_call_timeout, mapred_bucket_stream_call_timeout,
 	 search_timeout, search_call_timeout, get_preflist_timeout]).
 
-default_test() ->
-    [?assertEqual(?DEFAULT_PB_TIMEOUT, default(TN)) || TN <- ?TIMEOUT_NAMES].
+default_test_() ->
+    [?_assertEqual(?DEFAULT_PB_TIMEOUT, default(TN)) || TN <- ?TIMEOUT_NAMES].
 
 -endif.
