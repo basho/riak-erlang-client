@@ -57,11 +57,11 @@
          legacy_list_buckets/2,
          list_keys/2, list_keys/3,
          stream_list_keys/2, stream_list_keys/3,
-         get_bucket/2, get_bucket/3, get_bucket/4,
+         get_bucket/2, get_bucket/3,
          get_bucket_type/2, get_bucket_type/3,
-         set_bucket/3, set_bucket/4, set_bucket/5,
+         set_bucket/3, set_bucket/4,
          set_bucket_type/3, set_bucket_type/4,
-         reset_bucket/2, reset_bucket/3, reset_bucket/4,
+         reset_bucket/2, reset_bucket/3,
          mapred/3, mapred/4, mapred/5,
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
@@ -438,7 +438,6 @@ delete_obj(Pid, Obj, Options, Timeout) ->
 
 %% @doc List all buckets on the server in the "default" bucket type.
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
-%% @equiv list_buckets(Pid, riakc_timeout:default(list_buckets_timeout))
 -spec list_buckets(pid()) -> {ok, [bucket()]} | {error, term()}.
 list_buckets(Pid) ->
     list_buckets(Pid, <<"default">>, []).
@@ -468,32 +467,23 @@ stream_list_buckets(Pid) ->
 stream_list_buckets(Pid, Type) when is_binary(Type) ->
     stream_list_buckets(Pid, Type, []);
 stream_list_buckets(Pid, Timeout) when is_integer(Timeout) ->
-    stream_list_buckets(Pid, <<"default">>,[{timeout, Timeout}]);
+    stream_list_buckets(Pid, <<"default">>, [{timeout, Timeout}]);
 stream_list_buckets(Pid, Options) ->
     stream_list_buckets(Pid, <<"default">>, Options).
 
 stream_list_buckets(Pid, Type, Options) ->
-    ST = case proplists:get_value(timeout, Options) of
-             undefined -> ?DEFAULT_PB_TIMEOUT;
-             T -> T
-         end,
     ReqId = mk_reqid(),
-    CT = ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT,
+    {CT, ST} = riakc_timeout:timeouts(stream_list_buckets_timeout, Options),
     Req = #rpblistbucketsreq{timeout=ST, type=Type, stream=true},
     call_infinity(Pid, {req, Req, CT, {ReqId, self()}}).
 
 legacy_list_buckets(Pid, Options) ->
-    ST = case proplists:get_value(timeout, Options) of
-             undefined -> ?DEFAULT_PB_TIMEOUT;
-             T -> T
-         end,
-    CT = ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT,
+    {CT, ST} = riakc_timeout:timeouts(stream_list_buckets_timeout, Options),
     Req = #rpblistbucketsreq{timeout=ST},
     call_infinity(Pid, {req, Req, CT}).
 
 %% @doc List all keys in a bucket
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
-%% @equiv list_keys(Pid, Bucket, riakc_timeout:default(list_keys_timeout))
 -spec list_keys(pid(), bucket() | bucket_and_type()) -> {ok, [key()]} | {error, term()}.
 list_keys(Pid, Bucket) ->
     list_keys(Pid, Bucket, []).
@@ -532,7 +522,6 @@ stream_list_keys(Pid, Bucket) ->
 %% ```    {ReqId::req_id(), {keys, [key()]}}
 %%        {ReqId::req_id(), done}'''
 %% <em>This is a potentially expensive operation and should not be used in production.</em>
-%% @equiv stream_list_keys(Pid, Bucket, Timeout, riakc_timeout:default(stream_list_keys_call_timeout))
 -spec stream_list_keys(pid(), bucket() | bucket_and_type(), integer()|list()) ->
                               {ok, req_id()} |
                               {error, term()}.
@@ -541,12 +530,8 @@ stream_list_keys(Pid, Bucket, infinity) ->
 stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Bucket, [{timeout, Timeout}]);
 stream_list_keys(Pid, Bucket, Options) ->
-    ST = case proplists:get_value(timeout, Options) of
-             undefined -> ?DEFAULT_PB_TIMEOUT;
-             T -> T
-         end,
+    {CT, ST} = riakc_timeout:timeouts(stream_list_keys_timeout, Options),
     {BT, B} = maybe_bucket_type(Bucket),
-    CT = ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT,
     Req = #rpblistkeysreq{type=BT, bucket=B, timeout=ST},
     ReqId = mk_reqid(),
     call_infinity(Pid, {req, Req, CT, {ReqId, self()}}).
@@ -557,24 +542,19 @@ stream_list_keys(Pid, Bucket, Options) ->
 get_bucket(Pid, Bucket) ->
     get_bucket(Pid, Bucket, riakc_timeout:default(get_bucket_timeout)).
 
-%% @doc Get bucket properties specifying a server side timeout.
-%% @equiv get_bucket(Pid, Bucket, Timeout, riakc_timeout:default(get_bucket_call_timeout))
+%% @doc Get bucket properties specifying a client side timeout.
 -spec get_bucket(pid(), bucket() | bucket_and_type(), timeout()) -> {ok, bucket_props()} | {error, term()}.
 get_bucket(Pid, Bucket, Timeout) ->
-    get_bucket(Pid, Bucket, Timeout, riakc_timeout:default(get_bucket_call_timeout)).
-
-%% @doc Get bucket properties specifying a server side and local call timeout.
-%% @deprecated because `CallTimeout' is ignored
--spec get_bucket(pid(), bucket() | bucket_and_type(), timeout(), timeout()) -> {ok, bucket_props()} |
-                                                           {error, term()}.
-get_bucket(Pid, Bucket, Timeout, _CallTimeout) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = #rpbgetbucketreq{type = T, bucket = B},
     call_infinity(Pid, {req, Req, Timeout}).
 
+%% @doc Get bucket type properties.
+%% @equiv get_bucket_type(Pid, Bucket, riakc_timeout:default(get_bucket_type_timeout))
 get_bucket_type(Pid, BucketType) ->
-    get_bucket_type(Pid, BucketType, riakc_timeout:default(get_bucket_timeout)).
+    get_bucket_type(Pid, BucketType, riakc_timeout:default(get_bucket_type_timeout)).
 
+%% @doc Get bucket type properties specifying a client side timeout.
 get_bucket_type(Pid, BucketType, Timeout) ->
     Req = #rpbgetbuckettypereq{type = BucketType},
     call_infinity(Pid, {req, Req, Timeout}).
@@ -585,47 +565,34 @@ get_bucket_type(Pid, BucketType, Timeout) ->
 set_bucket(Pid, Bucket, BucketProps) ->
     set_bucket(Pid, Bucket, BucketProps, riakc_timeout:default(set_bucket_timeout)).
 
-%% @doc Set bucket properties specifying a server side timeout.
-%% @equiv set_bucket(Pid, Bucket, BucketProps, Timeout, riakc_timeout:default(set_bucket_call_timeout))
+%% @doc Set bucket properties specifying a client side timeout.
 -spec set_bucket(pid(), bucket() | bucket_and_type(), bucket_props(), timeout()) -> ok | {error, term()}.
 set_bucket(Pid, Bucket, BucketProps, Timeout) ->
-    set_bucket(Pid, Bucket, BucketProps, Timeout,
-               riakc_timeout:default(set_bucket_call_timeout)).
-
-%% @doc Set bucket properties specifying a server side and local call timeout.
-%% @deprecated because `CallTimeout' is ignored
--spec set_bucket(pid(), bucket() | bucket_and_type(), bucket_props(), timeout(), timeout()) -> ok | {error, term()}.
-set_bucket(Pid, Bucket, BucketProps, Timeout, _CallTimeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     {T, B} = maybe_bucket_type(Bucket),
     Req = #rpbsetbucketreq{type = T, bucket = B, props = PbProps},
     call_infinity(Pid, {req, Req, Timeout}).
 
+%% @doc Set bucket type properties.
+%% @equiv set_bucket_type(Pid, Bucket, BucketProps, riakc_timeout:default(set_bucket_type_timeout))
 set_bucket_type(Pid, BucketType, BucketProps) ->
-    set_bucket_type(Pid, BucketType, BucketProps, riakc_timeout:default(set_bucket_timeout)).
+    set_bucket_type(Pid, BucketType, BucketProps, riakc_timeout:default(set_bucket_type_timeout)).
 
+%% @doc Set bucket type properties specifying a client side timeout.
 set_bucket_type(Pid, BucketType, BucketProps, Timeout) ->
     PbProps = riak_pb_codec:encode_bucket_props(BucketProps),
     Req = #rpbsetbuckettypereq{type = BucketType, props = PbProps},
     call_infinity(Pid, {req, Req, Timeout}).
 
 %% @doc Reset bucket properties back to the defaults.
-%% @equiv reset_bucket(Pid, Bucket, riakc_timeout:default(reset_bucket_timeout), default_timeout(reset_bucket_call_timeout))
+%% @equiv reset_bucket(Pid, Bucket, riakc_timeout:default(reset_bucket_timeout))
 -spec reset_bucket(pid(), bucket() | bucket_and_type()) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket) ->
-    reset_bucket(Pid, Bucket, riakc_timeout:default(reset_bucket_timeout),
-                 riakc_timeout:default(reset_bucket_call_timeout)).
+    reset_bucket(Pid, Bucket, riakc_timeout:default(reset_bucket_timeout)).
 
-%% @doc Reset bucket properties back to the defaults.
-%% @equiv reset_bucket(Pid, Bucket, Timeout, riakc_timeout:default(reset_bucket_call_timeout))
+%% @doc Reset bucket properties back to the defaults specifying a client side timeout.
 -spec reset_bucket(pid(), bucket() | bucket_and_type(), timeout()) -> ok | {error, term()}.
 reset_bucket(Pid, Bucket, Timeout) ->
-    reset_bucket(Pid, Bucket, Timeout, riakc_timeout:default(reset_bucket_call_timeout)).
-
-%% @doc Reset bucket properties back to the defaults.
-%% @deprecated because `CallTimeout' is ignored
--spec reset_bucket(pid(), bucket() | bucket_and_type(), timeout(), timeout()) -> ok | {error, term()}.
-reset_bucket(Pid, Bucket, Timeout, _CallTimeout) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = #rpbresetbucketreq{type = T, bucket = B},
     call_infinity(Pid, {req, Req, Timeout}).
@@ -921,27 +888,11 @@ create_search_index(Pid, Index, Opts) ->
 create_search_index(Pid, Index, SchemaName, Timeout)
   when is_integer(Timeout); Timeout =:= infinity  ->
     create_search_index(Pid, Index, SchemaName, [{timeout, Timeout}]);
-create_search_index(Pid, Index, SchemaName, Opts) ->
-    ST = proplists:get_value(timeout, Opts, riakc_timeout:default(search_timeout)),
-    NVal = proplists:get_value(n_val, Opts),
+create_search_index(Pid, Index, SchemaName, Options) ->
+    NVal = proplists:get_value(n_val, Options),
     Req = set_index_create_req_nval(NVal, Index, SchemaName),
-    Req1 = case proplists:is_defined(timeout, Opts) of
-               true ->
-                   set_index_create_req_timeout(ST, Req);
-               _ ->
-                   Req
-           end,
-
-    CT = if
-             is_integer(ST) ->
-                 %% Add an extra 500ms to the create_search_index timeout
-                 %% and use that for the client-side timeout.
-                 %% This should give the creation process time to throw
-                 %% back a proper response.
-                 ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT;
-             true ->
-                 ST
-         end,
+    {CT, ST} = riakc_timeout:timeouts(create_search_index_timeout, Options),
+    Req1 = set_index_create_req_timeout(ST, Req),
     call_infinity(Pid, {req, Req1, CT}).
 
 %% @doc Delete a search index.

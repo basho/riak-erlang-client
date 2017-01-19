@@ -16,7 +16,7 @@
 
 -module(riakc_timeout).
 
--export([default/1]).
+-export([default/1, timeouts/2]).
 
 -define(DEFAULT_PB_TIMEOUT, 60000).
 -define(DEFAULT_ADDITIONAL_CLIENT_TIMEOUT, 500).
@@ -26,6 +26,14 @@
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
+
+-spec timeouts(timeout_name(), proplists:proplist()) -> {timeout(), timeout()}.
+timeouts(stream_list_buckets_timeout=Op, Opts) ->
+    get_timeouts(Op, Opts);
+timeouts(stream_list_keys_timeout=Op, Opts) ->
+    get_timeouts(Op, Opts);
+timeouts(create_search_index_timeout=Op, Opts) ->
+    get_timeouts(Op, Opts).
 
 -spec default(timeout_name()) -> timeout().
 default(ping_timeout=Op) ->
@@ -42,23 +50,19 @@ default(put_timeout=Op) ->
     get_default(Op);
 default(delete_timeout=Op) ->
     get_default(Op);
-default(list_buckets_timeout=Op) ->
-    get_default(Op);
-default(list_buckets_call_timeout=Op) ->
-    get_default(Op);
-default(list_keys_timeout=Op) ->
-    get_default(Op);
 default(stream_list_keys_timeout=Op) ->
     get_default(Op);
-default(stream_list_keys_call_timeout=Op) ->
+default(stream_list_buckets_timeout=Op) ->
     get_default(Op);
 default(get_bucket_timeout=Op) ->
     get_default(Op);
-default(get_bucket_call_timeout=Op) ->
+default(get_bucket_type_timeout=Op) ->
     get_default(Op);
 default(set_bucket_timeout=Op) ->
     get_default(Op);
-default(set_bucket_call_timeout=Op) ->
+default(reset_bucket_timeout=Op) ->
+    get_default(Op);
+default(set_bucket_type_timeout=Op) ->
     get_default(Op);
 default(mapred_timeout=Op) ->
     get_default(Op);
@@ -66,23 +70,33 @@ default(mapred_call_timeout=Op) ->
     get_default(Op);
 default(mapred_stream_timeout=Op) ->
     get_default(Op);
-default(mapred_stream_call_timeout=Op) ->
-    get_default(Op);
 default(mapred_bucket_timeout=Op) ->
     get_default(Op);
 default(mapred_bucket_call_timeout=Op) ->
-    get_default(Op);
-default(mapred_bucket_stream_call_timeout=Op) ->
     get_default(Op);
 default(search_timeout=Op) ->
     get_default(Op);
 default(search_call_timeout=Op) ->
     get_default(Op);
+default(create_search_index_timeout=Op) ->
+    get_default(Op);
 default(get_preflist_timeout=Op) ->
     get_default(Op).
 
-%% @doc Return the default timeout for an operation if none is provided.
-%%      Falls back to the default timeout.
+-spec get_timeouts(timeout_name(), proplists:proplist()) -> {timeout(), timeout()}.
+get_timeouts(Op, Opts) ->
+    ST = proplists:get_value(timeout, Opts, default(Op)),
+    CT = get_client_timeout(ST),
+    {CT, ST}.
+
+-spec get_client_timeout(undefined|timeout()) -> timeout().
+get_client_timeout(infinity) ->
+    infinity;
+get_client_timeout(undefined) ->
+    infinity;
+get_client_timeout(ST) when is_integer(ST) ->
+    ST + ?DEFAULT_ADDITIONAL_CLIENT_TIMEOUT.
+
 -spec get_default(timeout_name()) -> timeout().
 get_default(Op) ->
     case application:get_env(riakc, Op) of
@@ -103,15 +117,16 @@ get_default(Op) ->
 	[ping_timeout, get_client_id_timeout,
 	 set_client_id_timeout, get_server_info_timeout,
 	 get_timeout, put_timeout, delete_timeout,
-	 list_buckets_timeout, list_buckets_call_timeout,
-	 list_keys_timeout, stream_list_keys_timeout,
-	 stream_list_keys_call_timeout, get_bucket_timeout,
-	 get_bucket_call_timeout, set_bucket_timeout,
-	 set_bucket_call_timeout, mapred_timeout,
-	 mapred_call_timeout, mapred_stream_timeout,
-	 mapred_stream_call_timeout, mapred_bucket_timeout,
-	 mapred_bucket_call_timeout, mapred_bucket_stream_call_timeout,
-	 search_timeout, search_call_timeout, get_preflist_timeout]).
+	 stream_list_buckets_timeout,
+	 stream_list_keys_timeout,
+	 get_bucket_timeout, set_bucket_timeout, reset_bucket_timeout,
+	 get_bucket_type_timeout, set_bucket_type_timeout,
+	 mapred_timeout, mapred_call_timeout,
+     mapred_stream_timeout,
+     mapred_bucket_timeout, mapred_bucket_call_timeout,
+	 search_timeout, search_call_timeout,
+	 create_search_index_timeout,
+     get_preflist_timeout]).
 
 default_test_() ->
     [?_assertEqual(?DEFAULT_PB_TIMEOUT, default(TN)) || TN <- ?TIMEOUT_NAMES].
