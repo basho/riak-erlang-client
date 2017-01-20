@@ -62,8 +62,8 @@
          set_bucket/3, set_bucket/4,
          set_bucket_type/3, set_bucket_type/4,
          reset_bucket/2, reset_bucket/3,
-         mapred/3, mapred/4, mapred/5,
-         mapred_stream/4, mapred_stream/5, mapred_stream/6,
+         mapred/3, mapred/4,
+         mapred_stream/4, mapred_stream/5,
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
          mapred_bucket_stream/5, mapred_bucket_stream/6,
          search/3, search/4, search/5, search/6,
@@ -599,7 +599,7 @@ reset_bucket(Pid, Bucket, Timeout) ->
 
 %% @doc Perform a MapReduce job across the cluster.
 %%      See the MapReduce documentation for explanation of behavior.
-%% @equiv mapred(Inputs, Query, riakc_timeout:default(mapred))
+%% @equiv mapred(Inputs, Query, riakc_timeout:default(mapred_timeout))
 -spec mapred(pid(), mapred_inputs(), [mapred_queryterm()]) ->
                     {ok, mapred_result()} |
                     {error, {badqterm, mapred_queryterm()}} |
@@ -608,29 +608,18 @@ reset_bucket(Pid, Bucket, Timeout) ->
 mapred(Pid, Inputs, Query) ->
     mapred(Pid, Inputs, Query, riakc_timeout:default(mapred_timeout)).
 
-%% @doc Perform a MapReduce job across the cluster with a job timeout.
-%%      See the MapReduce documentation for explanation of behavior.
-%% @equiv mapred(Pid, Inputs, Query, Timeout, riakc_timeout:default(mapred_call_timeout))
+%% @doc Perform a MapReduce job across the cluster with a job and
+%%      local call timeout.  See the MapReduce documentation for
+%%      explanation of behavior. This is implemented by using
+%%      <code>mapred_stream/6</code> and then waiting for all results.
+%% @see mapred_stream/6
 -spec mapred(pid(), mapred_inputs(), [mapred_queryterm()], timeout()) ->
                     {ok, mapred_result()} |
                     {error, {badqterm, mapred_queryterm()}} |
                     {error, timeout} |
                     {error, term()}.
 mapred(Pid, Inputs, Query, Timeout) ->
-    mapred(Pid, Inputs, Query, Timeout, riakc_timeout:default(mapred_call_timeout)).
-
-%% @doc Perform a MapReduce job across the cluster with a job and
-%%      local call timeout.  See the MapReduce documentation for
-%%      explanation of behavior. This is implemented by using
-%%      <code>mapred_stream/6</code> and then waiting for all results.
-%% @see mapred_stream/6
--spec mapred(pid(), mapred_inputs(), [mapred_queryterm()], timeout(), timeout()) ->
-                    {ok, mapred_result()} |
-                    {error, {badqterm, mapred_queryterm()}} |
-                    {error, timeout} |
-                    {error, term()}.
-mapred(Pid, Inputs, Query, Timeout, CallTimeout) ->
-    case mapred_stream(Pid, Inputs, Query, self(), Timeout, CallTimeout) of
+    case mapred_stream(Pid, Inputs, Query, self(), Timeout) of
         {ok, ReqId} ->
             wait_for_mapred(ReqId, Timeout);
         Error ->
@@ -643,30 +632,18 @@ mapred(Pid, Inputs, Query, Timeout, CallTimeout) ->
 %%      The ClientPid will receive messages in this format:
 %% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
 %%      {ReqId::req_id(), done}'''
-%% @equiv mapred_stream(ConnectionPid, Inputs, Query, ClientPid, riakc_timeout:default(mapred_stream_timeout))
--spec mapred_stream(ConnectionPid::pid(),Inputs::mapred_inputs(),Query::[mapred_queryterm()], ClientPid::pid()) ->
+%% @equiv mapred_stream(ConnectionPid, Inputs, Query, ClientPid, riakc_timeout:default(mapred_timeout))
+-spec mapred_stream(
+        ConnectionPid::pid(),
+        Inputs::mapred_inputs(),
+        Query::[mapred_queryterm()],
+        ClientPid::pid()) ->
                            {ok, req_id()} |
                            {error, {badqterm, mapred_queryterm()}} |
                            {error, timeout} |
                            {error, Err :: term()}.
 mapred_stream(Pid, Inputs, Query, ClientPid) ->
-    mapred_stream(Pid, Inputs, Query, ClientPid, riakc_timeout:default(mapred_stream_timeout)).
-
-%% @doc Perform a streaming MapReduce job with a timeout across the cluster.
-%%      sending results to ClientPid.
-%%      See the MapReduce documentation for explanation of behavior.
-%%      The ClientPid will receive messages in this format:
-%% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
-%%      {ReqId::req_id(), done}'''
-%% @equiv mapred_stream(ConnectionPid, Inputs, Query, ClientPid, Timeout, riakc_timeout:default(mapred_stream_call_timeout))
--spec mapred_stream(ConnectionPid::pid(),Inputs::mapred_inputs(),Query::[mapred_queryterm()], ClientPid::pid(), Timeout::timeout()) ->
-                           {ok, req_id()} |
-                           {error, {badqterm, mapred_queryterm()}} |
-                           {error, timeout} |
-                           {error, Err :: term()}.
-mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
-    mapred_stream(Pid, Inputs, Query, ClientPid, Timeout,
-                  riakc_timeout:default(mapred_stream_call_timeout)).
+    mapred_stream(Pid, Inputs, Query, ClientPid, riakc_timeout:default(mapred_timeout)).
 
 %% @doc Perform a streaming MapReduce job with a map/red timeout across the cluster,
 %%      a local call timeout and sending results to ClientPid.
@@ -675,29 +652,32 @@ mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
 %% ```  {ReqId::req_id(), {mapred, Phase::non_neg_integer(), mapred_result()}}
 %%      {ReqId::req_id(), done}'''
 %% @deprecated because `CallTimeout' is ignored
--spec mapred_stream(ConnectionPid::pid(),Inputs::mapred_inputs(),
-                    Query::[mapred_queryterm()], ClientPid::pid(),
-                    Timeout::timeout(), CallTimeout::timeout()) ->
+-spec mapred_stream(
+        ConnectionPid::pid(),
+        Inputs::mapred_inputs(),
+        Query::[mapred_queryterm()],
+        ClientPid::pid(),
+        Timeout::timeout()) ->
                            {ok, req_id()} |
                            {error, {badqterm, mapred_queryterm()}} |
                            {error, timeout} |
                            {error, Err :: term()}.
-mapred_stream(Pid, {index,Bucket,Name,Key}, Query, ClientPid, Timeout, CallTimeout) when is_tuple(Name) ->
+mapred_stream(Pid, {index,Bucket,Name,Key}, Query, ClientPid, Timeout) when is_tuple(Name) ->
     Index = riakc_obj:index_id_to_bin(Name),
-    mapred_stream(Pid, {index,Bucket,Index,Key}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) when is_tuple(Name) ->
+    mapred_stream(Pid, {index,Bucket,Index,Key}, Query, ClientPid, Timeout);
+mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout) when is_tuple(Name) ->
     Index = riakc_obj:index_id_to_bin(Name),
-    mapred_stream(Pid, {index,Bucket,Index,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, {index,Bucket,Name,Key}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(Key) ->
+    mapred_stream(Pid, {index,Bucket,Index,StartKey,EndKey}, Query, ClientPid, Timeout);
+mapred_stream(Pid, {index,Bucket,Name,Key}, Query, ClientPid, Timeout) when is_binary(Name) andalso is_integer(Key) ->
     BinKey = list_to_binary(integer_to_list(Key)),
-    mapred_stream(Pid, {index,Bucket,Name,BinKey}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(StartKey) ->
+    mapred_stream(Pid, {index,Bucket,Name,BinKey}, Query, ClientPid, Timeout);
+mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout) when is_binary(Name) andalso is_integer(StartKey) ->
     BinStartKey = list_to_binary(integer_to_list(StartKey)),
-    mapred_stream(Pid, {index,Bucket,Name,BinStartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout, CallTimeout) when is_binary(Name) andalso is_integer(EndKey) ->
+    mapred_stream(Pid, {index,Bucket,Name,BinStartKey,EndKey}, Query, ClientPid, Timeout);
+mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeout) when is_binary(Name) andalso is_integer(EndKey) ->
     BinEndKey = list_to_binary(integer_to_list(EndKey)),
-    mapred_stream(Pid, {index,Bucket,Name,StartKey,BinEndKey}, Query, ClientPid, Timeout, CallTimeout);
-mapred_stream(Pid, Inputs, Query, ClientPid, Timeout, _CallTimeout) ->
+    mapred_stream(Pid, {index,Bucket,Name,StartKey,BinEndKey}, Query, ClientPid, Timeout);
+mapred_stream(Pid, Inputs, Query, ClientPid, Timeout) ->
     MapRed = [{'inputs', Inputs},
               {'query', Query},
               {'timeout', Timeout}],
@@ -2044,20 +2024,12 @@ fmt_err_msg(ErrMsg) ->
 %% Common code for sending a single bucket or multiple inputs map/request
 %% @private
 send_mapred_req(Pid, MapRed, ClientPid) ->
-    ReqMsg = #rpbmapredreq{request = encode_mapred_req(MapRed),
+    {CT, _ST} = riakc_timeout:timeouts(mapred_timeout, MapRed),
+    MapRedReq = encode_mapred_req(MapRed),
+    ReqMsg = #rpbmapredreq{request = MapRedReq,
                            content_type = <<"application/x-erlang-binary">>},
     ReqId = mk_reqid(),
-    Timeout = proplists:get_value(timeout, MapRed, riakc_timeout:default(mapred_timeout)),
-    Timeout1 = if
-           is_integer(Timeout) ->
-               %% Add an extra 100ms to the mapred timeout and use that
-               %% for the socket timeout. This should give the
-               %% map/reduce a chance to fail and let us know.
-               Timeout + 100;
-           true ->
-               Timeout
-           end,
-    call_infinity(Pid, {req, ReqMsg, Timeout1, {ReqId, ClientPid}}).
+    call_infinity(Pid, {req, ReqMsg, CT, {ReqId, ClientPid}}).
 
 %% @private
 %% Make a new request that can be sent or queued
@@ -2075,11 +2047,12 @@ new_request(Msg, From, Timeout) ->
              tref = create_req_timer(Timeout, Ref), opts = []}.
 new_request(Msg, From, Timeout, Context) ->
     Ref = make_ref(),
-    #request{ref =Ref, msg = Msg, from = From, ctx = Context, timeout = Timeout,
+    #request{ref = Ref, msg = Msg, from = From, ctx = Context, timeout = Timeout,
              tref = create_req_timer(Timeout, Ref), opts = []}.
 
 %% @private
 %% Create a request timer if desired, otherwise return undefined.
+-spec create_req_timer(undefined|timeout(), reference()) -> undefined|reference().
 create_req_timer(infinity, _Ref) ->
     undefined;
 create_req_timer(undefined, _Ref) ->
@@ -2089,6 +2062,7 @@ create_req_timer(Msecs, Ref) ->
 
 %% @private
 %% Cancel a request timer made by create_timer/2
+-spec cancel_req_timer(undefined|reference()) -> ok.
 cancel_req_timer(undefined) ->
     ok;
 cancel_req_timer(Tref) ->
@@ -2405,7 +2379,6 @@ receive_mapred(ReqId, Timeout) ->
     after Timeout ->
             timeout
     end.
-
 
 %% Encode the MapReduce request using term to binary
 %% @private

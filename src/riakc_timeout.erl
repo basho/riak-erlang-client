@@ -33,6 +33,8 @@ timeouts(stream_list_buckets_timeout=Op, Opts) ->
 timeouts(stream_list_keys_timeout=Op, Opts) ->
     get_timeouts(Op, Opts);
 timeouts(create_search_index_timeout=Op, Opts) ->
+    get_timeouts(Op, Opts);
+timeouts(mapred_timeout=Op, Opts) ->
     get_timeouts(Op, Opts).
 
 -spec default(timeout_name()) -> timeout().
@@ -66,10 +68,6 @@ default(set_bucket_type_timeout=Op) ->
     get_default(Op);
 default(mapred_timeout=Op) ->
     get_default(Op);
-default(mapred_call_timeout=Op) ->
-    get_default(Op);
-default(mapred_stream_timeout=Op) ->
-    get_default(Op);
 default(mapred_bucket_timeout=Op) ->
     get_default(Op);
 default(mapred_bucket_call_timeout=Op) ->
@@ -81,6 +79,8 @@ default(search_call_timeout=Op) ->
 default(create_search_index_timeout=Op) ->
     get_default(Op);
 default(get_preflist_timeout=Op) ->
+    get_default(Op);
+default(timeseries=Op) ->
     get_default(Op).
 
 -spec get_timeouts(timeout_name(), proplists:proplist()) -> {timeout(), timeout()}.
@@ -121,12 +121,10 @@ get_default(Op) ->
 	 stream_list_keys_timeout,
 	 get_bucket_timeout, set_bucket_timeout, reset_bucket_timeout,
 	 get_bucket_type_timeout, set_bucket_type_timeout,
-	 mapred_timeout, mapred_call_timeout,
-     mapred_stream_timeout,
-     mapred_bucket_timeout, mapred_bucket_call_timeout,
-	 search_timeout, search_call_timeout,
+	 mapred_timeout,
+     mapred_bucket_timeout, mapred_bucket_call_timeout, search_timeout, search_call_timeout,
 	 create_search_index_timeout,
-     get_preflist_timeout]).
+     get_preflist_timeout, timeseries]).
 
 default_test_() ->
     [?_assertEqual(?DEFAULT_PB_TIMEOUT, default(TN)) || TN <- ?TIMEOUT_NAMES].
