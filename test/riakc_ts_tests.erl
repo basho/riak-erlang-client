@@ -36,6 +36,12 @@
 -define(FIVE_MINS_AGO,    1443796600987).
 -define(NOW,              1443796900987).
 
+listing_is_blocked_test() ->
+    application:set_env(riakc, allow_listing, false),
+    E = <<"Bucket and key list operations are expensive and should not be used in production.">>,
+    ?assertMatch({error, E}, riakc_ts:stream_list_keys(self(), <<"b">>)),
+    application:set_env(riakc, allow_listing, true).
+
 integration_tests({ok, _Props}) ->
     [{"ping",
       ?_test(begin
@@ -86,9 +92,13 @@ integration_test_() ->
     SetupFun = fun() ->
                    %% Grab the riakclient_pb.proto file
                    code:add_pathz("../ebin"),
-                   ok = riakc_test_utils:maybe_start_network()
+                   ok = riakc_test_utils:maybe_start_network(),
+                   application:set_env(riakc, allow_listing, true)
                end,
-    CleanupFun = fun(_) -> net_kernel:stop() end,
+    CleanupFun = fun(_) ->
+                    net_kernel:stop(),
+                    application:set_env(riakc, allow_listing, false)
+                 end,
     GenFun = fun() ->
                  case catch net_adm:ping(riakc_test_utils:test_riak_node()) of
                      pong -> generate_integration_tests();

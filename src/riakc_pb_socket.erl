@@ -474,6 +474,13 @@ stream_list_buckets(Pid, Options) ->
     stream_list_buckets(Pid, <<"default">>, Options).
 
 stream_list_buckets(Pid, Type, Options) ->
+    AllowListing = riakc_utils:get_allow_listing(Options),
+    do_stream_list_buckets(AllowListing, Pid, Type, Options).
+
+do_stream_list_buckets(false, _Pid, _Type, _Options) ->
+    {error, <<"Bucket and key list operations are expensive "
+              "and should not be used in production.">>};
+do_stream_list_buckets(true, Pid, Type, Options) ->
     ST = case proplists:get_value(timeout, Options) of
              undefined -> ?DEFAULT_PB_TIMEOUT;
              T -> T
@@ -483,7 +490,14 @@ stream_list_buckets(Pid, Type, Options) ->
     Req = #rpblistbucketsreq{timeout=ST, type=Type, stream=true},
     call_infinity(Pid, {req, Req, CT, {ReqId, self()}}).
 
-legacy_list_buckets(Pid, Options) ->
+legacy_list_buckets(Pid, Options) when is_pid(Pid), is_list(Options) ->
+    AllowListing = riakc_utils:get_allow_listing(Options),
+    do_legacy_list_buckets(AllowListing, Pid, Options).
+
+do_legacy_list_buckets(false, _Pid, _Options) ->
+    {error, <<"Bucket and key list operations are expensive "
+              "and should not be used in production.">>};
+do_legacy_list_buckets(true, Pid, Options) ->
     ST = case proplists:get_value(timeout, Options) of
              undefined -> ?DEFAULT_PB_TIMEOUT;
              T -> T
@@ -542,6 +556,13 @@ stream_list_keys(Pid, Bucket, infinity) ->
 stream_list_keys(Pid, Bucket, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Bucket, [{timeout, Timeout}]);
 stream_list_keys(Pid, Bucket, Options) ->
+    AllowListing = riakc_utils:get_allow_listing(Options),
+    do_stream_list_keys(AllowListing, Pid, Bucket, Options).
+
+do_stream_list_keys(false, _Pid, _Bucket, _Options) ->
+    {error, <<"Bucket and key list operations are expensive "
+              "and should not be used in production.">>};
+do_stream_list_keys(true, Pid, Bucket, Options) ->
     ST = case proplists:get_value(timeout, Options) of
              undefined -> ?DEFAULT_PB_TIMEOUT;
              T -> T
