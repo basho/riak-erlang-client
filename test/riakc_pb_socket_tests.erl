@@ -425,14 +425,40 @@ integration_tests() ->
                  {ok, Pid} = riakc_test_utils:start_link(),
                  B = <<"bucket">>,
                  K = <<"foo">>,
-                 O=riakc_obj:new(B, K),
+                 O = riakc_obj:new(B, K),
                  riakc_pb_socket:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
+                 Inputs = [{B, K}],
+                 Args = [{map, {jsanon, <<"function (v) { return [JSON.parse(v.values[0].data)]; }">>}, undefined, true}],
+                 Want = {ok, [{0, [2]}]},
+                 Got = riakc_pb_socket:mapred(Pid, Inputs, Args),
+                 ?assertMatch(Want, Got)
+             end)},
 
-                 ?assertEqual({ok, [{0, [2]}]},
-                              riakc_pb_socket:mapred(Pid,
-                                             [{B, K}],
-                                             [{map, {jsanon, <<"function (v) { return [JSON.parse(v.values[0].data)]; }">>},
-                                               undefined, true}]))
+     {"javascript_source_map_with_bucket_type_test()",
+      ?_test(begin
+                 riakc_test_utils:reset_riak(),
+                 {ok, Pid} = riakc_test_utils:start_link(),
+                 BT = <<"plain">>,
+                 B = <<"my_bucket">>,
+                 BWT = {BT, B}, % NB: Bucket With Type
+                 K = <<"baz">>,
+                 Value = <<"bat">>,
+                 O = riakc_obj:new(BWT, K),
+                 O2 = riakc_obj:update_value(O, Value, "application/json"),
+                 ?assertMatch(BT, riakc_obj:bucket_type(O2)),
+                 ?assertMatch(BWT, riakc_obj:bucket(O2)),
+                 ?assertMatch(K, riakc_obj:key(O2)),
+                 ?assertMatch(ok, riakc_pb_socket:put(Pid, O2)),
+                 {ok, GotObj} = riakc_pb_socket:get(Pid, BWT, K),
+                 ?assertMatch(BT, riakc_obj:bucket_type(GotObj)),
+                 ?assertMatch(BWT, riakc_obj:bucket(GotObj)),
+                 ?assertMatch(K, riakc_obj:key(GotObj)),
+                 % NB: see basho/riak_kv#1623
+                 Inputs = [{{BWT, K}, ignored},{{BWT, K}, ignored}],
+                 Args = [{map, {jsanon, <<"function (v) { return [v.values[0].data]; }">>}, undefined, true}],
+                 Want = {ok, [{0, [Value, Value]}]},
+                 Got = riakc_pb_socket:mapred(Pid, Inputs, Args),
+                 ?assertMatch(Want, Got)
              end)},
 
      {"javascript_named_map_test()",
@@ -518,6 +544,25 @@ integration_tests() ->
                               riakc_pb_socket:mapred_bucket(Pid, <<"bucket">>,
                                                     [{map, {jsfun, <<"Riak.mapValuesJson">>}, undefined, false},
                                                      {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
+             end)},
+
+     {"javascript_bucket_type_map_reduce_test()",
+      ?_test(begin
+                 riakc_test_utils:reset_riak(),
+                 {ok, Pid} = riakc_test_utils:start_link(),
+                 BT = {<<"plain">>,<<"bucket">>},
+                 Store = fun({K, V}) ->
+                                 O=riakc_obj:new(BT, K),
+                                 riakc_pb_socket:put(Pid,riakc_obj:update_value(O, V, "application/json"))
+                         end,
+                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
+                                      {<<"bar">>, <<"3">>},
+                                      {<<"baz">>, <<"4">>}]],
+                 Want = {ok, [{1, [9]}]},
+                 Query = [{map, {jsfun, <<"Riak.mapValuesJson">>}, undefined, false},
+                                {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}],
+                 Got = riakc_pb_socket:mapred_bucket(Pid, BT, Query),
+                 ?assertMatch(Want, Got)
              end)},
 
      {"javascript_arg_map_reduce_test()",

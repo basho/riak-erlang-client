@@ -542,7 +542,13 @@ It is possible to define a wide range of inputs for a mapreduce job. Some exampl
 
 **Bucket/Key list:** `[{<<"bucket1">>,<<"key1">>},{<<"bucket1">>,<<"key2">>}]`
 
+**Bucket Type/Bucket/Key list:** `[{{{<<"type1">>,<<"bucket1">>},<<"key1">>},key_data1},{{{<<"type1">>,<<"bucket1">>},<<"key2">>},key_data2}]`
+
+*Note*: due to [a bug](https://github.com/basho/riak_kv/issues/1623), you must include "key data" in the above input list to be able to include bucket type.
+
 **All keys in a bucket:** `<<"bucket1">>`
+
+**All keys in a typed bucket:** `{<<"type1">>,<<"bucket1">>}`
 
 **Result of exact secondary index match:** `{index, <<"bucket1">>, {binary_index, "idx"}, <<"key">>}`, `{index, <<"bucket1">>, <<"idx_bin">>, <<"key">>}`
 
