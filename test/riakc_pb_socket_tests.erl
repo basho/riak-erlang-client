@@ -415,8 +415,7 @@ integration_tests() ->
                  %% Would really like this in a nested {setup, blah} structure
                  %% but eunit does not allow
                  {ok, Pid} = riakc_test_utils:start_link(),
-                 ?assertEqual(pong, riakc_pb_socket:ping(Pid, infinity)),
-                 ?assertEqual(pong, riakc_pb_socket:ping(Pid, undefined))
+                 ?assertEqual(pong, riakc_pb_socket:ping(Pid, infinity))
              end)},
 
      {"javascript_source_map_test()",
