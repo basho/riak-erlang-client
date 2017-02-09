@@ -224,11 +224,11 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Table, [{timeout, Timeout}]);
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
+    {CT, ST} = riakc_timeout:timeouts(stream_list_keys_timeout, Options),
     T = riakc_utils:characters_to_unicode_binary(Table),
-    ReqTimeout = proplists:get_value(timeout, Options),
-    Req = #tslistkeysreq{table = T, timeout = ReqTimeout},
+    Req = #tslistkeysreq{table = T, timeout = ST},
     ReqId = riakc_pb_socket:mk_reqid(),
-    gen_server:call(Pid, {req, Req, ?DEFAULT_PB_TIMEOUT, {ReqId, self()}}, infinity).
+    gen_server:call(Pid, {req, Req, CT, {ReqId, self()}}, infinity).
 
 %% --------------------------------------------
 %% local functions
@@ -236,5 +236,5 @@ stream_list_keys(Pid, Table, Options)
 -spec server_call(pid(), tuple()) -> term().
 server_call(Pid, Message) ->
     gen_server:call(Pid,
-                    {req, Message, riakc_pb_socket:default_timeout(timeseries)},
+                    {req, Message, riakc_timeout:default(timeseries)},
                     infinity).

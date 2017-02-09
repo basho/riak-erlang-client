@@ -22,8 +22,6 @@
 
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
--define(DEFAULT_PB_TIMEOUT, 60000).
--define(DEFAULT_ADDITIONAL_CLIENT_TIMEOUT, 500).
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
@@ -128,19 +126,6 @@
 -type connection_failure() :: {Reason::term(), FailureCount::integer()}.
 %% The reason for connection failure and how many times that type of
 %% failure has occurred since startup.
--type timeout_name() :: ping_timeout | get_client_id_timeout |
-                        set_client_id_timeout | get_server_info_timeout |
-                        get_timeout | put_timeout | delete_timeout |
-                        list_buckets_timeout | list_buckets_call_timeout |
-                        list_keys_timeout | stream_list_keys_timeout |
-                        stream_list_keys_call_timeout | get_bucket_timeout |
-                        get_bucket_call_timeout | set_bucket_timeout |
-                        set_bucket_call_timeout | mapred_timeout |
-                        mapred_call_timeout | mapred_stream_timeout |
-                        mapred_stream_call_timeout | mapred_bucket_timeout |
-                        mapred_bucket_call_timeout | mapred_bucket_stream_call_timeout |
-                        search_timeout | search_call_timeout |
-                        timeout.
 
 -type continuation() :: 'undefined' | binary().
 -type secondary_index_id() :: {binary_index, string()} | {integer_index, string()}.
