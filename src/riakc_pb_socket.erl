@@ -459,8 +459,8 @@ list_buckets(Pid, Type, Options) when is_binary(Type), is_list(Options) ->
     case stream_list_buckets(Pid, Type, Options) of
         {ok, ReqId} ->
             riakc_utils:wait_for_list(ReqId);
-        Error ->
-            Error
+        {error, Reason} ->
+            {error, riakc_utils:to_binary(Reason)}
     end.
 
 stream_list_buckets(Pid) ->

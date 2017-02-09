@@ -22,7 +22,9 @@
 
 -module(riakc_utils).
 
--export([wait_for_list/1, characters_to_unicode_binary/1]).
+-export([wait_for_list/1,
+         characters_to_unicode_binary/1,
+         to_binary/1]).
 
 -spec wait_for_list(non_neg_integer()) -> {ok, list()} | {error, any()}.
 %% @doc Wait for the results of a listing operation
@@ -30,9 +32,12 @@ wait_for_list(ReqId) ->
     wait_for_list(ReqId, []).
 wait_for_list(ReqId, Acc) ->
     receive
-        {ReqId, done} -> {ok, lists:flatten(Acc)};
-        {ReqId, {error, Reason}} -> {error, Reason};
-        {ReqId, {_, Res}} -> wait_for_list(ReqId, [Res|Acc])
+        {ReqId, done} ->
+              {ok, lists:flatten(Acc)};
+        {ReqId, {error, Reason}} ->
+              {error, to_binary(Reason)};
+        {ReqId, {_, Res}} ->
+              wait_for_list(ReqId, [Res|Acc])
     end.
 
 -spec characters_to_unicode_binary(string()|binary()) -> binary().
@@ -49,3 +54,8 @@ characters_to_unicode_binary(String) ->
         Binary ->
             Binary
     end.
+
+-spec to_binary(atom()|iolist()|binary()) -> binary().
+%% @doc Convert to binary, additionally supporting atom().
+to_binary(V) when is_atom(V) -> to_binary(atom_to_list(V));
+to_binary(V) -> iolist_to_binary(V).
