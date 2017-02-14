@@ -752,6 +752,17 @@ mapred_stream(Pid, {index,Bucket,Name,StartKey,EndKey}, Query, ClientPid, Timeou
     BinEndKey = list_to_binary(integer_to_list(EndKey)),
     mapred_stream(Pid, {index,Bucket,Name,StartKey,BinEndKey}, Query, ClientPid, Timeout, CallTimeout);
 mapred_stream(Pid, Inputs, Query, ClientPid, Timeout, _CallTimeout) ->
+    AllowListing = riakc_utils:get_allow_listing(),
+    do_mapred_stream(AllowListing, Pid, Inputs, Query, ClientPid, Timeout).
+
+do_mapred_stream(false, _Pid, Bucket, _Query, _ClientPid, _Timeout) when is_binary(Bucket) ->
+    {error, <<"Bucket list operations are expensive "
+              "and should not be used in production.">>};
+do_mapred_stream(false, _Pid, {Type, Bucket}, _Query, _ClientPid, _Timeout)
+  when is_binary(Type), is_binary(Bucket) ->
+    {error, <<"Bucket list operations are expensive "
+              "and should not be used in production.">>};
+do_mapred_stream(_AllowListing, Pid, Inputs, Query, ClientPid, Timeout) ->
     MapRed = [{'inputs', Inputs},
               {'query', Query},
               {'timeout', Timeout}],

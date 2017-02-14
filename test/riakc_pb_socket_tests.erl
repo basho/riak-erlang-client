@@ -37,6 +37,16 @@ listing_is_blocked_test() ->
     ?assertMatch({error, E}, riakc_pb_socket:list_keys(self(), <<"b">>)),
     application:set_env(riakc, allow_listing, true).
 
+mapred_over_bucket_is_blocked_test() ->
+    application:set_env(riakc, allow_listing, false),
+    Pid = self(),
+    Input1 = <<"bucket">>,
+    Input2 = {<<"type">>, <<"bucket">>},
+    E = <<"Bucket list operations are expensive and should not be used in production.">>,
+    ?assertMatch({error, E}, riakc_pb_socket:mapred(Pid, Input1, [])),
+    ?assertMatch({error, E}, riakc_pb_socket:mapred(Pid, Input2, [])),
+    application:set_env(riakc, allow_listing, true).
+
 bad_connect_test() ->
     %% Start with an unlikely port number
     ?assertMatch({error, {tcp, econnrefused}}, riakc_pb_socket:start({127,0,0,1}, 65535)).
