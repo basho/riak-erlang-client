@@ -22,7 +22,10 @@
 
 -module(riakc_utils).
 
--export([wait_for_list/1, characters_to_unicode_binary/1]).
+-export([wait_for_list/1,
+         characters_to_unicode_binary/1,
+         get_allow_listing/0,
+         get_allow_listing/1]).
 
 -spec wait_for_list(non_neg_integer()) -> {ok, list()} | {error, any()}.
 %% @doc Wait for the results of a listing operation
@@ -48,4 +51,24 @@ characters_to_unicode_binary(String) ->
             throw({unicode_error, ErrMsg});
         Binary ->
             Binary
+    end.
+
+%% @doc Return the value of allow_listing, which, if set to 'true`
+%%      will allow listing keys and buckets.
+-spec get_allow_listing() -> boolean().
+get_allow_listing() ->
+    case application:get_env(riakc, allow_listing) of
+        {ok, true} -> true;
+        _ -> false
+    end.
+
+-spec get_allow_listing(proplists:proplist()) -> boolean().
+get_allow_listing(Options) ->
+    case application:get_env(riakc, allow_listing) of
+        {ok, true} -> true;
+        _ ->
+            case proplists:get_value(allow_listing, Options) of
+                true -> true;
+                _ -> false
+            end
     end.

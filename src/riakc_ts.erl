@@ -224,6 +224,13 @@ stream_list_keys(Pid, Table, Timeout) when is_integer(Timeout) ->
     stream_list_keys(Pid, Table, [{timeout, Timeout}]);
 stream_list_keys(Pid, Table, Options)
   when is_pid(Pid), (is_binary(Table) orelse is_list(Table)), is_list(Options) ->
+    AllowListing = riakc_utils:get_allow_listing(Options),
+    do_stream_list_keys(AllowListing, Pid, Table, Options).
+
+do_stream_list_keys(false, _Pid, _Table, _Options) ->
+    {error, <<"Bucket and key list operations are expensive "
+              "and should not be used in production.">>};
+do_stream_list_keys(true, Pid, Table, Options) ->
     T = riakc_utils:characters_to_unicode_binary(Table),
     ReqTimeout = proplists:get_value(timeout, Options),
     Req = #tslistkeysreq{table = T, timeout = ReqTimeout},

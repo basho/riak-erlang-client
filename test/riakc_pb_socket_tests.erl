@@ -30,24 +30,45 @@
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
+listing_is_blocked_test() ->
+    application:set_env(riakc, allow_listing, false),
+    E = <<"Bucket and key list operations are expensive and should not be used in production.">>,
+    ?assertMatch({error, E}, riakc_pb_socket:list_buckets(self())),
+    ?assertMatch({error, E}, riakc_pb_socket:list_keys(self(), <<"b">>)),
+    application:set_env(riakc, allow_listing, true).
+
+mapred_over_bucket_is_blocked_test() ->
+    application:set_env(riakc, allow_listing, false),
+    Pid = self(),
+    Input1 = <<"bucket">>,
+    Input2 = {<<"type">>, <<"bucket">>},
+    E = <<"Bucket list operations are expensive and should not be used in production.">>,
+    ?assertMatch({error, E}, riakc_pb_socket:mapred(Pid, Input1, [])),
+    ?assertMatch({error, E}, riakc_pb_socket:mapred(Pid, Input2, [])),
+    application:set_env(riakc, allow_listing, true).
+
 bad_connect_test() ->
     %% Start with an unlikely port number
-    ?assertEqual({error, {tcp, econnrefused}}, riakc_pb_socket:start({127,0,0,1}, 65535)).
+    ?assertMatch({error, {tcp, econnrefused}}, riakc_pb_socket:start({127,0,0,1}, 65535)).
 
 queue_disconnected_test() ->
+    application:set_env(riakc, allow_listing, true),
     %% Start with an unlikely port number
     {ok, Pid} = riakc_pb_socket:start({127,0,0,1}, 65535, [queue_if_disconnected]),
-    ?assertEqual({error, timeout}, riakc_pb_socket:ping(Pid, 10)),
-    ?assertEqual({error, timeout}, riakc_pb_socket:list_keys(Pid, <<"b">>, 10)),
-    riakc_pb_socket:stop(Pid).
+    ?assertMatch({error, timeout}, riakc_pb_socket:ping(Pid, 10)),
+    ?assertMatch({error, timeout}, riakc_pb_socket:list_keys(Pid, <<"b">>, 10)),
+    riakc_pb_socket:stop(Pid),
+    application:set_env(riakc, allow_listing, false).
 
 auto_reconnect_bad_connect_test() ->
+    application:set_env(riakc, allow_listing, true),
     %% Start with an unlikely port number
     {ok, Pid} = riakc_pb_socket:start({127,0,0,1}, 65535, [auto_reconnect]),
-    ?assertEqual({false, []}, riakc_pb_socket:is_connected(Pid)),
-    ?assertEqual({error, disconnected}, riakc_pb_socket:ping(Pid)),
-    ?assertEqual({error, disconnected}, riakc_pb_socket:list_keys(Pid, <<"b">>)),
-    riakc_pb_socket:stop(Pid).
+    ?assertMatch({false, []}, riakc_pb_socket:is_connected(Pid)),
+    ?assertMatch({error, disconnected}, riakc_pb_socket:ping(Pid)),
+    ?assertMatch({error, disconnected}, riakc_pb_socket:list_keys(Pid, <<"b">>)),
+    riakc_pb_socket:stop(Pid),
+    application:set_env(riakc, allow_listing, false).
 
 server_closes_socket_test() ->
     %% Silence SASL junk when socket closes.
@@ -69,7 +90,7 @@ server_closes_socket_test() ->
     ok = gen_tcp:close(Listen),
     receive
         Msg1 -> % result of ping from spawned process above
-            ?assertEqual({error, disconnected}, Msg1)
+            ?assertMatch({error, disconnected}, Msg1)
     end,
     %% Wait for spawned process to exit
     Mref = erlang:monitor(process, Pid),
@@ -96,7 +117,7 @@ auto_reconnect_server_closes_socket_test() ->
     ok = gen_tcp:close(Listen),
     receive
         Msg ->
-            ?assertEqual({error, disconnected}, Msg)
+            ?assertMatch({error, disconnected}, Msg)
     end,
     %% Server will not have had a chance to reconnect yet, reason counters empty.
     ?assertMatch({false, []}, riakc_pb_socket:is_connected(Pid)),
@@ -139,8 +160,8 @@ integration_tests() ->
     [{"ping",
       ?_test( begin
                   {ok, Pid} = riakc_test_utils:start_link(),
-                  ?assertEqual(pong, riakc_pb_socket:ping(Pid)),
-                  ?assertEqual(true, riakc_pb_socket:is_connected(Pid)),
+                  ?assertMatch(pong, riakc_pb_socket:ping(Pid)),
+                  ?assertMatch(true, riakc_pb_socket:is_connected(Pid)),
                   riakc_pb_socket:stop(Pid)
               end)},
 
@@ -1453,9 +1474,13 @@ integration_test_() ->
     SetupFun = fun() ->
                    %% Grab the riakclient_pb.proto file
                    code:add_pathz("../ebin"),
-                   ok = riakc_test_utils:maybe_start_network()
+                   ok = riakc_test_utils:maybe_start_network(),
+                   application:set_env(riakc, allow_listing, true)
                end,
-    CleanupFun = fun(_) -> net_kernel:stop() end,
+    CleanupFun = fun(_) ->
+                    net_kernel:stop(),
+                    application:set_env(riakc, allow_listing, false)
+                 end,
     GenFun = fun() ->
                  case catch net_adm:ping(riakc_test_utils:test_riak_node()) of
                      pong -> integration_tests();
