@@ -999,6 +999,25 @@ integration_tests() ->
                     1 == Result#search_results.num_found
                 end )
          end)}},
+     {"updating without a key should generate one",
+         ?_test(begin
+                    riakc_test_utils:reset_riak(),
+                    {ok, Pid} = riakc_test_utils:start_link(),
+                    Res1 = riakc_pb_socket:update_type(Pid,
+                                     {<<"sets">>, <<"bucket">>}, undefined,
+                                     riakc_set:to_op(riakc_set:add_element(<<"X">>, riakc_set:new()))),
+                    Res2 = riakc_pb_socket:update_type(Pid,
+                                     {<<"sets">>, <<"bucket">>}, undefined,
+                                     riakc_set:to_op(riakc_set:add_element(<<"Y">>, riakc_set:new()))),
+                    ?assertMatch({ok, _K}, Res1),
+                    ?assertMatch({ok, _K}, Res2),
+                    {ok, K1} = Res1,
+                    {ok, K2} = Res2,
+                    ?assertMatch(true, is_binary(K1)),
+                    ?assertMatch(true, is_binary(K2)),
+                    % Make sure the same key isn't generated twice
+                    ?assert(Res1 =/= Res2)
+             end)},
      {"trivial set delete",
          ?_test(begin
                     riakc_test_utils:reset_riak(),
