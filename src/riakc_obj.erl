@@ -110,11 +110,11 @@
 
 -record(riakc_obj, {
           bucket :: bucket(),
-          key :: key(),
-          vclock :: vclock(),
+          key :: key() | undefined,
+          vclock :: vclock() | undefined,
           contents :: contents(),
-          updatemetadata :: metadata(),
-          updatevalue :: value()
+          updatemetadata :: metadata() | undefined,
+          updatevalue :: value() | undefind
          }).
 
 -type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
