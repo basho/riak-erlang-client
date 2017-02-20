@@ -1225,7 +1225,7 @@ fetch_type(Pid, BucketAndType, Key, Options) ->
 
 %% @doc Updates the convergent datatype in Riak with local
 %% modifications stored in the container type.
--spec update_type(pid(), bucket_and_type(), Key::binary(), Update::riakc_datatype:update(term())) ->
+-spec update_type(pid(), bucket_and_type(), Key::binary()|'undefined', Update::riakc_datatype:update(term())) ->
                          ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
                          {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
 update_type(Pid, BucketAndType, Key, Update) ->
@@ -1234,7 +1234,7 @@ update_type(Pid, BucketAndType, Key, Update) ->
 %% @doc Updates the convergent datatype in Riak with local
 %% modifications stored in the container type, using the given request
 %% options.
--spec update_type(pid(), bucket_and_type(), Key::binary(),
+-spec update_type(pid(), bucket_and_type(), Key::binary()|'undefined',
                   Update::riakc_datatype:update(term()), [proplists:property()]) ->
                          ok | {ok, Key::binary()} | {ok, riakc_datatype:datatype()} |
                          {ok, Key::binary(), riakc_datatype:datatype()} | {error, term()}.
