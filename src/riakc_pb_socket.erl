@@ -1211,14 +1211,16 @@ counter_val(Pid, Bucket, Key, Options) ->
 
 %% @doc Fetches the representation of a convergent datatype from Riak.
 -spec fetch_type(pid(), bucket_and_type(), Key::binary()) ->
-                        {ok, riakc_datatype:datatype()} | {error, term()}.
+                        {ok, riakc_datatype:datatype()} | {error, Reason}
+                            when Reason :: {notfound, Type::atom()} | term().
 fetch_type(Pid, BucketAndType, Key) ->
     fetch_type(Pid, BucketAndType, Key, []).
 
 %% @doc Fetches the representation of a convergent datatype from Riak,
 %% using the given request options.
 -spec fetch_type(pid(), bucket_and_type(), Key::binary(), [proplists:property()]) ->
-                        {ok, riakc_datatype:datatype()} | {error, term()}.
+                        {ok, riakc_datatype:datatype()} | {error, Reason}
+                            when Reason :: {notfound, Type::atom()} | term().
 fetch_type(Pid, BucketAndType, Key, Options) ->
     Req = riak_pb_dt_codec:encode_fetch_request(BucketAndType, Key, Options),
     call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
