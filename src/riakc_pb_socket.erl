@@ -160,7 +160,7 @@
                 auto_reconnect = false :: boolean(), % if true, automatically reconnects to server
                                         % if false, exits on connection failure/request timeout
                 queue_if_disconnected = false :: boolean(), % if true, add requests to queue if disconnected
-                sock :: port() | ssl:sslsocket(),       % gen_tcp socket
+                sock :: port() | ssl:sslsocket() | undefined,       % gen_tcp socket
                 keepalive = false :: boolean(), % if true, enabled TCP keepalive for the socket
                 transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
