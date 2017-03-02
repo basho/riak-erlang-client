@@ -8,7 +8,43 @@ defmodule Riakc.Mixfile do
      version: @version,
      description: "The Riak client for Erlang",
      package: package(),
-     deps: deps()]
+     deps: deps(),
+     erlc_options: erlc_options()]
+  end
+
+  defp erlc_options do
+    otp_rel = :erlang.list_to_integer(:erlang.system_info(:otp_release))
+
+    o1 = try do
+      case otp_rel do
+        v when v >= 17 -> [{:d, :namespaced_types}]
+        _ -> []
+      end
+    catch
+      _ -> []
+    end
+
+    o2 = try do
+      case otp_rel do
+        v when v >= 18 -> [{:d, :deprecated_now}]
+        _ -> []
+      end
+    catch
+      _ -> []
+    end
+
+    o3 = try do
+      case otp_rel do
+        v when v >= 19 -> [{:d, :deprecated_19}]
+        _ -> []
+      end
+    catch
+      _ -> []
+    end
+
+    extra_options = o1 ++ o2 ++ o3
+
+    [:debug_info, :warnings_as_errors | extra_options]
   end
 
   defp deps do
