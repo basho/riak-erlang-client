@@ -1,20 +1,25 @@
-.PHONY: all lint clean compile deps distclean release docs
+.PHONY: all lint clean compile deps distclean release docs secex
+
+REBAR ?= ./rebar
 
 all: deps compile
 
 lint: xref dialyzer
 
 compile: deps
-	./rebar compile
+	$(REBAR) compile
 
 deps:
-	./rebar get-deps
+	$(REBAR) get-deps
 
 clean:
-	./rebar clean
+	$(REBAR) clean
 
 distclean: clean
-	./rebar delete-deps
+	$(REBAR) delete-deps
+
+secex: compile
+	./secex 8087
 
 release: compile
 ifeq ($(VERSION),)
