@@ -713,6 +713,7 @@ This is not a comprehensive list, please see the commit history.
 * [Andrzej Kajetanowicz](https://github.com/kajetanowicz)
 * [Andy Gross](https://github.com/argv0)
 * [Anthony Molinaro](https://github.com/djnym)
+* [Bernard Duggan](https://github.com/bernardd)
 * [Brett Hazen](https://github.com/javajolt)
 * [Brian McClain](https://github.com/BrianMMcClain)
 * [Brian Roach](https://github.com/broach)
