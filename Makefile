@@ -28,8 +28,8 @@ ifeq ($(RELEASE_GPG_KEYNAME),)
 endif
 	echo "==> Tagging version $(VERSION)"
 	$(PROJDIR)/tools/build/publish $(VERSION) master validate
-	echo "$(VERSION)" > VERSION
-	git add --force VERSION
+	echo "$(VERSION)" > $(PROJDIR)/VERSION
+	git add --force $(PROJDIR)/VERSION
 	git commit --message="riak-erlang-client $(VERSION)"
 	git push
 	git tag --sign -a "$(VERSION)" -m "riak-erlang-client $(VERSION)" --local-user "$(RELEASE_GPG_KEYNAME)"
