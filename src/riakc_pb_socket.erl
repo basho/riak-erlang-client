@@ -160,7 +160,7 @@
                 auto_reconnect = false :: boolean(), % if true, automatically reconnects to server
                                         % if false, exits on connection failure/request timeout
                 queue_if_disconnected = false :: boolean(), % if true, add requests to queue if disconnected
-                sock :: port() | ssl:sslsocket(),       % gen_tcp socket
+                sock :: port() | ssl:sslsocket() | undefined,       % gen_tcp socket
                 keepalive = false :: boolean(), % if true, enabled TCP keepalive for the socket
                 transport = gen_tcp :: 'gen_tcp' | 'ssl',
                 active :: #request{} | undefined,     % active request
@@ -1243,14 +1243,16 @@ counter_val(Pid, Bucket, Key, Options) ->
 
 %% @doc Fetches the representation of a convergent datatype from Riak.
 -spec fetch_type(pid(), bucket_and_type(), Key::binary()) ->
-                        {ok, riakc_datatype:datatype()} | {error, term()}.
+                        {ok, riakc_datatype:datatype()} | {error, Reason}
+                            when Reason :: {notfound, Type::atom()} | term().
 fetch_type(Pid, BucketAndType, Key) ->
     fetch_type(Pid, BucketAndType, Key, []).
 
 %% @doc Fetches the representation of a convergent datatype from Riak,
 %% using the given request options.
 -spec fetch_type(pid(), bucket_and_type(), Key::binary(), [proplists:property()]) ->
-                        {ok, riakc_datatype:datatype()} | {error, term()}.
+                        {ok, riakc_datatype:datatype()} | {error, Reason}
+                            when Reason :: {notfound, Type::atom()} | term().
 fetch_type(Pid, BucketAndType, Key, Options) ->
     Req = riak_pb_dt_codec:encode_fetch_request(BucketAndType, Key, Options),
     call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).

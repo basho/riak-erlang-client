@@ -1,6 +1,9 @@
 Release Notes
 =============
 
+* [`2.5.3`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.5.3)
+ * Use `riak_pb` version `2.3.2`
+ * Publish to `hex.pm`
 * `2.5.2`
  * Use `riak_pb` version `2.3.0.0`
 * [`2.5.1`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.5.1)
