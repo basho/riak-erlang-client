@@ -112,12 +112,14 @@ module_for_term(T) ->
                    prop_module_for_term]).
 -define(F(Fmt, Args), lists:flatten(io_lib:format(Fmt, Args))).
 datatypes_test_() ->
+    {timeout, 120,
      [{" prop_module_type() ",
        ?_assert(eqc:quickcheck(?QC_OUT(prop_module_type())))}] ++
-     [ {?F(" ~s(~s) ", [Prop, Mod]),
-        ?_assert(eqc:quickcheck(?QC_OUT(eqc:testing_time(2, ?MODULE:Prop(Mod)))))} ||
-         Prop <- ?MODPROPS,
-         Mod <- ?MODULES ].
+         [ {?F(" ~s(~s) ", [Prop, Mod]),
+            ?_assert(eqc:quickcheck(?QC_OUT(eqc:testing_time(2, ?MODULE:Prop(Mod)))))} ||
+             Prop <- ?MODPROPS,
+             Mod <- ?MODULES ]
+    }.
 
 run_props() ->
     run_props(500).
