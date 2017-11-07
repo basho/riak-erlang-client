@@ -23,7 +23,7 @@
 
 -module(riakc_pb_socket_tests).
 
--compile(export_all).
+-export([ integration_tests/0 ]).
 
 -include("riakc.hrl").
 

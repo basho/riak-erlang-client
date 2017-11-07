@@ -19,16 +19,10 @@
 %% under the License.
 %%
 %% -------------------------------------------------------------------
--ifdef(TEST).
-
 -module(riakc_utils_tests).
-
--compile(export_all).
 
 -include_lib("eunit/include/eunit.hrl").
 
 bad_unicode_binary_test() ->
     S = <<"\xa0\xa1">>,
     ?assertThrow({unicode_error, _Msg}, riakc_utils:characters_to_unicode_binary(S)).
-
--endif.
