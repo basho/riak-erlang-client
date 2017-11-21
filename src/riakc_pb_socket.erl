@@ -1549,6 +1549,9 @@ get_options([{n_val, N} | Rest], Req)
 get_options([{sloppy_quorum, Bool} | Rest], Req)
   when Bool == true; Bool == false ->
     get_options(Rest, Req#rpbgetreq{sloppy_quorum = Bool});
+get_options([{coord_get, Bool} | Rest], Req)
+  when Bool == true; Bool == false ->
+    get_options(Rest, Req#rpbgetreq{coord_get = Bool});
 get_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
