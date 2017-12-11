@@ -23,7 +23,28 @@
 
 -module(riakc_test_utils).
 
--compile(export_all).
+-export([test_riak_node/0,
+         test_eunit_node/0,
+         test_cookie/0,
+         test_ip/0,
+         test_port/0,
+         start_link/0,
+         start_link/1,
+         riak_version/0,
+         compare_versions/2,
+         wait_until/1,
+         wait_until/3,
+         reset_riak/0,
+         reset_solr/1,
+         reset_riak_12/0,
+         set_test_backend/0,
+         reset_riak_legacy/0,
+         reset_ring/0,
+         riak_pb_listener_pid/0,
+         pause_riak_pb_listener/0,
+         resume_riak_pb_listener/0,
+         kill_riak_pb_sockets/0,
+         maybe_start_network/0]).
 
 -include_lib("eunit/include/eunit.hrl").
 
