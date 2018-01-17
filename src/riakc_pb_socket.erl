@@ -1582,6 +1582,9 @@ put_options([{n_val, N} | Rest], Req)
 put_options([{sloppy_quorum, Bool} | Rest], Req)
   when Bool == true; Bool == false ->
     put_options(Rest, Req#rpbputreq{sloppy_quorum = Bool});
+put_options([{node_confirms, NodeConfirms} | Rest], Req) ->
+    NCOpt = riak_pb_kv_codec:encode_quorum(NodeConfirms),
+    put_options(Rest, Req#rpbputreq{node_confirms = NCOpt});
 put_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
@@ -1642,6 +1645,8 @@ counter_incr_options([{dw, DW} | Rest], Req) ->
     counter_incr_options(Rest, Req#rpbcounterupdatereq{dw=riak_pb_kv_codec:encode_quorum(DW)});
 counter_incr_options([{pw, PW} | Rest], Req) ->
     counter_incr_options(Rest, Req#rpbcounterupdatereq{pw=riak_pb_kv_codec:encode_quorum(PW)});
+counter_incr_options([{node_confirms, NodeConfirms} | Rest], Req) ->
+    counter_incr_options(Rest, Req#rpbcounterupdatereq{node_confirms=riak_pb_kv_codec:encode_quorum(NodeConfirms)});
 counter_incr_options([returnvalue | Rest], Req) ->
     counter_incr_options(Rest, Req#rpbcounterupdatereq{returnvalue=true});
 counter_incr_options([_ | _Rest], _Req) ->
