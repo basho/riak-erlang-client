@@ -2272,8 +2272,8 @@ start_tls(State=#state{sock=Sock}) ->
     end.
 
 start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
-    ok = ssl:send(Sock, riak_pb_codec:encode(#rpbauthreq{user=User,
-                                                         password=Pass})),
+    ok = ssl:send(Sock, riak_pb_codec:encode(#rpbauthreq{user=iolist_to_binary(User),
+                                                         password=iolist_to_binary(Pass)})),
     receive
         {ssl_error, Sock, Reason} ->
             {error, Reason};
