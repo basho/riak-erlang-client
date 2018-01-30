@@ -182,6 +182,10 @@
 
 -export_type([address/0, portnum/0]).
 
+%% Disable "The pattern 'undefined' can never match the type [binary()]"
+%% warnings in process_response/3:
+-dialyzer({no_match, process_response/3}).
+
 %% @private Like `gen_server:call/3', but with the timeout hardcoded
 %% to `infinity'.
 call_infinity(Pid, Msg) ->
