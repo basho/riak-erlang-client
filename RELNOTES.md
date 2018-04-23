@@ -1,6 +1,9 @@
 Release Notes
 =============
 
+* [`2.5.5`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.5.5)
+  * [Add `node_confirms` option to PUT request](https://github.com/basho/riak-erlang-client/pull/371)
+  * [Add gset support ](https://github.com/basho/riak-erlang-client/pull/373)
 * [`2.5.0`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.5.0)
  * Adds HyperLogLog CRDT data type support
 * [`2.4.1`](https://github.com/basho/riak-erlang-client/issues?q=milestone%3Ariak-erlang-client-2.4.1)
