@@ -75,7 +75,8 @@
          tunnel/4,
          get_preflist/3, get_preflist/4,
          get_coverage/2, get_coverage/3,
-         replace_coverage/3, replace_coverage/4]).
+         replace_coverage/3, replace_coverage/4,
+         rt_enqueue/3, rt_enqueue/4, rt_enqueue/5]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -385,6 +386,29 @@ delete(Pid, Bucket, Key, Options, Timeout) ->
     Req = delete_options(Options, #rpbdelreq{type = T, bucket = B, key = Key}),
     call_infinity(Pid, {req, Req, Timeout}).
 
+%% @doc put the object stored at bucket/key the server, on to the
+%% realtime repl queue Will return {error, notfound} if the key is not
+%% on the server. NOTE: takes most of the options for GET, as it first
+%% gets the object, before putting it on the queue
+-spec rt_enqueue(pid(), bucket() | bucket_and_type(), key()) -> ok | {error, term()}.
+rt_enqueue(Pid, Bucket, Key) ->
+    rt_enqueue(Pid, Bucket, Key, [], default_timeout(get_timeout)).
+
+%% @doc As per rt_enqueue/3 but you provide a timeout
+-spec rt_enqueue(pid(), bucket() | bucket_and_type(), key(), TimeoutOrOptions::timeout() |  rt_enqueue_options()) ->
+                 ok | {error, term()}.
+rt_enqueue(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
+    rt_enqueue(Pid, Bucket, Key, [], Timeout);
+rt_enqueue(Pid, Bucket, Key, Options) ->
+    rt_enqueue(Pid, Bucket, Key, Options, default_timeout(get_timeout)).
+
+%% @doc as for rt_enqueue/3, but you provide timeout and `get_options()'
+-spec rt_enqueue(pid(), bucket() | bucket_and_type(), key(), get_options(), timeout()) ->
+                 ok | {error, term()}.
+rt_enqueue(Pid, Bucket, Key, Options, Timeout) ->
+    {T, B} = maybe_bucket_type(Bucket),
+    Req = rt_enqueue_options(Options, #rpbrtereq{type =T, bucket = B, key = Key}),
+    call_infinity(Pid, {req, Req, Timeout}).
 
 %% @doc Delete the object at Bucket/Key, giving the vector clock.
 %% @equiv delete_vclock(Pid, Bucket, Key, VClock, [])
@@ -1616,6 +1640,29 @@ delete_options([{sloppy_quorum, Bool} | Rest], Req)
 delete_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
+rt_enqueue_options([], Req) ->
+    Req;
+rt_enqueue_options([{basic_quorum, BQ} | Rest], Req) ->
+    rt_enqueue_options(Rest, Req#rpbrtereq{basic_quorum = BQ});
+rt_enqueue_options([{notfound_ok, NFOk} | Rest], Req) ->
+    rt_enqueue_options(Rest, Req#rpbrtereq{notfound_ok = NFOk});
+rt_enqueue_options([{r, R} | Rest], Req) ->
+    rt_enqueue_options(Rest, Req#rpbrtereq{r = riak_pb_kv_codec:encode_quorum(R)});
+rt_enqueue_options([{pr, PR} | Rest], Req) ->
+    rt_enqueue_options(Rest, Req#rpbrtereq{pr = riak_pb_kv_codec:encode_quorum(PR)});
+rt_enqueue_options([{timeout, T} | Rest], Req) when is_integer(T)->
+    rt_enqueue_options(Rest, Req#rpbrtereq{timeout = T});
+rt_enqueue_options([{timeout, _T} | _Rest], _Req) ->
+    erlang:error(badarg);
+rt_enqueue_options([{n_val, N} | Rest], Req)
+  when is_integer(N), N > 0 ->
+    rt_enqueue_options(Rest, Req#rpbrtereq{n_val = N});
+rt_enqueue_options([{sloppy_quorum, Bool} | Rest], Req)
+  when Bool == true; Bool == false ->
+    rt_enqueue_options(Rest, Req#rpbrtereq{sloppy_quorum = Bool});
+rt_enqueue_options([{_, _} | _Rest], _Req) ->
+    erlang:error(badarg).
+
 search_options([], Req) ->
     Req;
 search_options([{rows, Rows} | Rest], Req) ->
@@ -1746,6 +1793,11 @@ process_response(#request{msg = #rpbputreq{type = Type, bucket = Bucket, key = K
 process_response(#request{msg = #rpbdelreq{}},
                  rpbdelresp, State) ->
     %% server just returned the rpbdelresp code - no message was encoded
+    {reply, ok, State};
+
+process_response(#request{msg = #rpbrtereq{}},
+                 rpbrteresp, State) ->
+    %% server just returned the rpbrteresp code - no message was encoded
     {reply, ok, State};
 
 process_response(#request{msg = #rpblistbucketsreq{}}=Request,

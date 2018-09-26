@@ -70,6 +70,12 @@
                       {n_val, pos_integer()} |
                       {sloppy_quorum, boolean()}.
 
+-type rt_enqueue_option() :: read_quorum() |
+                      {notfound_ok, boolean()} |
+                      {basic_quorum, boolean()} |
+                      {n_val, pos_integer()} |
+                      {sloppy_quorum, boolean()}.
+
 %% Valid request options for get requests. When `if_modified' is
 %% specified with a vclock, the request will fail if the object has
 %% not changed. When `head' is specified, only the metadata will be
@@ -89,6 +95,7 @@
 -type put_options() :: [put_option()]. %% A list of options for a put request.
 -type search_options() :: [search_option()]. %% A list of options for a search request.
 -type delete_options() :: [delete_option()]. %% A list of options for a delete request.
+-type rt_enqueue_options() :: [rt_enqueue_option()]. %% A list of options for a get request.
 -type mapred_queryterm() ::  {map, mapred_funterm(), Arg::term(), Accumulate :: boolean()} |
                              {reduce, mapred_funterm(), Arg::term(),Accumulate :: boolean()} |
                              {link, Bucket :: riakc_obj:bucket(), Tag :: term(), Accumulate :: boolean()}.
