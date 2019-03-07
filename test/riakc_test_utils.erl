@@ -23,7 +23,7 @@
 
 -module(riakc_test_utils).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -include_lib("eunit/include/eunit.hrl").
 
