@@ -14,3 +14,4 @@ test-unchanged.escript
 *.iml
 *.dump
 _build/
+rebar.lock
