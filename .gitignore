@@ -1,6 +1,5 @@
 .rebar/
 .eunit/*
-deps/*
 priv/*
 *.o
 *.beam
@@ -14,3 +13,5 @@ test-unchanged.escript
 .idea
 *.iml
 *.dump
+_build/
+rebar.lock

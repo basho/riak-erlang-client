@@ -1,20 +1,22 @@
 .PHONY: all lint clean compile deps distclean release docs
 
+REBAR=./rebar3
+
 all: deps compile
 
 lint: xref dialyzer
 
 compile: deps
-	./rebar compile
+	$(REBAR) compile
 
 deps:
-	./rebar get-deps
+	$(REBAR) get-deps
 
 clean:
-	./rebar clean
+	$(REBAR) clean
 
-distclean: clean
-	./rebar delete-deps
+distclean:
+	$(REBAR) clean --all
 
 release: compile
 ifeq ($(VERSION),)
