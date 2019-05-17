@@ -2220,7 +2220,7 @@ start_tls(State=#state{sock=Sock}) ->
                 rpbstarttls ->
                     Options = [{verify, verify_peer},
                                {server_name_indication, disable},
-                               {crl_check, true},
+                               {crl_check, best_effort},
                                {cacertfile, State#state.cacertfile}] ++
                               [{K, V} || {K, V} <- [{certfile,
                                                      State#state.certfile},
