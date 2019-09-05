@@ -1735,7 +1735,7 @@ process_response(#request{msg = #rpbfetchreq{}},
                                 replencoded_object = ObjBin,
                                 deleted_vclock = VclockBin}, State) ->
     {reply,
-        {crc_check(CRC,ObjBin), {deleted, binary_to_term(VclockBin), ObjBin}},
+        {crc_check(CRC,ObjBin), {deleted, VclockBin, ObjBin}},
         State};
 process_response(#request{msg = #rpbfetchreq{}},
                  #rpbfetchresp{crc_check = CRC,
