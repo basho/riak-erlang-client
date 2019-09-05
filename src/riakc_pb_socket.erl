@@ -1727,10 +1727,10 @@ process_response(#request{msg = #rpbgetreq{type = Type, bucket = Bucket, key = K
 
 %% rpbfetchreq
 process_response(#request{msg = #rpbfetchreq{}},
-                 #rpbfetchrsp{queue_empty = true}, State) ->
+                 #rpbfetchresp{queue_empty = true}, State) ->
     {reply, {ok, queue_empty}, State};
 process_response(#request{msg = #rpbfetchreq{}},
-                 #rpbfetchrsp{deleted = true, 
+                 #rpbfetchresp{deleted = true, 
                                 crc_check = CRC,
                                 replencoded_object = ObjBin,
                                 deleted_vclock = VclockBin}, State) ->
@@ -1738,7 +1738,7 @@ process_response(#request{msg = #rpbfetchreq{}},
         {crc_check(CRC,ObjBin), {deleted, binary_to_term(VclockBin), ObjBin}},
         State};
 process_response(#request{msg = #rpbfetchreq{}},
-                 #rpbfetchrsp{crc_check = CRC,
+                 #rpbfetchresp{crc_check = CRC,
                                 replencoded_object = ObjBin}, State) ->
     {reply, {crc_check(CRC,ObjBin), ObjBin}, State};
 
