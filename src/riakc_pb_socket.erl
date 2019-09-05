@@ -49,6 +49,7 @@
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
          get/3, get/4, get/5,
+         fetch/2,
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
@@ -320,6 +321,15 @@ get(Pid, Bucket, Key, Options, Timeout) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = get_options(Options, #rpbgetreq{type =T, bucket = B, key = Key}),
     call_infinity(Pid, {req, Req, Timeout}).
+
+%% @doc Fetch replicated objects from a queue
+-spec fetch(pid(), binary()) ->
+                {ok, queue_empty}|
+                {ok|crc_wonky, {deleted, term(), binary()}|binary()}.
+fetch(Pid, QueueName) ->
+    Req = #rpbfetchreq{queuename = QueueName},
+    call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
+
 
 %% @doc Put the metadata/value in the object under bucket/key
 %% @equiv put(Pid, Obj, [])
@@ -1715,6 +1725,23 @@ process_response(#request{msg = #rpbgetreq{type = Type, bucket = Bucket, key = K
     B = maybe_make_bucket_type(Type, Bucket),
     {reply, {ok, riakc_obj:new_obj(B, Key, Vclock, Contents)}, State};
 
+%% rpbfetchreq
+process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchrsp{queue_empty = true}, State) ->
+    {reply, {ok, queue_empty}, State};
+process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchrsp{deleted = true, 
+                                crc_check = CRC,
+                                replencoded_object = ObjBin,
+                                deleted_vclock = VclockBin}, State) ->
+    {reply,
+        {crc_check(CRC,ObjBin), {deleted, binary_to_term(VclockBin), ObjBin}},
+        State};
+process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchrsp{crc_check = CRC,
+                                replencoded_object = ObjBin}, State) ->
+    {reply, {crc_check(CRC,ObjBin), ObjBin}, State};
+
 %% rpbputreq
 process_response(#request{msg = #rpbputreq{}},
                  rpbputresp, State) ->
@@ -2382,6 +2409,12 @@ remove_queued_request(Ref, State) ->
             {reply, Reply, NewState} = on_timeout(Req, State),
             _ = send_caller(Reply, Req),
             NewState#state{queue = queue:from_list(L2)}
+    end.
+
+crc_check(CRC, Bin) ->
+    case erlang:crc32(Bin) of
+        CRC -> ok;
+        _ -> crc_wonky
     end.
 
 %% @private
