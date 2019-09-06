@@ -178,7 +178,8 @@
                                % certificate authentication
                 ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
                                % documentation.
-                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
+                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer(),
+                silence_terminate_crash = false :: boolean()}).
 
 -export_type([address/0, portnum/0]).
 
@@ -1338,7 +1339,12 @@ init([Address, Port, Options]) ->
                                           queue = queue:new()}),
     case connect(State) of
         {error, Reason} when State#state.auto_reconnect /= true ->
-            {stop, {tcp, Reason}};
+            case State#state.silence_terminate_crash of
+                true ->
+                    {stop, normal};
+                _ ->
+                    {stop, {tcp, Reason}}
+            end;
         {error, _Reason} ->
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {ok, State};
@@ -1513,7 +1519,9 @@ parse_options([{cacertfile, File}|Options], State) ->
 parse_options([{keyfile, File}|Options], State) ->
     parse_options(Options, State#state{keyfile=File});
 parse_options([{ssl_opts, Opts}|Options], State) ->
-    parse_options(Options, State#state{ssl_opts=Opts}).
+    parse_options(Options, State#state{ssl_opts=Opts});
+parse_options([{silence_terminate_crash,Bool}|Options], State) ->
+    parse_options(Options, State#state{silence_terminate_crash=Bool}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -2318,7 +2326,12 @@ disconnect(State) ->
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {noreply, increase_reconnect_interval(NewState)};
         false ->
-            {stop, disconnected, NewState}
+            case State#state.silence_terminate_crash of
+                true ->
+                    {stop, normal, NewState};
+                _ ->
+                    {stop, disconnected, NewState}
+            end
     end.
 
 %% Double the reconnect interval up to the maximum
