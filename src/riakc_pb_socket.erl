@@ -1493,7 +1493,7 @@ parse_options([auto_reconnect|Options], State) ->
 parse_options([{keepalive,Bool}|Options], State) when is_boolean(Bool) ->
     parse_options(Options, State#state{keepalive = Bool});
 parse_options([keepalive|Options], State) ->
-    parse_options([{keepalive, false}|Options], State);
+    parse_options([{keepalive, true}|Options], State);
 parse_options([{credentials, User, Pass}|Options], State) ->
     parse_options(Options, State#state{credentials={User, Pass}});
 parse_options([{certfile, File}|Options], State) ->
