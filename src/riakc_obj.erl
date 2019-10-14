@@ -78,7 +78,7 @@
 -endif.
 
 -type bucket() :: binary() | {binary(), binary()}. %% A bucket name
--type key() :: binary() | 'undefined'. %% A key name
+-type key() :: binary() | undefined. %% A key name
 -type id() :: {bucket(), key()}.
 -type vclock() :: binary(). %% An opaque vector clock
 -type content_type() :: string(). %% The media type of a value
@@ -107,10 +107,10 @@
 -record(riakc_obj, {
           bucket :: bucket(),
           key :: key(),
-          vclock :: vclock(),
+          vclock :: vclock() | undefined,
           contents :: contents(),
-          updatemetadata :: metadata(),
-          updatevalue :: value()
+          updatemetadata :: metadata() | undefined,
+          updatevalue :: value() | undefined
          }).
 
 -type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
