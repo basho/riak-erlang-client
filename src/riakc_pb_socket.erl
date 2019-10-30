@@ -75,7 +75,8 @@
          tunnel/4,
          get_preflist/3, get_preflist/4,
          get_coverage/2, get_coverage/3,
-         replace_coverage/3, replace_coverage/4]).
+         replace_coverage/3, replace_coverage/4,
+         get_ring/1, get_ring/2]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -1315,6 +1316,12 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                   {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
                    Timeout}).
 
+get_ring(Pid) ->
+    call_infinity(Pid, {req, rpbgetringreq, default_timeout(ping_timeout)}).
+
+get_ring(Pid, Timeout) ->
+    call_infinity(Pid, {req, rpbgetringreq, Timeout}).
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -2040,6 +2047,9 @@ process_response(#request{msg = #tsgetreq{}},
                  Result = #tsgetresp{},
                  State) ->
     {reply, Result, State};
+process_response(#request{msg = rpbgetringreq}, Result, State) ->
+    Ring = riak_pb_kv_codec:decode_ring(Result),
+    {reply, Ring, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
