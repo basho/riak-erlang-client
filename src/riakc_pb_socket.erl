@@ -76,7 +76,8 @@
          get_preflist/3, get_preflist/4,
          get_coverage/2, get_coverage/3,
          replace_coverage/3, replace_coverage/4,
-         get_ring/1, get_ring/2]).
+         get_ring/1, get_ring/2,
+         get_default_bucket_props/1, get_default_bucket_props/2]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -1317,10 +1318,16 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                    Timeout}).
 
 get_ring(Pid) ->
-    call_infinity(Pid, {req, rpbgetringreq, default_timeout(ping_timeout)}).
+    call_infinity(Pid, {req, rpbgetringreq, default_timeout(get_ring_timeout)}).
 
 get_ring(Pid, Timeout) ->
     call_infinity(Pid, {req, rpbgetringreq, Timeout}).
+
+get_default_bucket_props(Pid) ->
+    call_infinity(Pid, {req, rpbgetdefaultbucketpropsreq, default_timeout(get_default_bucket_props_timeout)}).
+
+get_default_bucket_props(Pid, Timeout) ->
+    call_infinity(Pid, {req, rpbgetdefaultbucketpropsreq, Timeout}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -2050,6 +2057,9 @@ process_response(#request{msg = #tsgetreq{}},
 process_response(#request{msg = rpbgetringreq}, Result, State) ->
     Ring = riak_pb_kv_codec:decode_ring(Result),
     {reply, Ring, State};
+process_response(#request{msg = rpbgetdefaultbucketpropsreq}, Result, State) ->
+    BucketPropsList = riak_pb_kv_codec:decode_bucket_props(Result),
+    {reply, BucketPropsList, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
