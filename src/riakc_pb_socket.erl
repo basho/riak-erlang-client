@@ -2240,7 +2240,7 @@ process_response(#request{msg = #rpbaaefoldmergebranchnvalreq{}},
                     State) ->
     {reply, {ok, {branches, lists:map(fun unpack_branch/1, Branches)}}, State};
 process_response(#request{msg = #rpbaaefoldfetchclocksnvalreq{}},
-                    #rpbaaefoldkeyvalueresp{type = <<"clock">>} = Rsp,
+                    #rpbaaefoldkeyvalueresp{response_type = <<"clock">>} = Rsp,
                     State) ->
     KeysNClocks = Rsp#rpbaaefoldkeyvalueresp.keys_value,
     {reply,
@@ -2259,7 +2259,7 @@ process_response(#request{msg = #rpbaaefoldmergetreesrangereq{tree_size = TS}},
                     {struct, lists:map(fun split_branch/1, Branches)}}]},
     {reply, {ok, {tree, TreeToImport}}, State};
 process_response(#request{msg = #rpbaaefoldfetchclocksrangereq{}},
-                    #rpbaaefoldkeyvalueresp{type = <<"clock">>} = Rsp,
+                    #rpbaaefoldkeyvalueresp{response_type = <<"clock">>} = Rsp,
                     State) ->
     KeysNClocks = Rsp#rpbaaefoldkeyvalueresp.keys_value,
     {reply,
