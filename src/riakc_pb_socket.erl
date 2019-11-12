@@ -2272,9 +2272,8 @@ process_response(#request{msg = #rpbaaefoldfindkeysreq{}},
 process_response(#request{msg = #rpbaaefoldobjectstatsreq{}},
                     #rpbaaefoldkeycountresp{keys_count = KeysCount},
                     State) ->
-    {reply,
-        {ok, {stats, lists:map(fun unpack_keycount_fun/1, KeysCount)}},
-        State};
+    RawStats = lists:map(fun unpack_keycount_fun/1, KeysCount),
+    {reply, {ok, {stats, stats_output(RawStats)}}, State};
 
 process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
                  State) ->
@@ -2441,6 +2440,34 @@ unpack_keycount_fun(RpbKeysCount) ->
                 Order,
                 RpbKeysCount#rpbkeyscount.count}
     end.
+
+%% For absolute equivalence with HTTP client output need to
+%% sort both this list of stats and nest lists for any repeated keys, and ehn
+%% sort nay nested lists
+stats_output(Stats) ->
+    Output =
+        lists:sort(lists:foldr(fun stats_fold_fun/2, [], lists:sort(Stats))),
+    lists:map(fun sort_nested/1, Output).
+    
+
+sort_nested({K, L}) when is_list(L) ->
+    L0 =
+        lists:map(fun({O, C}) -> {integer_to_binary(O), C} end,
+                    lists:reverse(lists:sort(L))),
+    {K, L0};
+sort_nested(AnyOther) ->
+    AnyOther.
+
+stats_fold_fun({K, O, C}, Acc) ->
+    case lists:keyfind(K, 1, Acc) of
+        false ->
+            [{K, [{O, C}]}|Acc];
+        {K, L} ->
+            lists:keyreplace(K, 1, Acc, {K, lists:sort([{O, C}|L])})
+    end;
+stats_fold_fun({K, C}, Acc) -> 
+    [{K, C}|Acc].
+
 
 unpack_branch(BranchBin) ->
     {I, CB} = split_branch(BranchBin),
@@ -2948,5 +2975,28 @@ increase_reconnect_interval_test(State) ->
             ?assert(NextInterval > CurrInterval),
             increase_reconnect_interval_test(NextState)
     end.
+
+stats_output_test() ->
+    %% Raw details returned as in the mapped protocol buffer records
+    RawStats = 
+        [{<<"total_count">>,10000},
+            {<<"total_size">>,1218213},
+            {<<"sizes">>,2,9994},{<<"sizes">>,3,6},
+            {<<"siblings">>,1,9900},{<<"siblings">>,2,10},{<<"siblings">>,3,10},
+            {<<"siblings">>,4,10},{<<"siblings">>,5,10},{<<"siblings">>,6,10},
+            {<<"siblings">>,7,10},{<<"siblings">>,8,10},{<<"siblings">>,9,10},
+            {<<"siblings">>,10,10},{<<"siblings">>,11,10}],
+    %% What the HTTP client would return for the equivalent
+    ExpectedStats = 
+        lists:sort(
+            [{<<"siblings">>,
+                [{<<"11">>,10},{<<"10">>,10},{<<"9">>,10},{<<"8">>,10},
+                    {<<"7">>,10},{<<"6">>,10},{<<"5">>,10},{<<"4">>,10},
+                    {<<"3">>,10},{<<"2">>,10},{<<"1">>,9900}]},
+            {<<"sizes">>,[{<<"3">>,6},{<<"2">>,9994}]},
+            {<<"total_size">>,1218213},
+            {<<"total_count">>,10000}]),
+    OutStats = stats_output(RawStats),
+    ?assertMatch(ExpectedStats, OutStats).
 
 -endif.
