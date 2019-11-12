@@ -2240,10 +2240,11 @@ process_response(#request{msg = #rpbaaefoldmergebranchnvalreq{}},
                     State) ->
     {reply, {ok, {branches, lists:map(fun unpack_branch/1, Branches)}}, State};
 process_response(#request{msg = #rpbaaefoldfetchclocksnvalreq{}},
-                    #rpbaaefoldkeyclockresp{keys_clock = KeysClocks},
+                    #rpbaaefoldkeyvalueresp{type = <<"clock">>} = Rsp,
                     State) ->
+    KeysNClocks = Rsp#rpbaaefoldkeyvalueresp.keys_value,
     {reply,
-        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysClocks)}},
+        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysNClocks)}},
         State};
 process_response(#request{msg = #rpbaaefoldmergetreesrangereq{tree_size = TS}},
                     #rpbaaefoldtreeresp{size = TS,
@@ -2258,10 +2259,11 @@ process_response(#request{msg = #rpbaaefoldmergetreesrangereq{tree_size = TS}},
                     {struct, lists:map(fun split_branch/1, Branches)}}]},
     {reply, {ok, {tree, TreeToImport}}, State};
 process_response(#request{msg = #rpbaaefoldfetchclocksrangereq{}},
-                    #rpbaaefoldkeyclockresp{keys_clock = KeysClocks},
+                    #rpbaaefoldkeyvalueresp{type = <<"clock">>} = Rsp,
                     State) ->
+    KeysNClocks = Rsp#rpbaaefoldkeyvalueresp.keys_value,
     {reply,
-        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysClocks)}},
+        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysNClocks)}},
         State};
 process_response(#request{msg = #rpbaaefoldfindkeysreq{}},
                     #rpbaaefoldkeycountresp{keys_count = KeysCount},
@@ -2419,15 +2421,15 @@ response_type(_ReturnTerms, _ReturnBody) ->
 
 
 unpack_keyclock_fun(RpbKeysClock) ->
-    case RpbKeysClock#rpbkeysclock.type of
+    case RpbKeysClock#rpbkeysvalue.type of
         undefined ->
-            {RpbKeysClock#rpbkeysclock.bucket,
-                RpbKeysClock#rpbkeysclock.key,
-                RpbKeysClock#rpbkeysclock.value};
+            {RpbKeysClock#rpbkeysvalue.bucket,
+                RpbKeysClock#rpbkeysvalue.key,
+                RpbKeysClock#rpbkeysvalue.value};
         T ->
-            {{T, RpbKeysClock#rpbkeysclock.bucket},
-                RpbKeysClock#rpbkeysclock.key,
-                RpbKeysClock#rpbkeysclock.value}
+            {{T, RpbKeysClock#rpbkeysvalue.bucket},
+                RpbKeysClock#rpbkeysvalue.key,
+                RpbKeysClock#rpbkeysvalue.value}
     end.
 
 unpack_keycount_fun(RpbKeysCount) ->
