@@ -70,6 +70,9 @@
          search/3, search/4, search/5, search/6,
          get_index/4, get_index/5, get_index/6, get_index/7, %% @deprecated
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
+         aae_merge_root/2, aae_merge_branches/3, aae_fetch_clocks/3,
+         aae_range_tree/7, aae_range_clocks/5, % aae_range_replkeys/5,
+         aae_find_keys/5, aae_object_stats/4,
          cs_bucket_fold/3,
          default_timeout/1,
          tunnel/4,
@@ -128,6 +131,14 @@
                   {end_key, binary()} |
                   {end_incl, boolean()}.
 -type cs_opts() :: [cs_opt()].
+
+-type key_range() :: {riakc_obj:key(), riakc_obj:key()} | all.
+-type segment_filter() :: {list(pos_integer()), tree_size()} | all.
+-type modified_range() :: {ts(), ts()} | all.
+-type ts() :: pos_integer().
+-type hash_method() :: pre_hash | {rehash, non_neg_integer()}.
+
+-type tree_size() :: xxsmall| xsmall| small| medium| large| xlarge.
 
 %% Which client operation the default timeout is being requested
 %% for. `timeout' is the global default timeout. Any of these defaults
@@ -1315,6 +1326,312 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                   {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
                    Timeout}).
 
+
+%% @doc Get the merged aae tictactree root for the given `NVal'
+-spec aae_merge_root(pid(), NVal::pos_integer()) ->
+                            {ok, {root, binary()}} |
+                            {error, any()}.
+aae_merge_root(Pid, NVal) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldmergerootnvalreq{n_val = NVal},
+                        Timeout}).
+
+
+%% @doc get the aae merged branches for the given `NVal', restricted
+%% to the given list of `Branches'
+-spec aae_merge_branches(pid(),
+                            NVal::pos_integer(),
+                            Branches::list(pos_integer())) ->
+                                {ok, {branches, [{BranchId::integer(), Branch::binary()}]}} |
+                                {error, any()}.
+aae_merge_branches(Pid, NVal, Branches) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldmergebranchnvalreq{n_val = NVal,
+                                                        id_filter = Branches},
+                        Timeout}).
+
+
+%% @doc get the aae merged branches for the given `NVal', restricted
+%% to the given list of `Branches'
+-spec aae_fetch_clocks(pid(),
+                        NVal::pos_integer(),
+                        Segments::list(pos_integer())) ->
+                            {ok, {keysclocks,
+                                    [{{riakc_obj:bucket(),
+                                        riakc_obj:key()},
+                                        binary()}]}} |
+                            {error, any()}.
+aae_fetch_clocks(Pid, NVal, Segments) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldfetchclocksnvalreq{n_val = NVal,
+                                                        id_filter = Segments},
+                        Timeout}).
+
+%% @doc generate a tictac tree by folding over a range of keys
+%% in`Bucket'. The fold can be limited to the keys in `KeyRange' which
+%% is a pair `{Start::binary(), End::binary()}` that defines a range
+%% of keys, or the atom `all'. The `TreeSize' parameter is an atom,
+%% one of `xxsmall', `xsmall', `small', `medium', `large', or `xlarge'
+%% which determines, well, the tictac tree size. `SegmentFilter'
+%% further limits ths returned tree, it can be a pair of `{Segments,
+%% TreeSize}' where `Segments' is a list of integers (segments to
+%% return) and `TreeSize' the tree size that was initially queried to
+%% return the segments in `Segments', or it can be the atom
+%% `all'. `ModifiedRange' can restrict the tree fold to only include
+%% keys whose last modified date is in the range. The Range is a pair
+%% `{Start::pos_integer(), End::pos_integer()}' where both `Start' and
+%% `End' are 32-bit unix timestamps that represents seconds since the
+%% epoch. Finally `HashMethod' is one of `pre_hash' or `{rehash,
+%% IV::non_neg_integer()}'. The former uses the default hashing, the
+%% latter instructs the tictac tree to be built hashing the objects'
+%% vector clocks with a hash initialised with the value of `IV'. This
+%% is for those of you worried about hash collisions.  NOTE: what is
+%% returned is mochijson2 style {struct, ETC} terms, as this is what
+%% leveled_tictact:import_tree expects
+-spec aae_range_tree(pid(), riakc_obj:bucket(),
+                        key_range(), tree_size(),
+                        segment_filter(), modified_range(), hash_method()) ->
+                            {ok, {tree, Tree::any()}} | {error, any()}.
+aae_range_tree(Pid, BucketType, KeyRange, TreeSize,
+                SegmentFilter, ModifiedRange, HashMethod) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {SF, SFL, FTS} =
+        case SegmentFilter of
+            all ->
+                {false, [], undefined};
+            {SFL0, FTS0} ->
+                {true, SFL0, FTS0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {HM, IV} =
+        case HashMethod of
+            pre_hash ->
+                {false, undefined};
+            {rehash, IV0} ->
+                {true, IV0}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldmergetreesrangereq{type = T,
+                                                        bucket = B,
+                                                        key_range = KR,
+                                                        start_key = SK,
+                                                        end_key = EK,
+                                                        tree_size = TreeSize,   
+                                                        segment_filter = SF,
+                                                        id_filter = SFL,
+                                                        filter_tree_size = FTS,
+                                                        modified_range = MR,
+                                                        last_mod_start = MRLow,
+                                                        last_mod_end = MRHigh,
+                                                        use_prehash = HM,
+                                                        init_vector = IV},
+                        Timeout}).
+
+-spec aae_range_clocks(pid(),
+                        riakc_obj:bucket(), key_range(),
+                        segment_filter(), modified_range()) ->
+                            {ok,
+                                {keysclocks,
+                                    [{{riakc_obj:bucket(),
+                                        riakc_obj:key()},
+                                        binary()}]}} |
+                            {error, any()}.
+aae_range_clocks(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {SF, SFL, FTS} =
+        case SegmentFilter of
+            all ->
+                {false, [], undefined};
+            {SFL0, FTS0} ->
+                {true, SFL0, FTS0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldfetchclocksrangereq{type = T,
+                                                        bucket = B,
+                                                        key_range = KR,
+                                                        start_key = SK,
+                                                        end_key = EK,
+                                                        segment_filter = SF,
+                                                        id_filter = SFL,
+                                                        filter_tree_size = FTS,
+                                                        modified_range = MR,
+                                                        last_mod_start = MRLow,
+                                                        last_mod_end = MRHigh},
+                        Timeout}).
+
+%% @doc aae_find_keys folds over the tictacaae store to get
+%% operational information. `Rhc' is the client. `Bucket' is the
+%% bucket to fold over. `KeyRange' as before is a two tuple of
+%% `{Start, End}' where both ` Start' and `End' are binaries that
+%% represent the first and last key of a range to fold over. The atom
+%% `all' means all fol over keys in the bucket. `ModifiedRange' is a
+%% pair `{StartDate, EndDate}' or 32-bit integer unix timestamps, or
+%% the atom `all', that limits the fold to only the keys that have a
+%% last-modified date in the range. the `Query' is either
+%% `{sibling_coun, N}` or `{object_size, N}' where `N' is an
+%% integer. for `sibling_count' `N' means return all keys that have
+%% more than `N' siblings. NOTE: 1 sibling means a single value in
+%% this implementation, therefore if you want all keys that have more
+%% than a single value AT THE VNODE then `{sibling_count, 1}' is your
+%% query. NOTE NOTE: It is possible that all N vnodes have a single
+%% value, and that value is different on each vnode (temporarily
+%% only), this query would not detect that state. For `object_size' it
+%% means return all keys whose object size is greater than `N'. The
+%% result is a list of pairs `{Key, Count | Size}'
+-spec aae_find_keys(pid(),
+                    riakc_obj:bucket(), key_range(),
+                    modified_range(), Query) ->
+                        {ok, {keys, list({riakc_obj:key(), pos_integer()})}} |
+                        {error, any()} when
+                    Query :: {sibling_count, pos_integer()} | {object_size, pos_integer()}.
+aae_find_keys(Pid, BucketType, KeyRange, ModifiedRange, Query) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldfindkeysreq{type = T,
+                                                bucket = B,
+                                                key_range = KR,
+                                                start_key = SK,
+                                                end_key = EK,
+                                                modified_range = MR,
+                                                last_mod_start = MRLow,
+                                                last_mod_end = MRHigh,
+                                                finder = element(1, Query),
+                                                find_limit = element(2, Query)
+                                                },
+                        Timeout}).
+
+
+%% @doc aae_object_stats folds over the tictacaae store to get
+%% operational information. `Rhc' is the client. `Bucket' is the
+%% bucket to fold over. `KeyRange' as before is a two tuple of
+%% `{Start, End}' where both ` Start' and `End' are binaries that
+%% represent the first and last key of a range to fold over. The atom
+%% `all' means all fol over keys in the bucket. `ModifiedRange' is a
+%% pair `{StartDate, EndDate}' or 32-bit integer unix timestamps, or
+%% the atom `all', that limits the fold to only the keys that have a
+%% last-modified date in the range. the `Query' is either
+%% `{sibling_coun, N}` or `{object_size, N}' where `N' is an
+%% integer. for `sibling_count' `N' means return all keys that have
+%% more than `N' siblings. NOTE: 1 sibling means a single value in
+%% this implementation, therefore if you want all keys that have more
+%% than a single value AT THE VNODE then `{sibling_count, 1}' is your
+%% query. NOTE NOTE: It is possible that all N vnodes have a single
+%% value, and that value is different on each vnode (temporarily
+%% only), this query would not detect that state. For `object_size' it
+%% means return all keys whose object size is greater than `N'. The
+%% result is a list of pairs `{Key, Count | Size}'
+-spec aae_object_stats(pid(),
+                        riakc_obj:bucket(), key_range(),
+                        modified_range()) ->
+                            {ok, {stats, list({Key::atom(), Val::atom() | list()})}} |
+                            {error, any()}.
+aae_object_stats(Pid, BucketType, KeyRange, ModifiedRange) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldobjectstatsreq{type = T,
+                                                    bucket = B,
+                                                    key_range = KR,
+                                                    start_key = SK,
+                                                    end_key = EK,
+                                                    modified_range = MR,
+                                                    last_mod_start = MRLow,
+                                                    last_mod_end = MRHigh},
+                        Timeout}).
+
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -1911,6 +2228,53 @@ process_response(#request{msg = #rpbcountergetreq{}},
 process_response(#request{msg = #rpbcountergetreq{}},
                  #rpbcountergetresp{value=Value}, State) ->
     {reply, {ok, Value}, State};
+%% Responses to AAE fold requests
+process_response(#request{msg = #rpbaaefoldmergerootnvalreq{}},
+                    #rpbaaefoldtreeresp{size = _TreeSize,
+                                        level_one = Root},
+                    State) ->
+    {reply, {ok, {root, Root}}, State};
+process_response(#request{msg = #rpbaaefoldmergebranchnvalreq{}},
+                    #rpbaaefoldtreeresp{size = _TreeSize,
+                                        level_two = Branches},
+                    State) ->
+    {reply, {ok, {branches, lists:map(fun unpack_branch/1, Branches)}}, State};
+process_response(#request{msg = #rpbaaefoldfetchclocksnvalreq{}},
+                    #rpbaaefoldkeyclockresp{keys_clock = KeysClocks},
+                    State) ->
+    {reply,
+        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysClocks)}},
+        State};
+process_response(#request{msg = #rpbaaefoldmergetreesrangereq{tree_size = TS}},
+                    #rpbaaefoldtreeresp{size = TS,
+                                        level_one = Root,
+                                        level_two = Branches},
+                    State) ->
+    TreeToImport = 
+        {struct, 
+            [{<<"level1">>,
+                    base64:encode_to_string(Root)}, 
+                {<<"level2">>,
+                    {struct, lists:map(fun split_branch/1, Branches)}}]},
+    {reply, {ok, {tree, TreeToImport}}, State};
+process_response(#request{msg = #rpbaaefoldfetchclocksrangereq{}},
+                    #rpbaaefoldkeyclockresp{keys_clock = KeysClocks},
+                    State) ->
+    {reply,
+        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysClocks)}},
+        State};
+process_response(#request{msg = #rpbaaefoldfindkeysreq{}},
+                    #rpbaaefoldkeycountresp{keys_count = KeysCount},
+                    State) ->
+    {reply,
+        {ok, {keys, lists:map(fun unpack_keycount_fun/1, KeysCount)}},
+        State};
+process_response(#request{msg = #rpbaaefoldobjectstatsreq{}},
+                    #rpbaaefoldkeycountresp{keys_count = KeysCount},
+                    State) ->
+    {reply,
+        {ok, {stats, lists:map(fun unpack_keycount_fun/1, KeysCount)}},
+        State};
 
 process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
                  State) ->
@@ -2054,6 +2418,35 @@ response_type(true, _ReturnBody) ->
 response_type(_ReturnTerms, _ReturnBody) ->
     keys.
 
+
+unpack_keyclock_fun(RpbKeysClock) ->
+    case RpbKeysClock#rpbkeysclock.type of
+        undefined ->
+            {RpbKeysClock#rpbkeysclock.bucket,
+                RpbKeysClock#rpbkeysclock.key,
+                RpbKeysClock#rpbkeysclock.value};
+        T ->
+            {{T, RpbKeysClock#rpbkeysclock.bucket},
+                RpbKeysClock#rpbkeysclock.key,
+                RpbKeysClock#rpbkeysclock.value}
+    end.
+
+unpack_keycount_fun(RpbKeysCount) ->
+    case RpbKeysCount#rpbkeyscount.order of
+        undefined ->
+            {RpbKeysCount#rpbkeyscount.tag, 
+                RpbKeysCount#rpbkeyscount.count};
+        Order ->
+            {RpbKeysCount#rpbkeyscount.tag,
+                Order,
+                RpbKeysCount#rpbkeyscount.count}
+    end.
+
+unpack_branch(BranchBin) ->
+    {I, CB} = split_branch(BranchBin),
+    {I, zlib:uncompress(base64:decode(CB))}.
+
+split_branch(<<I:32/integer, CB/binary>>) -> {I, CB}.
 
 %% Helper for index responses
 -spec process_index_response('keys'|'terms'|'objects', list(), list()) ->
