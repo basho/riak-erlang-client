@@ -2256,7 +2256,10 @@ process_response(#request{msg = #rpbaaefoldmergetreesrangereq{tree_size = TS}},
             [{<<"level1">>,
                     base64:encode_to_string(Root)}, 
                 {<<"level2">>,
-                    {struct, lists:map(fun split_branch/1, Branches)}}]},
+                    {struct,
+                        lists:map(fun base64:encode_to_string/1,
+                                    lists:map(fun split_branch/1,
+                                                Branches))}}]},
     {reply, {ok, {tree, TreeToImport}}, State};
 process_response(#request{msg = #rpbaaefoldfetchclocksrangereq{}},
                     #rpbaaefoldkeyvalueresp{response_type = <<"clock">>} = Rsp,
@@ -2473,7 +2476,7 @@ stats_fold_fun({K, C}, Acc) ->
 
 unpack_branch(BranchBin) ->
     {I, CB} = split_branch(BranchBin),
-    {I, zlib:uncompress(base64:decode(CB))}.
+    {I, zlib:uncompress(CB)}.
 
 split_branch(<<I:32/integer, CB/binary>>) -> {I, CB}.
 
