@@ -2244,7 +2244,7 @@ process_response(#request{msg = #rpbaaefoldfetchclocksnvalreq{}},
                     State) ->
     KeysNClocks = Rsp#rpbaaefoldkeyvalueresp.keys_value,
     {reply,
-        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysNClocks)}},
+        {ok, {keysclocks, lists:map(fun unpack_keyclock_fun/1, KeysNClocks)}},
         State};
 process_response(#request{msg = #rpbaaefoldmergetreesrangereq{tree_size = TS}},
                     #rpbaaefoldtreeresp{size = TS,
@@ -2266,7 +2266,7 @@ process_response(#request{msg = #rpbaaefoldfetchclocksrangereq{}},
                     State) ->
     KeysNClocks = Rsp#rpbaaefoldkeyvalueresp.keys_value,
     {reply,
-        {ok, {keyclocks, lists:map(fun unpack_keyclock_fun/1, KeysNClocks)}},
+        {ok, {keysclocks, lists:map(fun unpack_keyclock_fun/1, KeysNClocks)}},
         State};
 process_response(#request{msg = #rpbaaefoldfindkeysreq{}},
                     #rpbaaefoldkeycountresp{keys_count = KeysCount},
@@ -2426,12 +2426,12 @@ response_type(_ReturnTerms, _ReturnBody) ->
 unpack_keyclock_fun(RpbKeysClock) ->
     case RpbKeysClock#rpbkeysvalue.type of
         undefined ->
-            {RpbKeysClock#rpbkeysvalue.bucket,
-                RpbKeysClock#rpbkeysvalue.key,
+            {{RpbKeysClock#rpbkeysvalue.bucket,
+                RpbKeysClock#rpbkeysvalue.key},
                 RpbKeysClock#rpbkeysvalue.value};
         T ->
-            {{T, RpbKeysClock#rpbkeysvalue.bucket},
-                RpbKeysClock#rpbkeysvalue.key,
+            {{{T, RpbKeysClock#rpbkeysvalue.bucket},
+                RpbKeysClock#rpbkeysvalue.key},
                 RpbKeysClock#rpbkeysvalue.value}
     end.
 
