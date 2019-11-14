@@ -1,18 +1,6 @@
-sudo: required
-dist: trusty
 language: erlang
+script:
+  - make dialyzer
+  - make test
 otp_release:
-  - 19.1
-  - 18.3
-  - 17.5
   - R16B03
-  - R15B03
-env:
-  - RIAK_DOWNLOAD_URL=http://s3.amazonaws.com/downloads.basho.com/riak/2.0/2.0.7/ubuntu/trusty/riak_2.0.7-1_amd64.deb
-  - RIAK_DOWNLOAD_URL=http://s3.amazonaws.com/downloads.basho.com/riak/2.1/2.1.4/ubuntu/trusty/riak_2.1.4-1_amd64.deb
-before_script:
-  - sudo ./tools/travis-ci/riak-install -d "$RIAK_DOWNLOAD_URL"
-  - sudo ./tools/setup-riak
-notifications:
-  slack:
-    secure: JVsrhRuWRTQauP7OjSc1XO6+P3eiOZtkjYhU2R53Hn9dK1KmJRBR5MzO1nq6BUs+bViXiAyW0YOoDTWF0eUw5gdd6sqnvx0+mYJVfYDTfbjp46yqj03Nj+J5HZ1KWPM78NSZ8jpZvdwk35ZpHqhsh/zWOY2RYmIVQKLB9EthHLU=
