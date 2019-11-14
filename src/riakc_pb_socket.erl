@@ -1425,9 +1425,9 @@ aae_range_tree(Pid, BucketType, KeyRange, TreeSize,
     {HM, IV} =
         case HashMethod of
             pre_hash ->
-                {false, undefined};
+                {true, undefined};
             {rehash, IV0} ->
-                {true, IV0}
+                {false, IV0}
         end,
     {T, B} =
         case BucketType of
