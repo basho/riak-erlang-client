@@ -2357,10 +2357,10 @@ process_response(#request{msg = #rpbaaefoldfindkeysreq{}},
         {ok, {keys, lists:map(fun unpack_keycount_fun/1, KeysCount)}},
         State};
 process_response(#request{msg = #rpbaaefoldreplkeysreq{}},
-                    #rpbaaefoldkeycountresp{keys_count = KeysCount},
+                    #rpbaaefoldkeycountresp{keys_count = [DispatchCount]},
                     State) ->
-    [{<<"dispatched_count">>, Count}] = KeysCount,
-    {reply, {ok, Count}, State};
+    true = <<"dispatched_count">> == DispatchCount#rpbkeyscount.tag,
+    {reply, {ok, DispatchCount#rpbkeyscount.count}, State};
 process_response(#request{msg = #rpbaaefoldobjectstatsreq{}},
                     #rpbaaefoldkeycountresp{keys_count = KeysCount},
                     State) ->
