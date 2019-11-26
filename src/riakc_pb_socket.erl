@@ -72,7 +72,7 @@
          get_index/4, get_index/5, get_index/6, get_index/7, %% @deprecated
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
          aae_merge_root/2, aae_merge_branches/3, aae_fetch_clocks/3,
-         aae_range_tree/7, aae_range_clocks/5, % aae_range_replkeys/5,
+         aae_range_tree/7, aae_range_clocks/5, aae_range_replkeys/5,
          aae_find_keys/5, aae_object_stats/4,
          cs_bucket_fold/3,
          default_timeout/1,
@@ -1519,6 +1519,55 @@ aae_range_clocks(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
                                                         last_mod_end = MRHigh},
                         Timeout}).
 
+
+%% @doc aae_range_repllkeys
+%% Fold over a range of keys and queue up those keys to be replicated to the
+%% other site.  Once the keys are replicated the objects will then be fetched,
+%% as long as a site is consuming from that replication queue.
+%% Will return the number of keys which have been queued for replication.
+-spec aae_range_replkeys(pid(), riakc_obj:bucket(),
+                            key_range(), modified_range(),
+                            atom()) ->
+                                {ok, non_neg_integer()} |
+                                    {error, any()}.
+aae_range_replkeys(Pid, BucketType, KeyRange, ModifiedRange, QueueName) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    QN = atom_to_binary(QueueName, utf8),
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldreplkeysreq{type = T,
+                                                bucket = B,
+                                                key_range = KR,
+                                                start_key = SK,
+                                                end_key = EK,
+                                                modified_range = MR,
+                                                last_mod_start = MRLow,
+                                                last_mod_end = MRHigh,
+                                                queuename = QN},
+                        Timeout}).
+
+
 %% @doc aae_find_keys folds over the tictacaae store to get
 %% operational information. `Rhc' is the client. `Bucket' is the
 %% bucket to fold over. `KeyRange' as before is a two tuple of
@@ -2307,6 +2356,11 @@ process_response(#request{msg = #rpbaaefoldfindkeysreq{}},
     {reply,
         {ok, {keys, lists:map(fun unpack_keycount_fun/1, KeysCount)}},
         State};
+process_response(#request{msg = #rpbaaefoldreplkeysreq{}},
+                    #rpbaaefoldkeycountresp{keys_count = KeysCount},
+                    State) ->
+    [{<<"dispatched_count">>, Count}] = KeysCount,
+    {reply, {ok, Count}, State};
 process_response(#request{msg = #rpbaaefoldobjectstatsreq{}},
                     #rpbaaefoldkeycountresp{keys_count = KeysCount},
                     State) ->
