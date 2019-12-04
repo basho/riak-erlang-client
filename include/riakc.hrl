@@ -211,3 +211,5 @@
           primary   :: boolean()
          }).
 -type preflist() :: [#preflist_item{}].
+
+-record(riakc_meta_entry, {value, lastmod}).

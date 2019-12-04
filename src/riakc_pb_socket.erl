@@ -77,7 +77,8 @@
          get_coverage/2, get_coverage/3,
          replace_coverage/3, replace_coverage/4,
          get_ring/1, get_ring/2,
-         get_default_bucket_props/1, get_default_bucket_props/2]).
+         get_default_bucket_props/1, get_default_bucket_props/2,
+         get_chash_bin/1, get_chash_bin/2]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -1329,6 +1330,12 @@ get_default_bucket_props(Pid) ->
 get_default_bucket_props(Pid, Timeout) ->
     call_infinity(Pid, {req, rpbgetdefaultbucketpropsreq, Timeout}).
 
+get_chash_bin(Pid) ->
+    call_infinity(Pid, {req, rpbgetchashbinreq, default_timeout(get_chash_bin_timeout)}).
+
+get_chash_bin(Pid, Timeout) ->
+    call_infinity(Pid, {req, rpbgetchashbinreq, Timeout}).
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -2060,6 +2067,10 @@ process_response(#request{msg = rpbgetringreq}, Result, State) ->
 process_response(#request{msg = rpbgetdefaultbucketpropsreq}, Result, State) ->
     BucketPropsList = riak_pb_kv_codec:decode_bucket_props(Result),
     {reply, BucketPropsList, State};
+process_response(#request{msg = rpbgetchashbinreq}, Result, State) ->
+    EncodedChashBin = Result#rpbgetchashbinresp.chash_bin,
+    ChashBin = erlang:binary_to_term(EncodedChashBin),
+    {reply, ChashBin, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
