@@ -77,8 +77,7 @@
          get_coverage/2, get_coverage/3,
          replace_coverage/3, replace_coverage/4,
          get_ring/1, get_ring/2,
-         get_default_bucket_props/1, get_default_bucket_props/2,
-         get_chash_bin/1, get_chash_bin/2]).
+         get_default_bucket_props/1, get_default_bucket_props/2]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -183,6 +182,8 @@
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
 
 -export_type([address/0, portnum/0]).
+
+-define(is_non_neg_integer(Integer), erlang:is_integer(Integer) andalso Integer > -1).
 
 %% @private Like `gen_server:call/3', but with the timeout hardcoded
 %% to `infinity'.
@@ -1318,23 +1319,25 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                   {req, #rpbcoveragereq{type=T, bucket=B, replace_cover=Cover, unavailable_cover=Other},
                    Timeout}).
 
-get_ring(Pid) ->
+-spec get_ring(Pid :: pid()) ->
+    {ok, #riak_pb_ring{}}.
+get_ring(Pid) when erlang:is_pid(Pid) ->
     call_infinity(Pid, {req, rpbgetringreq, default_timeout(get_ring_timeout)}).
 
-get_ring(Pid, Timeout) ->
+-spec get_ring(Pid :: pid(), Timeout :: non_neg_integer()) ->
+    {ok, #riak_pb_ring{}}.
+get_ring(Pid, Timeout) when erlang:is_pid(Pid) andalso ?is_non_neg_integer(Timeout) ->
     call_infinity(Pid, {req, rpbgetringreq, Timeout}).
 
-get_default_bucket_props(Pid) ->
+-spec get_default_bucket_props(Pid :: pid()) ->
+    {ok, list({atom(), term()})}.
+get_default_bucket_props(Pid) when erlang:is_pid(Pid) ->
     call_infinity(Pid, {req, rpbgetdefaultbucketpropsreq, default_timeout(get_default_bucket_props_timeout)}).
 
-get_default_bucket_props(Pid, Timeout) ->
+-spec get_default_bucket_props(Pid :: pid(), Timeout :: non_neg_integer()) ->
+    {ok, list({atom(), term()})}.
+get_default_bucket_props(Pid, Timeout) when erlang:is_pid(Pid) andalso ?is_non_neg_integer(Timeout) ->
     call_infinity(Pid, {req, rpbgetdefaultbucketpropsreq, Timeout}).
-
-get_chash_bin(Pid) ->
-    call_infinity(Pid, {req, rpbgetchashbinreq, default_timeout(get_chash_bin_timeout)}).
-
-get_chash_bin(Pid, Timeout) ->
-    call_infinity(Pid, {req, rpbgetchashbinreq, Timeout}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -2063,10 +2066,10 @@ process_response(#request{msg = #tsgetreq{}},
     {reply, Result, State};
 process_response(#request{msg = rpbgetringreq}, Result, State) ->
     Ring = riak_pb_kv_codec:decode_ring(Result),
-    {reply, Ring, State};
+    {reply, {ok, Ring}, State};
 process_response(#request{msg = rpbgetdefaultbucketpropsreq}, Result, State) ->
     BucketPropsList = riak_pb_kv_codec:decode_bucket_props(Result),
-    {reply, BucketPropsList, State};
+    {reply, {ok, BucketPropsList}, State};
 process_response(#request{msg = rpbgetchashbinreq}, Result, State) ->
     EncodedChashBin = Result#rpbgetchashbinresp.chash_bin,
     ChashBin = erlang:binary_to_term(EncodedChashBin),

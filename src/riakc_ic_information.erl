@@ -49,11 +49,11 @@ get_preflist(Bucket, Key, Ring, Options, DefaultBucketProps) ->
                         get_primary_apl(DocIdx, Nval, ChRing);
                     _ ->
                         UpNodes = get_up_nodes(),
-                        get_apl_ann(DocIdx, Nval, UpNodes)
+                        get_apl_ann(DocIdx, Nval, UpNodes, ChRing)
                 end,
     [IndexNode || {IndexNode, _Type} <- Preflist2].
 
-%% TODO - Add functionality for the get_bucket_type_info function below
+%% TODO - Add functionality for the get_bucket_type_info function below.
 get_bucket_type_info(_Pid) ->
 	ok.
 
@@ -74,7 +74,7 @@ get_option(Name, Options, Default) ->
 get_bucket_props({<<"default">>, Name}, Ring, DefaultBucketProps) ->
     get_bucket_props(Name, Ring, DefaultBucketProps);
 get_bucket_props({_Type, _Name}, _Ring, _DefaultBucketProps) ->
-    %% TODO - Report error or find way of getting bucket props for non-default buckets, as non default buckets aren't stored in ring
+    %% TODO - Report error or find way of getting bucket props for non-default buckets, as non default buckets aren't stored in ring.
     ok;
 get_bucket_props(Bucket, Ring, DefaultBucketProps) ->
     Meta = get_meta({bucket, Bucket}, Ring),
@@ -89,8 +89,8 @@ get_meta(Key, Ring) ->
     case dict:find(Key, Ring#riak_pb_ring.meta) of
         error -> undefined;
         {ok, '$removed'} -> undefined;
-        {ok, Meta} when Meta#riakc_meta_entry.value =:= '$removed' -> undefined;
-        {ok, Meta} -> {ok, Meta#riakc_meta_entry.value}
+        {ok, {_, Value, _}} when Value =:= '$removed' -> undefined;
+        {ok, {_, Value, _}} -> {ok, Value}
     end.
 
 get_nval(Options, BucketNval) ->
@@ -108,9 +108,9 @@ get_primary_apl(DocIdx, Nval, ChRing) ->
     UpNodes = get_up_nodes(),
     get_primary_apl_chbin(DocIdx, Nval, ChBin, UpNodes).
 
-get_apl_ann(_DocIdx, _Nval, _UpNodes) ->
-    %% TODO - Fill in implementation for this function.
-    ok.
+get_apl_ann(DocIdx, Nval, UpNodes, ChRing) ->
+    ChBin = riakc_chash:chashring_to_chashbin(ChRing),
+    get_apl_ann_chbin(DocIdx, Nval, ChBin, UpNodes).
 
 get_up_nodes() ->
     %% TODO - Fill in implementation for this function.
@@ -122,6 +122,12 @@ get_primary_apl_chbin(DocIdx, Nval, ChBin, UpNodes) ->
     {Up, _} = check_up(Primaries, UpNodes, [], []),
     Up.
 
+get_apl_ann_chbin(DocIdx, Nval, ChBin, UpNodes) ->
+    Iterator = riakc_chash:iterator(DocIdx, ChBin),
+    {Primaries, Iterator2} = riakc_chash:iterator_pop(Nval, Iterator),
+    {Up, Pangs} = check_up(Primaries, UpNodes, [], []),
+    Up ++ find_fallbacks_chbin(Pangs, Iterator2, UpNodes, []).
+
 check_up([], _UpNodes, Up, Pangs) ->
     {lists:reverse(Up), lists:reverse(Pangs)};
 check_up([{Partition, Node} | Rest], UpNodes, Up, Pangs) ->
@@ -131,3 +137,23 @@ check_up([{Partition, Node} | Rest], UpNodes, Up, Pangs) ->
         false ->
             check_up(Rest, UpNodes, Up, [{Partition, Node} | Pangs])
     end.
+
+find_fallbacks_chbin([], _Fallbacks, _UpNodes, Secondaries) ->
+    lists:reverse(Secondaries);
+find_fallbacks_chbin(_, done, _UpNodes, Secondaries) ->
+    lists:reverse(Secondaries);
+find_fallbacks_chbin([{Partition, _Node} | Rest] = Pangs, Iterator, UpNodes, Secondaries) ->
+    {_, FallbackNode} = riakc_chash:iterator_value(Iterator),
+    Iterator2 = riakc_chash:iterator_next(Iterator),
+    case lists:member(FallbackNode, UpNodes) of
+        true ->
+            NewSecondaries = [{{Partition, FallbackNode}, fallback} | Secondaries],
+            find_fallbacks_chbin(Rest, Iterator2, UpNodes, NewSecondaries);
+        false ->
+            find_fallbacks_chbin(Pangs, Iterator2, UpNodes, Secondaries)
+    end.
+
+%% ====================================================================
+%% Eunit tests
+%% ====================================================================
+%% TODO - consider whether to add eunit tests to this module.
