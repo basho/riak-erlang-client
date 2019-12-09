@@ -2590,7 +2590,7 @@ process_response(#request{msg = #rpbaaefoldreaptombsreq{}},
                     #rpbaaefoldkeycountresp{response_type = ReapTag,
                                             keys_count = [ReapCount]},
                     State) ->
-    true = <<"reap_count">> == ReapTag,
+    true = <<"reap_tombs">> == ReapTag,
     true = <<"dispatched_count">> == ReapCount#rpbkeyscount.tag,
     {reply, {ok, ReapCount#rpbkeyscount.count}, State};
 process_response(#request{msg = #rpbaaefolderasekeysreq{}},
