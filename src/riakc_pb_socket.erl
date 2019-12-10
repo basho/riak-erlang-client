@@ -74,6 +74,7 @@
          aae_merge_root/2, aae_merge_branches/3, aae_fetch_clocks/3,
          aae_range_tree/7, aae_range_clocks/5, aae_range_replkeys/5,
          aae_find_keys/5, aae_find_tombs/5, aae_reap_tombs/6, aae_erase_keys/6,
+         aae_list_buckets/1, aae_list_buckets/2,
          aae_object_stats/4,
          cs_bucket_fold/3,
          default_timeout/1,
@@ -1913,6 +1914,24 @@ aae_object_stats(Pid, BucketType, KeyRange, ModifiedRange) ->
                                                     last_mod_end = MRHigh},
                         Timeout}).
 
+%% @doc
+%% List all the buckets with references in the AAE store.  For reasonable 
+%% (e.g. < o(1000)) this should be quick and efficient unless using the
+%% leveled_so parallel store.  A minimum n_val can be passed if known.  If
+%% there are buckets (with keys) below the minimum n_val they may not be
+%% detecting in the query.  Will default to 1.
+-spec aae_list_buckets(pid()) -> list(riakc_obj:bucket()).
+aae_list_buckets(Pid) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    call_infinity(Pid, {req, #rpbaaefoldlistbucketsreq{}, Timeout}).
+
+-spec aae_list_buckets(pid(), pos_integer()) -> list(riakc_obj:bucket()).
+aae_list_buckets(Pid, MinNVal) when is_integer(MinNVal), MinNVal > 0 ->
+    Timeout = default_timeout(get_coverage_timeout),
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldlistbucketsreq{n_val = MinNVal},
+                        Timeout}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -2610,6 +2629,10 @@ process_response(#request{msg = #rpbaaefoldobjectstatsreq{}},
                     State) ->
     RawStats = lists:map(fun unpack_keycount_fun/1, KeysCount),
     {reply, {ok, {stats, stats_output(RawStats)}}, State};
+process_response(#request{msg = #rpbaaefoldlistbucketsreq{}},
+                    #rpbaaefoldlistbucketsresp{bucket_list = BucketList},
+                    State) ->
+    {repl, {ok, lists:map(fun unpack_bucket/1, BucketList)}, State};
 
 process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
                  State) ->
@@ -2753,6 +2776,14 @@ response_type(true, _ReturnBody) ->
 response_type(_ReturnTerms, _ReturnBody) ->
     keys.
 
+
+unpack_bucket(RpbAaeFoldBucket) ->
+    case RpbAaeFoldBucket#rpbaaefoldbucket.type of
+        undefined ->
+            RpbAaeFoldBucket#rpbaaefoldbucket.bucket;
+        T ->
+            {T, RpbAaeFoldBucket#rpbaaefoldbucket.bucket}
+    end.
 
 unpack_keyclock_fun(RpbKeysClock) ->
     case RpbKeysClock#rpbkeysvalue.type of
