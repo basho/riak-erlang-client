@@ -2632,7 +2632,7 @@ process_response(#request{msg = #rpbaaefoldobjectstatsreq{}},
 process_response(#request{msg = #rpbaaefoldlistbucketsreq{}},
                     #rpbaaefoldlistbucketsresp{bucket_list = BucketList},
                     State) ->
-    {repl, {ok, lists:map(fun unpack_bucket/1, BucketList)}, State};
+    {reply, {ok, lists:map(fun unpack_bucket/1, BucketList)}, State};
 
 process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
                  State) ->
