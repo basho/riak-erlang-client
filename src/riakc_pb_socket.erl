@@ -77,7 +77,8 @@
          get_coverage/2, get_coverage/3,
          replace_coverage/3, replace_coverage/4,
          get_ring/1, get_ring/2,
-         get_default_bucket_props/1, get_default_bucket_props/2]).
+         get_default_bucket_props/1, get_default_bucket_props/2,
+         get_nodes/1, get_nodes/2]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -1339,6 +1340,12 @@ get_default_bucket_props(Pid) when erlang:is_pid(Pid) ->
 get_default_bucket_props(Pid, Timeout) when erlang:is_pid(Pid) andalso ?is_non_neg_integer(Timeout) ->
     call_infinity(Pid, {req, rpbgetdefaultbucketpropsreq, Timeout}).
 
+get_nodes(Pid) ->
+    call_infinity(Pid, {req, rpbgetnodesreq, default_timeout(get_nodes_timeout)}).
+
+get_nodes(Pid, Timeout) ->
+    call_infinity(Pid, {req, rpbgetnodesreq, Timeout}).
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -1409,6 +1416,23 @@ handle_info({ssl_error, _Socket, Reason}, State) ->
     disconnect(State);
 handle_info({ssl_closed, _Socket}, State) ->
     disconnect(State);
+handle_info({Proto, Socket, Data}, State = #state{sock = Socket, active = undefined})
+        when Proto == tcp orelse Proto == ssl ->
+    <<MsgCode:8, MsgData/binary>> = Data,
+    NewState = case decode(MsgCode, MsgData) of
+                   #rpberrorresp{} ->
+                       State;
+                   Resp ->
+                       {reply, _Response, NewState1} = process_response(undefined, Resp, State),
+                       NewState1
+               end,
+    case State#state.transport of
+        gen_tcp ->
+            ok = inet:setopts(Socket, [{active, once}]);
+        ssl ->
+            ok = ssl:setopts(Socket, [{active, once}])
+    end,
+    {noreply, NewState};
 %% Make sure the two Socks match.  If a request timed out, but there was
 %% a response queued up behind it we do not want to process it.  Instead
 %% it should drop through and be ignored.
@@ -2070,10 +2094,12 @@ process_response(#request{msg = rpbgetringreq}, Result, State) ->
 process_response(#request{msg = rpbgetdefaultbucketpropsreq}, Result, State) ->
     BucketPropsList = riak_pb_kv_codec:decode_bucket_props(Result),
     {reply, {ok, BucketPropsList}, State};
-process_response(#request{msg = rpbgetchashbinreq}, Result, State) ->
-    EncodedChashBin = Result#rpbgetchashbinresp.chash_bin,
-    ChashBin = erlang:binary_to_term(EncodedChashBin),
-    {reply, ChashBin, State};
+process_response(#request{msg = rpbgetnodesreq}, Result, State) ->
+    Nodes = riak_pb_kv_codec:decode_nodes(Result),
+    {reply, {ok, Nodes}, State};
+process_response(undefined, Reply, State) when erlang:is_record(Reply, rpbnodewatcherupdate) ->
+    {Timestamp, Nodes} = riak_pb_kv_codec:decode_node_watcher_update(Reply),
+    {reply, ok, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo
     {reply, {error, {unknown_response, Request, Reply}}, State}.
