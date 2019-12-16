@@ -16,7 +16,10 @@
 %% API
 -export([
     start_link/0,
-    update_nodes_list/2
+    update_nodes_list/2,
+    get_up_nodes/0,
+    get_ring/0,
+    get_default_bucket_props/0
 ]).
 
 %% gen_server callbacks
@@ -32,6 +35,9 @@
 -define(SERVER, ?MODULE).
 -define(ETS_IC_INFO_TABLE, ic_information).
 -define(UPDATE_NODES, update_nodes).
+-define(GET_UP_NODES, get_up_nodes).
+-define(GET_RING, get_ring).
+-define(GET_DEFAULT_BUCKET_PROPS, get_default_bucket_props).
 
 -define(is_new_timestamp(CurrentTimestamp, NewTimestamp), NewTimestamp > CurrentTimestamp orelse
     CurrentTimestamp == undefined).
@@ -59,6 +65,17 @@ start_link() ->
 update_nodes_list(NewTimestamp, Nodes) when erlang:is_integer(NewTimestamp) andalso erlang:is_list(Nodes) ->
     gen_server:cast(?SERVER, {?UPDATE_NODES, NewTimestamp, Nodes}).
 
+-spec get_up_nodes() ->
+    {ok, list(atom())}.
+get_up_nodes() ->
+    gen_server:call(?SERVER, ?GET_UP_NODES).
+
+get_ring() ->
+    gen_server:call(?SERVER, ?GET_RING).
+
+get_default_bucket_props() ->
+    gen_server:call(?SERVER, ?GET_DEFAULT_BUCKET_PROPS).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -68,13 +85,23 @@ init([]) ->
     ets:insert(?ETS_IC_INFO_TABLE, InitInformation),
     {ok, #state{update_timestamp = undefined}}.
 
+handle_call(?GET_UP_NODES, _From, State) ->
+    UpNodes = handle_get_up_nodes(),
+    {reply, {ok, UpNodes}, State};
+handle_call(?GET_RING, _From, State) ->
+    Ring = handle_get_ring(),
+    {reply, {ok, Ring}, State};
+handle_call(?GET_DEFAULT_BUCKET_PROPS, _From, State) ->
+    DefaultBucketProps = handle_get_default_bucket_props(),
+    {reply, {ok, DefaultBucketProps}, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 handle_cast({?UPDATE_NODES, NewTimestamp, NodesList}, State) ->
     CurrentTimestamp = State#state.update_timestamp,
-    handle_update_nodes(CurrentTimestamp, NewTimestamp, NodesList),
-    {noreply, State};
+    NewTimestamp = handle_update_nodes(CurrentTimestamp, NewTimestamp, NodesList),
+    NewState = State#state{update_timestamp = NewTimestamp},
+    {noreply, NewState};
 handle_cast(_Request, State) ->
     {noreply, State}.
 
@@ -98,11 +125,24 @@ get_init_information() ->
     {ok, DefaultBucketProps} = riakc_pb_socket:get_default_bucket_props(Pid),
     #riakc_ic_information{nodes = Nodes, ring = Ring, default_bucket_props = DefaultBucketProps}.
 
+handle_get_up_nodes() ->
+    [IcInfo] = ets:lookup(?ETS_IC_INFO_TABLE, riakc_ic_information),
+    IcInfo#riakc_ic_information.nodes.
+
+handle_get_ring() ->
+    [IcInfo] = ets:lookup(?ETS_IC_INFO_TABLE, riakc_ic_information),
+    IcInfo#riakc_ic_information.ring.
+
+handle_get_default_bucket_props() ->
+    [IcInfo] = ets:lookup(?ETS_IC_INFO_TABLE, riakc_ic_information),
+    IcInfo#riakc_ic_information.default_bucket_props.
+
 handle_update_nodes(CurrentTimestamp, NewTimestamp, NodesList) when ?is_new_timestamp(CurrentTimestamp, NewTimestamp) ->
-    %% TODO - currently assumes ic info table has been initialised. Need to think about what happens when the table can't initialise properly for whatever reason
     [IcInfo] = ets:lookup(?ETS_IC_INFO_TABLE, riakc_ic_information),
     NewIcInfo = IcInfo#riakc_ic_information{nodes = NodesList},
     ets:insert(?ETS_IC_INFO_TABLE, NewIcInfo),
-    ok;
-handle_update_nodes(_CurrentTimestamp, _NewTimestamp, _NodesList) ->
-    ok.
+    NewTimestamp;
+handle_update_nodes(CurrentTimestamp, _NewTimestamp, _NodesList) ->
+    %% TODO - should maybe just send node watcher update on one connection instead of through all connections.
+    %% Node update with same/old timestamp has already been sent via another connection, nothing to do here.
+    CurrentTimestamp.

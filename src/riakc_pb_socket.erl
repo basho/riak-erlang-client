@@ -2099,6 +2099,7 @@ process_response(#request{msg = rpbgetnodesreq}, Result, State) ->
     {reply, {ok, Nodes}, State};
 process_response(undefined, Reply, State) when erlang:is_record(Reply, rpbnodewatcherupdate) ->
     {Timestamp, Nodes} = riak_pb_kv_codec:decode_node_watcher_update(Reply),
+    riakc_ic:update_nodes_list(Timestamp, Nodes),
     {reply, ok, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo

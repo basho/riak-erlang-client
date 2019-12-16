@@ -14,13 +14,11 @@
 
 %% API
 -export([
-	get_hash_fun/3,
-	get_preflist/5,
+	get_hash_fun/1,
+	get_preflist/3,
 	get_bucket_type_info/1
 ]).
 
--type ring() :: #riak_pb_ring{}.
--type riakc_bucket_props() :: list({atom(), term()}).
 -type riakc_preflist() :: list({{pos_integer(), atom()}, atom()}).
 
 -define(DEFAULT_HASH_FUN, {riak_core_util, chash_std_keyfun}).
@@ -30,28 +28,18 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--spec get_hash_fun(Bucket :: bucket() | bucket_and_type(), Ring :: ring(), DefaultBucketProps :: riakc_bucket_props()) ->
+-spec get_hash_fun(Bucket :: bucket() | bucket_and_type()) ->
 	{atom(), atom()}.
-get_hash_fun(_Bucket, Ring, DefaultBucketProps) when ?get_hash_fun_guard(Ring, DefaultBucketProps) ->
+get_hash_fun(_Bucket) ->
 	?DEFAULT_HASH_FUN.
 
--spec get_preflist(Bucket :: binary(), Key :: binary(), Ring :: ring(), Options :: list(term()), DefaultBucketProps :: riakc_bucket_props()) ->
+-spec get_preflist(Bucket :: binary(), Key :: binary(), Options :: list(term())) ->
     riakc_preflist().
-get_preflist(Bucket, Key, Ring, Options, DefaultBucketProps) ->
-    BucketKey = {Bucket, Key},
-    BucketProps = get_bucket_props(Bucket, Ring, DefaultBucketProps),
-    ChRing = Ring#riak_pb_ring.chring,
-    DocIdx = riakc_chash:chash_key(BucketKey),
-    BucketNval = get_option(n_val, BucketProps),
-    Nval = get_nval(Options, BucketNval),
-    Preflist2 = case get_option(sloppy_quorum, Options) of
-                    false ->
-                        get_primary_apl(DocIdx, Nval, ChRing);
-                    _ ->
-                        UpNodes = get_up_nodes(),
-                        get_apl_ann(DocIdx, Nval, UpNodes, ChRing)
-                end,
-    [IndexNode || {IndexNode, _Type} <- Preflist2].
+get_preflist(Bucket, Key, Options) ->
+    {ok, Ring} = riakc_ic:get_ring(),
+    {ok, DefaultBucketProps} = riakc_ic:get_default_bucket_props(),
+    {ok, UpNodes} = riakc_ic:get_up_nodes(),
+    handle_get_preflist(Bucket, Key, Options, Ring, DefaultBucketProps, UpNodes).
 
 %% TODO - Add functionality for the get_bucket_type_info function below.
 get_bucket_type_info(_Pid) ->
@@ -60,24 +48,32 @@ get_bucket_type_info(_Pid) ->
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
-get_option(Name, Options) ->
-    get_option(Name, Options, undefined).
+handle_get_preflist(Bucket, Key, Options, Ring, DefaultBucketProps, UpNodes) ->
+    BucketKey = {Bucket, Key},
+    BucketProps = get_bucket_props(Bucket, Ring, DefaultBucketProps),
+    ChRing = Ring#riak_pb_ring.chring,
+    DocIdx = riakc_chash:chash_key(BucketKey),
+    BucketNval = get_option(n_val, BucketProps),
+    Nval = get_nval(Options, BucketNval),
+    SloppyQuorum = get_option(sloppy_quorum, Options),
+    Preflist2 = calculate_preflist(SloppyQuorum, DocIdx, Nval, ChRing, UpNodes),
+    [IndexNode || {IndexNode, _Type} <- Preflist2].
 
-get_option(Name, Options, Default) ->
-    case lists:keyfind(Name, 1, Options) of
-        {_, Val} ->
-            Val;
-        false ->
-            Default
-    end.
-
+%% ====================================================================
+%% Helper functions
+%% ====================================================================
 get_bucket_props({<<"default">>, Name}, Ring, DefaultBucketProps) ->
     get_bucket_props(Name, Ring, DefaultBucketProps);
-get_bucket_props({_Type, _Name}, _Ring, _DefaultBucketProps) ->
+get_bucket_props({_Type, _Name}, _Ring, DefaultBucketProps) ->
     %% TODO - Report error or find way of getting bucket props for non-default buckets, as non default buckets aren't stored in ring.
-    ok;
+    DefaultBucketProps;
 get_bucket_props(Bucket, Ring, DefaultBucketProps) ->
-    Meta = get_meta({bucket, Bucket}, Ring),
+    Meta = case dict:find({bucket, Bucket}, Ring#riak_pb_ring.meta) of
+               error -> undefined;
+               {ok, '$removed'} -> undefined;
+               {ok, {_, Value, _}} when Value =:= '$removed' -> undefined;
+               {ok, {_, Value, _}} -> {ok, Value}
+           end,
     get_bucket_props_1(Bucket, Meta, DefaultBucketProps).
 
 get_bucket_props_1(Name, undefined, DefaultBucketProps) ->
@@ -85,12 +81,12 @@ get_bucket_props_1(Name, undefined, DefaultBucketProps) ->
 get_bucket_props_1(_Name, {ok, Bucket}, _DefaultBucketProps) ->
     Bucket.
 
-get_meta(Key, Ring) ->
-    case dict:find(Key, Ring#riak_pb_ring.meta) of
-        error -> undefined;
-        {ok, '$removed'} -> undefined;
-        {ok, {_, Value, _}} when Value =:= '$removed' -> undefined;
-        {ok, {_, Value, _}} -> {ok, Value}
+get_option(Name, Options) ->
+    case lists:keyfind(Name, 1, Options) of
+        {_, Val} ->
+            Val;
+        false ->
+            undefined
     end.
 
 get_nval(Options, BucketNval) ->
@@ -103,26 +99,14 @@ get_nval(Options, BucketNval) ->
             {error, {n_val_violation, BadNval}}
     end.
 
-get_primary_apl(DocIdx, Nval, ChRing) ->
+calculate_preflist(SloppyQuorum, DocIdx, Nval, ChRing, UpNodes) when SloppyQuorum == false ->
     ChBin = riakc_chash:chashring_to_chashbin(ChRing),
-    UpNodes = get_up_nodes(),
-    get_primary_apl_chbin(DocIdx, Nval, ChBin, UpNodes).
-
-get_apl_ann(DocIdx, Nval, UpNodes, ChRing) ->
-    ChBin = riakc_chash:chashring_to_chashbin(ChRing),
-    get_apl_ann_chbin(DocIdx, Nval, ChBin, UpNodes).
-
-get_up_nodes() ->
-    %% TODO - Fill in implementation for this function.
-    ok.
-
-get_primary_apl_chbin(DocIdx, Nval, ChBin, UpNodes) ->
     Iterator = riakc_chash:iterator(DocIdx, ChBin),
     {Primaries, _} = riakc_chash:iterator_pop(Nval, Iterator),
     {Up, _} = check_up(Primaries, UpNodes, [], []),
-    Up.
-
-get_apl_ann_chbin(DocIdx, Nval, ChBin, UpNodes) ->
+    Up;
+calculate_preflist(_SloppyQuorum, DocIdx, Nval, ChRing, UpNodes) ->
+    ChBin = riakc_chash:chashring_to_chashbin(ChRing),
     Iterator = riakc_chash:iterator(DocIdx, ChBin),
     {Primaries, Iterator2} = riakc_chash:iterator_pop(Nval, Iterator),
     {Up, Pangs} = check_up(Primaries, UpNodes, [], []),
@@ -152,8 +136,3 @@ find_fallbacks_chbin([{Partition, _Node} | Rest] = Pangs, Iterator, UpNodes, Sec
         false ->
             find_fallbacks_chbin(Pangs, Iterator2, UpNodes, Secondaries)
     end.
-
-%% ====================================================================
-%% Eunit tests
-%% ====================================================================
-%% TODO - consider whether to add eunit tests to this module.
