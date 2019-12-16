@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 13. Dec 2019 13:39
 %%%-------------------------------------------------------------------
--module(riakc_ic).
+-module(riakc_ic_information_gs).
 -author("paulhunt").
 
 -behaviour(gen_server).

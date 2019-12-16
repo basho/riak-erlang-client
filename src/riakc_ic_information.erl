@@ -23,8 +23,6 @@
 
 -define(DEFAULT_HASH_FUN, {riak_core_util, chash_std_keyfun}).
 
--define(get_hash_fun_guard(Ring, DefaultProps), erlang:is_record(Ring, riak_pb_ring) andalso erlang:is_list(DefaultProps)).
-
 %% ====================================================================
 %% API functions
 %% ====================================================================
