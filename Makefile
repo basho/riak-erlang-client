@@ -18,6 +18,9 @@ clean:
 distclean:
 	$(REBAR) clean --all
 
+shell:
+	$(REBAR) shell --apps "riakc"
+
 release: compile
 ifeq ($(VERSION),)
 	$(error VERSION must be set to build a release and deploy this package)

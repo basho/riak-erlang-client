@@ -1,19 +1,31 @@
 %% -*- erlang -*-
-{application, riakc,
- [{description, "Riak Client"},
-  {vsn, git},
-  {applications, [
-                  kernel,
-                  stdlib,
-                  riak_pb
-                 ]},
-  {registered, []},
-  {env, [
-         %% Set default timeout for operations.
-         %% Individual operation timeouts can be supplied,
-         %% e.g. get_timeout, put_timeout that will 
-         %% override the default.
-         {timeout, 60000}
+{application, riakc, [
+    {description, "Riak Client"},
+    %% TODO - change this back after testing
+    {vsn, git},
+    {applications, [
+        kernel,
+        stdlib,
+        riak_pb
+    ]},
+    {registered, []},
+    {mod, {riakc_app, []}},
+    {env, [
+        %% Set default timeout for operations.
+        %% Individual operation timeouts can be supplied,
+        %% e.g. get_timeout, put_timeout that will
+        %% override the default.
+        {timeout, 60000},
+        %% Temp pools variable for testing purposes
+        {pools, [
+            {pool1, [
+                {size, 10},
+                {max_overflow, 20}
+            ], [
+                {hostname, "127.0.0.1"},
+                {port, 10017}
+            ]}
         ]}
- ]}.
+    ]}
+]}.
 
