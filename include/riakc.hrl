@@ -26,6 +26,15 @@
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
+-record(riakc_obj, {
+    bucket :: bucket_and_type() | bucket(),
+    key :: key() | undefined,
+    vclock :: vclock() | undefined,
+    contents :: riakc_obj:contents(),
+    updatemetadata :: riakc_obj:metadata() | undefined,
+    updatevalue :: riakc_obj:value() | undefined
+}).
+
 -type client_option()  :: queue_if_disconnected |
                           {queue_if_disconnected, boolean()} |
                           {connect_timeout, pos_integer()} |
@@ -44,7 +53,7 @@
 -type bucket_type() :: binary().
 -type bucket_and_type() :: {bucket_type(), bucket()}.
 -type key() :: binary(). %% A key name.
--type riakc_obj() :: riakc_obj:riakc_obj(). %% An object (bucket, key, metadata, value) stored in Riak.
+-type riakc_obj() :: #riakc_obj{}. %% An object (bucket, key, metadata, value) stored in Riak.
 -type req_id() :: non_neg_integer(). %% Request identifier for streaming requests.
 -type server_prop() :: {node, binary()} | {server_version, binary()}. %% Server properties, as returned by the `get_server_info/1' call.
 -type server_info() :: [server_prop()]. %% A response from the `get_server_info/1' call.
@@ -63,7 +72,7 @@
                          write_quorum() |
                          {rw, ReadWriteQuorum::quorum()}. %% Valid quorum options for delete requests. Note that `rw' is deprecated in Riak 1.0 and later.
 -type get_option() :: read_quorum() |
-                      {if_modified, riakc_obj:vclock()} |
+                      {if_modified, vclock()} |
                       {notfound_ok, boolean()} |
                       {basic_quorum, boolean()} |
                       head | deletedvclock |
@@ -139,6 +148,7 @@
                         search_timeout | search_call_timeout |
                         timeout.
 
+-type vclock() :: binary(). %% An opaque vector clock
 -type continuation() :: 'undefined' | binary().
 -type secondary_index_id() :: {binary_index, string()} | {integer_index, string()}.
 -type index_term() :: integer() | binary().

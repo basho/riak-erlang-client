@@ -1340,9 +1340,13 @@ get_default_bucket_props(Pid) when erlang:is_pid(Pid) ->
 get_default_bucket_props(Pid, Timeout) when erlang:is_pid(Pid) andalso ?is_non_neg_integer(Timeout) ->
     call_infinity(Pid, {req, rpbgetdefaultbucketpropsreq, Timeout}).
 
+-spec get_nodes(Pid :: pid()) ->
+    {ok, list(atom())}.
 get_nodes(Pid) ->
     call_infinity(Pid, {req, rpbgetnodesreq, default_timeout(get_nodes_timeout)}).
 
+-spec get_nodes(Pid :: pid(), Timeout :: timeout()) ->
+    {ok, list(atom())}.
 get_nodes(Pid, Timeout) ->
     call_infinity(Pid, {req, rpbgetnodesreq, Timeout}).
 

@@ -72,15 +72,13 @@
 %% Internal library use only
 -export([new_obj/4,index_id_to_bin/1]).
 
+-include("riakc.hrl").
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--type bucket() :: binary() | {binary(), binary()}. %% A bucket name
--type key() :: binary() | undefined. %% A key name
 -type id() :: {bucket(), key()}.
--type vclock() :: binary(). %% An opaque vector clock
 -type content_type() :: string(). %% The media type of a value
 -type value() :: binary(). %% An opaque value
 -type contents() :: [{metadata(), value()}]. %% All metadata/value pairs in a `riakc_obj'.
@@ -90,12 +88,12 @@
 -type integer_index_id() :: {integer_index, string()}.
 -type integer_index_value() :: integer().
 -type integer_index() :: {integer_index_id(), [integer_index_value()]}.
--type secondary_index_id() :: binary_index_id() | integer_index_id().
 -type secondary_index_value() :: integer_index_value() | binary_index_value().
 -type secondary_index() :: binary_index() | integer_index().
 -type metadata_key() :: binary().
 -type metadata_value() :: binary().
 -type metadata_entry() :: {metadata_key(), metadata_value()}.
+
 -ifdef(pre17).
 -type metadata() :: dict(). %% Value metadata
 -else.
@@ -104,16 +102,6 @@
 -type tag() :: binary().
 -type link() :: {tag(), [id()]}.
 
--record(riakc_obj, {
-          bucket :: bucket(),
-          key :: key(),
-          vclock :: vclock() | undefined,
-          contents :: contents(),
-          updatemetadata :: metadata() | undefined,
-          updatevalue :: value() | undefined
-         }).
-
--type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
 -export_type([riakc_obj/0, bucket/0, key/0, vclock/0, contents/0, metadata/0, value/0,
               binary_index_id/0, binary_index/0, integer_index_id/0, integer_index/0, 
               secondary_index/0, metadata_key/0, metadata_value/0, metadata_entry/0]).
