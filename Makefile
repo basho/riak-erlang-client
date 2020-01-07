@@ -19,7 +19,7 @@ distclean:
 	$(REBAR) clean --all
 
 shell:
-	$(REBAR) shell --apps "riakc"
+	$(REBAR) shell
 
 release: compile
 ifeq ($(VERSION),)

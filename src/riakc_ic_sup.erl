@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author paulhunt
-%%% @copyright (C) 2019, <COMPANY>
+%%% @copyright (C) 2019, bet365
 %%% @doc
 %%%
 %%% @end
@@ -18,29 +18,33 @@
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
--define(WORKER_MOD, riakc_ic_worker).
+-define(BALCON_POOL_GS_MOD, riakc_ic_balcon_pool_gs).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
+-spec start_link() ->
+    {ok, pid()} | ignore | {error, term()}.
 start_link() ->
-    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+    RegistrationModule = riakc_config:get_registration_module(),
+    StatisticsModule = riakc_config:get_statistics_module(),
+    supervisor:start_link({local, ?SERVER}, ?MODULE, [RegistrationModule, StatisticsModule]).
 
 %%%===================================================================
 %%% Supervisor callbacks
 %%%===================================================================
-init([]) ->
-    Pools = application:get_env(riakc, pools),
-    PoolSpecs = get_pool_specs(Pools),
-    {ok, {{one_for_one, 10, 10}, PoolSpecs}}.
+init([RegistrationModule, StatisticsModule]) ->
+    PoolSpecs = pools_to_spec(RegistrationModule, StatisticsModule),
+    ChildSpecs = [] ++ PoolSpecs,
+    {ok, {{one_for_one, 1, 5}, ChildSpecs}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-get_pool_specs(undefined) ->
-    [];
-get_pool_specs({ok, Pools}) ->
-    lists:map(fun({Name, SizeArgs, WorkerArgs}) ->
-        PoolArgs = [{name, {local, Name}}, {worker_module, ?WORKER_MOD}] ++ SizeArgs,
-        poolboy:child_spec(Name, PoolArgs, WorkerArgs)
-    end, Pools).
+pools_to_spec(RegistrationModule, StatisticsModule) ->
+    ResourcesDict = RegistrationModule:create_pool_mapping(),
+    dict:fold(fun(PoolName, Resource, Acc) ->
+        Args = [PoolName, Resource, RegistrationModule, StatisticsModule],
+        MFA = {?BALCON_POOL_GS_MOD, start_link, [Args]},
+        [{PoolName, MFA, permanent, 5000, worker, [?BALCON_POOL_GS_MOD]} | Acc]
+    end, [], ResourcesDict).
