@@ -19,7 +19,7 @@
 -define(APP_NAME, riakc).
 -define(REGISTRATION_MODULE, registration_module).
 -define(STATISTICS_MODULE, statistics_module).
--define(POOL, pool).
+-define(POOL, pools).
 
 %%%===================================================================
 %%% API functions
