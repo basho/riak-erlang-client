@@ -45,6 +45,6 @@ pools_to_spec(RegistrationModule, StatisticsModule) ->
     ResourcesDict = RegistrationModule:create_pool_mapping(),
     dict:fold(fun(PoolName, Resource, Acc) ->
         Args = [PoolName, Resource, RegistrationModule, StatisticsModule],
-        MFA = {?BALCON_POOL_GS_MOD, start_link, [Args]},
+        MFA = {?BALCON_POOL_GS_MOD, start_link, Args},
         [{PoolName, MFA, permanent, 5000, worker, [?BALCON_POOL_GS_MOD]} | Acc]
     end, [], ResourcesDict).
