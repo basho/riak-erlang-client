@@ -13,13 +13,15 @@
 -export([
     get_registration_module/0, get_registration_module/1,
     get_statistics_module/0, get_statistics_module/1,
-    get_pools/0, get_pools/1
+    get_pools/0, get_pools/1,
+    get_healthcheck_args/0, get_healthcheck_args/1
 ]).
 
 -define(APP_NAME, riakc).
 -define(REGISTRATION_MODULE, registration_module).
 -define(STATISTICS_MODULE, statistics_module).
 -define(POOL, pools).
+-define(HEALTHCHECK_ARGS, healthcheck_args).
 
 %%%===================================================================
 %%% API functions
@@ -53,6 +55,16 @@ get_pools() ->
     list().
 get_pools(Default) ->
     get_config_var(?APP_NAME, ?POOL, Default).
+
+-spec get_healthcheck_args() ->
+    list() | undefined.
+get_healthcheck_args() ->
+    get_config_var(?APP_NAME, ?HEALTHCHECK_ARGS).
+
+-spec get_healthcheck_args(Default :: list()) ->
+    list().
+get_healthcheck_args(Default) ->
+    get_config_var(?APP_NAME, ?HEALTHCHECK_ARGS, Default).
 
 %%%===================================================================
 %%% Internal functions

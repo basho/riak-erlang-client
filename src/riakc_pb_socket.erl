@@ -78,7 +78,9 @@
          replace_coverage/3, replace_coverage/4,
          get_ring/1, get_ring/2,
          get_default_bucket_props/1, get_default_bucket_props/2,
-         get_nodes/1, get_nodes/2]).
+         get_nodes/1, get_nodes/2,
+         node_watcher_subscribe/1, node_watcher_subscribe/2,
+         node_watcher_unsubscribe/1, node_watcher_unsubscribe/2]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -1350,6 +1352,30 @@ get_nodes(Pid) ->
 get_nodes(Pid, Timeout) ->
     call_infinity(Pid, {req, rpbgetnodesreq, Timeout}).
 
+-spec node_watcher_subscribe(Pid :: pid()) ->
+    ok.
+node_watcher_subscribe(Pid) ->
+    Req = riak_pb_kv_codec:encode_node_watcher_subscribe_req(Pid),
+    call_infinity(Pid, {req, Req, default_timeout(node_watcher_subscribe_timeout)}).
+
+-spec node_watcher_subscribe(Pid :: pid(), Timeout :: non_neg_integer()) ->
+    ok.
+node_watcher_subscribe(Pid, Timeout) ->
+    Req = riak_pb_kv_codec:encode_node_watcher_subscribe_req(Pid),
+    call_infinity(Pid, {req, Req, Timeout}).
+
+-spec node_watcher_unsubscribe(Pid :: pid()) ->
+    ok.
+node_watcher_unsubscribe(Pid) ->
+    Req = riak_pb_kv_codec:encode_node_watcher_unsubscribe_req(Pid),
+    call_infinity(Pid, {req, Req, default_timeout(node_watcher_unsubscribe_timeout)}).
+
+-spec node_watcher_unsubscribe(Pid :: pid(), Timeout :: non_neg_integer()) ->
+    ok.
+node_watcher_unsubscribe(Pid, Timeout) ->
+    Req = riak_pb_kv_codec:encode_node_watcher_unsubscribe_req(Pid),
+    call_infinity(Pid, {req, Req, Timeout}).
+
 %% ====================================================================
 %% gen_server callbacks
 %% ====================================================================
@@ -2102,8 +2128,11 @@ process_response(#request{msg = rpbgetnodesreq}, Result, State) ->
     Nodes = riak_pb_kv_codec:decode_nodes(Result),
     {reply, {ok, Nodes}, State};
 process_response(undefined, Reply, State) when erlang:is_record(Reply, rpbnodewatcherupdate) ->
-    {Timestamp, Nodes} = riak_pb_kv_codec:decode_node_watcher_update(Reply),
-    riakc_ic:update_nodes_list(Timestamp, Nodes),
+    %% TODO - Implement functionality here.
+    {reply, ok, State};
+process_response(#request{msg = #rpbnodewatchersubscribereq{}}, rpbnodewatchersubscriberesp, State) ->
+    {reply, ok, State};
+process_response(#request{msg = #rpbnodewatcherunsubscribereq{}}, rpbnodewatcherunsubscriberesp, State) ->
     {reply, ok, State};
 process_response(Request, Reply, State) ->
     %% Unknown request/response combo

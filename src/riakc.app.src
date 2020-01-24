@@ -6,7 +6,8 @@
     {applications, [
         kernel,
         stdlib,
-        riak_pb
+        riak_pb,
+        poolboy
     ]},
     {registered, []},
     {mod, {riakc_app, []}},

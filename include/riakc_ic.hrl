@@ -79,3 +79,7 @@
 -define(GET_RING_TIMEOUT, get_ring_timeout).
 -define(GET_DEFAULT_BUCKET_PROPS_TIMEOUT, get_default_bucket_props_timeout).
 -define(GET_NODES_TIMEOUT, get_nodes_timeout).
+
+%% Error Reasons
+-define(INVALID_CONFIG, invalid_config).
+-define(NO_AVAILABLE_CONNECTIONS, no_available_connections).

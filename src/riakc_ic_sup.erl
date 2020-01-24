@@ -18,7 +18,7 @@
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
--define(BALCON_POOL_GS_MOD, riakc_ic_balcon_pool_gs).
+-define(BALCON_MOD, riakc_ic_balcon).
 
 %%%===================================================================
 %%% API functions
@@ -34,17 +34,17 @@ start_link() ->
 %%% Supervisor callbacks
 %%%===================================================================
 init([RegistrationModule, StatisticsModule]) ->
-    PoolSpecs = pools_to_spec(RegistrationModule, StatisticsModule),
-    ChildSpecs = [] ++ PoolSpecs,
+    BalConSpec = riakc_ic_balcon_spec(RegistrationModule, StatisticsModule),
+    ChildSpecs = [BalConSpec],
     {ok, {{one_for_one, 1, 5}, ChildSpecs}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-pools_to_spec(RegistrationModule, StatisticsModule) ->
+riakc_ic_balcon_spec(RegistrationModule, StatisticModule) ->
     ResourcesDict = RegistrationModule:create_pool_mapping(),
-    dict:fold(fun(PoolName, Resource, Acc) ->
-        Args = [PoolName, Resource, RegistrationModule, StatisticsModule],
-        MFA = {?BALCON_POOL_GS_MOD, start_link, Args},
-        [{PoolName, MFA, permanent, 5000, worker, [?BALCON_POOL_GS_MOD]} | Acc]
-    end, [], ResourcesDict).
+    Mappings = dict:fold(fun(PoolName, Resource, Acc) ->
+        [{PoolName, Resource}|Acc]
+                         end, [], ResourcesDict),
+    Args = [Mappings, RegistrationModule, StatisticModule],
+    {?BALCON_MOD, {?BALCON_MOD, start_link, Args}, permanent, 5000, worker, [?BALCON_MOD]}.
