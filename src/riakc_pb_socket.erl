@@ -2128,7 +2128,8 @@ process_response(#request{msg = rpbgetnodesreq}, Result, State) ->
     Nodes = riak_pb_kv_codec:decode_nodes(Result),
     {reply, {ok, Nodes}, State};
 process_response(undefined, Reply, State) when erlang:is_record(Reply, rpbnodewatcherupdate) ->
-    %% TODO - Implement functionality here.
+    Nodes = riak_pb_kv_codec:decode_node_watcher_update(Reply),
+    riakc_ic_information:update_nodes(Nodes),
     {reply, ok, State};
 process_response(#request{msg = #rpbnodewatchersubscribereq{}}, rpbnodewatchersubscriberesp, State) ->
     {reply, ok, State};

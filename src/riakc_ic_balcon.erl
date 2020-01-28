@@ -127,9 +127,6 @@ handle_info({'EXIT', Pid, normal}, State) ->
         {BucketOrPoolName, #pool_info{admin_pid = AdminPid}} <- AllMappings, AdminPid == Pid],
     {noreply, State};
 handle_info(_Info, State) ->
-    io:format("==========================================================================================="),
-    io:format("riakc_ic_balcon - info received:~n~n~p~n", [_Info]),
-    io:format("==========================================================================================="),
     {noreply, State}.
 
 terminate(_Reason, _State) ->

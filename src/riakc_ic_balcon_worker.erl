@@ -21,7 +21,9 @@
 -define(EXECUTE, execute).
 -define(CHANGE_CONNECTION, change_connection).
 
--record(state, {riak_connection}).
+-record(state, {
+    riak_connection :: pid()
+}).
 
 %%%===================================================================
 %%% API
@@ -75,6 +77,9 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Request, State) ->
     {noreply, State}.
 
+handle_info({'EXIT', Pid, _Reason}, State = #state{riak_connection = RiakConnection}) when RiakConnection == Pid ->
+    %% TODO - Add logging here.
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 

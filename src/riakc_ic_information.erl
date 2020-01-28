@@ -1,69 +1,116 @@
 %%%-------------------------------------------------------------------
 %%% @author paulhunt
-%%% @copyright (C) 2019, bet365
+%%% @copyright (C) 2020, bet365
 %%% @doc
 %%%
 %%% @end
-%%% Created : 30. Oct 2019 10:34
+%%% Created : 28. Jan 2020 09:22
 %%%-------------------------------------------------------------------
 -module(riakc_ic_information).
 -author("paulhunt").
 
--include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
 -include("riakc.hrl").
+-include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
+
+-behaviour(gen_server).
 
 %% API
--export([
-	get_hash_fun/1,
-	get_preflist/3,
-	get_bucket_type_info/1
-]).
+-export([start_link/0, update_nodes/1, get_preflist/3]).
 
--type riakc_preflist() :: list({{pos_integer(), atom()}, atom()}).
+%% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--define(DEFAULT_HASH_FUN, {riak_core_util, chash_std_keyfun}).
+-type riakc_preflist() :: list({{pos_integer(), atom(), atom()}}).
 
-%% ====================================================================
-%% API functions
-%% ====================================================================
--spec get_hash_fun(Bucket :: bucket() | bucket_and_type()) ->
-	{atom(), atom()}.
-get_hash_fun(_Bucket) ->
-	?DEFAULT_HASH_FUN.
+-define(SERVER, ?MODULE).
+-define(UPDATE_NODES, update_nodes).
+-define(GET_PREFLIST, get_preflist).
 
--spec get_preflist(Bucket :: binary(), Key :: binary(), Options :: list(term())) ->
+-record(state, {
+    ring                    :: riak_pb_ring(),
+    default_bucket_props    :: list({atom(), term()}),
+    nodes_list              :: list(atom())
+}).
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+-spec start_link() ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
+start_link() ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+
+-spec update_nodes(Nodes :: list(atom())) ->
+    ok.
+update_nodes(Nodes) ->
+    gen_server:cast(?SERVER, {?UPDATE_NODES, Nodes}),
+    ok.
+
+-spec get_preflist(Bucket :: bucket() | bucket_and_type(), Key :: binary(), Options :: list(term())) ->
     riakc_preflist().
 get_preflist(Bucket, Key, Options) ->
-    {ok, Ring} = riakc_ic:get_ring(),
-    {ok, DefaultBucketProps} = riakc_ic:get_default_bucket_props(),
-    {ok, UpNodes} = riakc_ic:get_up_nodes(),
-    handle_get_preflist(Bucket, Key, Options, Ring, DefaultBucketProps, UpNodes).
+    gen_server:call(?SERVER, {?GET_PREFLIST, Bucket, Key, Options}).
 
-%% TODO - Add functionality for the get_bucket_type_info function below.
-get_bucket_type_info(_Pid) ->
-	ok.
+%%%===================================================================
+%%% gen_server callbacks
+%%%===================================================================
+init([]) ->
+    State = get_init_information(),
+    {ok, State}.
 
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
-handle_get_preflist(Bucket, Key, Options, Ring, DefaultBucketProps, UpNodes) ->
+handle_call({?GET_PREFLIST, Bucket, Key, Options}, _From, State) ->
+    handle_get_preflist(Bucket, Key, Options, State),
+    {reply, ok, State};
+handle_call(_Request, _From, State) ->
+    {reply, ok, State}.
+
+handle_cast({?UPDATE_NODES, Nodes}, State) ->
+    {ok, NewState} = handle_update_nodes(Nodes, State),
+    {noreply, NewState};
+handle_cast(_Request, State) ->
+    {noreply, State}.
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+get_init_information() ->
+    %% Create connection here just to get things working and tested. Normally will be given an 'admin' connection to do this with.
+    {ok, Pid} = riakc_pb_socket:start_link("127.0.0.1", 10017),
+    {ok, Nodes} = riakc_pb_socket:get_nodes(Pid),
+    {ok, Ring} = riakc_pb_socket:get_ring(Pid),
+    {ok, DefaultBucketProps} = riakc_pb_socket:get_default_bucket_props(Pid),
+    #state{nodes_list = Nodes, ring = Ring, default_bucket_props = DefaultBucketProps}.
+
+handle_update_nodes(Nodes, State) ->
+    NewState = State#state{nodes_list = Nodes},
+    {ok, NewState}.
+
+handle_get_preflist(Bucket, Key, Options, State) ->
+    #state{ring = Ring, nodes_list = UpNodes, default_bucket_props = DefaultBucketProps} = State,
     BucketKey = {Bucket, Key},
     BucketProps = get_bucket_props(Bucket, Ring, DefaultBucketProps),
     ChRing = Ring#riak_pb_ring.chring,
     DocIdx = riakc_chash:chash_key(BucketKey),
-    BucketNval = get_option(n_val, BucketProps),
-    Nval = get_nval(Options, BucketNval),
-    SloppyQuorum = get_option(sloppy_quorum, Options),
+    Nval = get_nval(Options, BucketProps),
+    SloppyQuorum = proplists:get_value(sloppy_quorum, Options),
     Preflist2 = calculate_preflist(SloppyQuorum, DocIdx, Nval, ChRing, UpNodes),
     [IndexNode || {IndexNode, _Type} <- Preflist2].
 
-%% ====================================================================
-%% Helper functions
-%% ====================================================================
 get_bucket_props({<<"default">>, Name}, Ring, DefaultBucketProps) ->
     get_bucket_props(Name, Ring, DefaultBucketProps);
 get_bucket_props({_Type, _Name}, _Ring, DefaultBucketProps) ->
-    %% TODO - Report error or find way of getting bucket props for non-default buckets, as non default buckets aren't stored in ring.
+    %% TODO - Report error or find way of getting bucket props for non-default buckets, as non default buckets aren't
+    %% TODO         stored in ring. Potentially could create a get request for the bucket props, then store bucket
+    %% TODO         props for that bucket to be used for any other calls for that bucket.
     DefaultBucketProps;
 get_bucket_props(Bucket, Ring, DefaultBucketProps) ->
     Meta = case dict:find({bucket, Bucket}, Ring#riak_pb_ring.meta) of
@@ -79,22 +126,15 @@ get_bucket_props_1(Name, undefined, DefaultBucketProps) ->
 get_bucket_props_1(_Name, {ok, Bucket}, _DefaultBucketProps) ->
     Bucket.
 
-get_option(Name, Options) ->
-    case lists:keyfind(Name, 1, Options) of
-        {_, Val} ->
-            Val;
-        false ->
-            undefined
-    end.
-
-get_nval(Options, BucketNval) ->
-    case get_option(n_val, Options) of
+get_nval(Options, BucketProps) ->
+    BucketNval = proplists:get_value(n_val, BucketProps),
+    case proplists:get_value(n_val, Options) of
         undefined ->
             BucketNval;
-        Nval when erlang:is_integer(Nval) andalso Nval > 0 andalso Nval =< BucketNval ->
+        Nval when is_integer(Nval) andalso Nval > 0 andalso Nval =< BucketNval ->
             Nval;
         BadNval ->
-            {error, {n_val_violation, BadNval}}
+            {error, n_val_violation, BadNval}
     end.
 
 calculate_preflist(SloppyQuorum, DocIdx, Nval, ChRing, UpNodes) when SloppyQuorum == false ->
@@ -120,9 +160,7 @@ check_up([{Partition, Node} | Rest], UpNodes, Up, Pangs) ->
             check_up(Rest, UpNodes, Up, [{Partition, Node} | Pangs])
     end.
 
-find_fallbacks_chbin([], _Fallbacks, _UpNodes, Secondaries) ->
-    lists:reverse(Secondaries);
-find_fallbacks_chbin(_, done, _UpNodes, Secondaries) ->
+find_fallbacks_chbin(Pangs, Fallbacks, _UpNodes, Secondaries) when Pangs == [] orelse Fallbacks == done ->
     lists:reverse(Secondaries);
 find_fallbacks_chbin([{Partition, _Node} | Rest] = Pangs, Iterator, UpNodes, Secondaries) ->
     {_, FallbackNode} = riakc_chash:iterator_value(Iterator),
