@@ -17,7 +17,7 @@
 -export([start_link/3]).
 
 %% API Calls
--export([transaction/2, transaction/3, checkout/1, checkin/2]).
+-export([transaction/2, transaction/3, transaction_admin/2, transaction_admin/3, checkout/1, checkin/2]).
 
 %% Admin Calls
 -export([get_info/1, rebalance/1, get_pool_info/1]).
@@ -56,19 +56,29 @@
 %%% API
 %%%===================================================================
 -spec start_link(Mappings :: {atom(), list({atom(), list()})}, RegisterModule :: atom(), StatisticModule :: atom()) ->
-    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
+    {ok, pid()} | ignore | {error, term()}.
 start_link(Mappings, RegisterModule, StatisticModule) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [Mappings, RegisterModule, StatisticModule], []).
 
 -spec transaction(BucketOrPoolName :: bucket_or_pool_name(), Fun :: function()) ->
-    any() | {error, invalid_bucket_or_pool_name}.
+    any() | {error, term()}.
 transaction(BucketOrPoolName, Fun) ->
     handle_transaction(BucketOrPoolName, Fun).
 
 -spec transaction(BucketOrPoolName :: bucket_or_pool_name(), Fun :: function(), Timeout :: pos_integer()) ->
-    any() | {error, invalid_bucket_or_pool_name}.
+    any() | {error, term()}.
 transaction(BucketOrPoolName, Fun, Timeout) ->
     handle_transaction(BucketOrPoolName, Fun, Timeout).
+
+-spec transaction_admin(BucketOrPoolName :: bucket_or_pool_name(), Fun :: function()) ->
+    any() | {error, term()}.
+transaction_admin(BucketOrPoolName, Fun) ->
+    handle_transaction_admin(BucketOrPoolName, Fun).
+
+-spec transaction_admin(BucketOrPoolName :: bucket_or_pool_name(), Fun :: function(), Timeout :: pos_integer()) ->
+    any() | {error, term()}.
+transaction_admin(BucketOrPoolName, Fun, Timeout) ->
+    handle_transaction_admin(BucketOrPoolName, Fun, Timeout).
 
 -spec checkout(BucketOrPoolName :: bucket_or_pool_name()) ->
     pid() | {error, invalid_bucket_or_pool_name}.
@@ -211,6 +221,26 @@ handle_transaction(BucketOrPoolName, Fun, Timeout) ->
             {ok, PoolboyPid} = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
             WorkerFun = fun(WorkerPid) -> riakc_ic_balcon_worker:execute(WorkerPid, Fun) end,
             poolboy:transaction(PoolboyPid, WorkerFun, Timeout);
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+handle_transaction_admin(BucketOrPoolName, Fun) ->
+    case get_admin_pid(BucketOrPoolName) of
+        {ok, AdminPid} ->
+            {ok, AdminPoolboyPid} = riakc_ic_balcon_admin:get_admin_poolboy_pid(AdminPid),
+            WorkerFun = fun(WorkerPid) -> riakc_ic_balcon_worker:execute(WorkerPid, Fun) end,
+            poolboy:transaction(AdminPoolboyPid, WorkerFun);
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+handle_transaction_admin(BucketOrPoolName, Fun, Timeout) ->
+    case get_admin_pid(BucketOrPoolName) of
+        {ok, AdminPid} ->
+            {ok, AdminPoolboyPid} = riakc_ic_balcon_admin:get_admin_poolboy_pid(AdminPid),
+            WorkerFun = fun(WorkerPid) -> riakc_ic_balcon_worker:execute(WorkerPid, Fun) end,
+            poolboy:transaction(AdminPoolboyPid, WorkerFun, Timeout);
         {error, Reason} ->
             {error, Reason}
     end.

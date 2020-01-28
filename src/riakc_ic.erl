@@ -498,36 +498,36 @@ replace_coverage(Bucket, Cover, Other) ->
     {ok, tuple()} | {error, term()}.
 get_ring(PoolName) ->
     Fun = fun(Pid) -> riakc_pb_socket:get_ring(Pid) end,
-    riakc_ic_balcon:transaction(PoolName, Fun).
+    riakc_ic_balcon:transaction_admin(PoolName, Fun).
 
 -spec get_ring(PoolName :: atom(), Timeout :: timeout()) ->
     {ok, tuple()} | {error, term()}.
 get_ring(PoolName, Timeout) ->
-    riakc_ic_balcon:transaction(PoolName, fun(Pid) -> riakc_pb_socket:get_ring(Pid, Timeout) end).
+    riakc_ic_balcon:transaction_admin(PoolName, fun(Pid) -> riakc_pb_socket:get_ring(Pid, Timeout) end).
 
 
 %% Get Default Bucket Props API Functions
 -spec get_default_bucket_props(PoolName :: atom()) ->
     {ok, bucket_props()} | {error, term()}.
 get_default_bucket_props(PoolName) ->
-    riakc_ic_balcon:transaction(PoolName, fun(Pid) -> riakc_pb_socket:get_default_bucket_props(Pid) end).
+    riakc_ic_balcon:transaction_admin(PoolName, fun(Pid) -> riakc_pb_socket:get_default_bucket_props(Pid) end).
 
 -spec get_default_bucket_props(PoolName :: atom(), Timeout :: timeout()) ->
     {ok, bucket_props()} | {error, term()}.
 get_default_bucket_props(PoolName, Timeout) ->
-    riakc_ic_balcon:transaction(PoolName, fun(Pid) -> riakc_pb_socket:get_default_bucket_props(Pid, Timeout) end).
+    riakc_ic_balcon:transaction_admin(PoolName, fun(Pid) -> riakc_pb_socket:get_default_bucket_props(Pid, Timeout) end).
 
 
 %% Get Nodes API Functions
 -spec get_nodes(PoolName :: atom()) ->
     {ok, list(atom())} | {error, term()}.
 get_nodes(PoolName) ->
-    riakc_ic_balcon:transaction(PoolName, fun(Pid) -> riakc_pb_socket:get_nodes(Pid) end).
+    riakc_ic_balcon:transaction_admin(PoolName, fun(Pid) -> riakc_pb_socket:get_nodes(Pid) end).
 
 -spec get_nodes(PoolName :: atom(), Timeout :: timeout()) ->
     {ok, list(atom())} | {error, term()}.
 get_nodes(PoolName, Timeout) ->
-    riakc_ic_balcon:transaction(PoolName, fun(Pid) -> riakc_pb_socket:get_nodes(Pid, Timeout) end).
+    riakc_ic_balcon:transaction_admin(PoolName, fun(Pid) -> riakc_pb_socket:get_nodes(Pid, Timeout) end).
 
 
 %% List Search Indexes API Functions
