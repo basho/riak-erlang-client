@@ -104,6 +104,7 @@ get_pool_info(PoolName) ->
 %%%===================================================================
 init([Mappings, RegisterModule, StatisticModule]) ->
     process_flag(trap_exit, true),
+    %% TODO - Add 'admin connections' functionality, which uses connections specifically to send/receive admin requests.
     ets:new(?MAPPING_TABLE, [set, named_table, {read_concurrency, true}]),
     case init_balcon(Mappings, RegisterModule, StatisticModule) of
         {ok, State} ->
@@ -197,7 +198,7 @@ get_admin_pid(BucketOrPoolName) ->
 handle_transaction(BucketOrPoolName, Fun) ->
     case get_admin_pid(BucketOrPoolName) of
         {ok, AdminPid} ->
-            PoolboyPid = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
+            {ok, PoolboyPid} = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
             WorkerFun = fun(WorkerPid) -> riakc_ic_balcon_worker:execute(WorkerPid, Fun) end,
             poolboy:transaction(PoolboyPid, WorkerFun);
         {error, Reason} ->
@@ -207,7 +208,7 @@ handle_transaction(BucketOrPoolName, Fun) ->
 handle_transaction(BucketOrPoolName, Fun, Timeout) ->
     case get_admin_pid(BucketOrPoolName) of
         {ok, AdminPid} ->
-            PoolboyPid = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
+            {ok, PoolboyPid} = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
             WorkerFun = fun(WorkerPid) -> riakc_ic_balcon_worker:execute(WorkerPid, Fun) end,
             poolboy:transaction(PoolboyPid, WorkerFun, Timeout);
         {error, Reason} ->
@@ -217,7 +218,7 @@ handle_transaction(BucketOrPoolName, Fun, Timeout) ->
 handle_checkout(BucketOrPoolName) ->
     case get_admin_pid(BucketOrPoolName) of
         {ok, AdminPid} ->
-            PoolboyPid = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
+            {ok, PoolboyPid} = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
             poolboy:checkout(PoolboyPid);
         {error, Reason} ->
             {error, Reason}
@@ -226,7 +227,7 @@ handle_checkout(BucketOrPoolName) ->
 handle_checkin(BucketOrPoolName, Worker) ->
     case get_admin_pid(BucketOrPoolName) of
         {ok, AdminPid} ->
-            PoolboyPid = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
+            {ok, PoolboyPid} = riakc_ic_balcon_admin:get_poolboy_pid(AdminPid),
             poolboy:checkin(PoolboyPid, Worker);
         {error, Reason} ->
             {error, Reason}
