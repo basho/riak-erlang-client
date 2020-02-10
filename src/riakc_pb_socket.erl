@@ -1712,8 +1712,7 @@ aae_find_tombs(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
                     segment_filter(),
                     modified_range(),
                     change_method()) ->
-                        {ok, {keys, list({riakc_obj:key(), pos_integer()})}} |
-                        {error, any()}.
+                        {ok, non_neg_integer()} | {error, any()}.
 aae_reap_tombs(Pid,
                 BucketType, KeyRange,
                 SegmentFilter, ModifiedRange,
@@ -1793,8 +1792,7 @@ aae_reap_tombs(Pid,
                     segment_filter(),
                     modified_range(),
                     change_method()) ->
-                        {ok, {keys, list({riakc_obj:key(), pos_integer()})}} |
-                        {error, any()}.
+                        {ok, non_neg_integer()} | {error, any()}.
 aae_erase_keys(Pid,
                 BucketType, KeyRange,
                 SegmentFilter, ModifiedRange,
