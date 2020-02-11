@@ -49,6 +49,7 @@
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
          get/3, get/4, get/5,
+         fetch/2,
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
@@ -71,8 +72,10 @@
          get_index/4, get_index/5, get_index/6, get_index/7, %% @deprecated
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
          aae_merge_root/2, aae_merge_branches/3, aae_fetch_clocks/3,
-         aae_range_tree/7, aae_range_clocks/5, % aae_range_replkeys/5,
-         aae_find_keys/5, aae_object_stats/4,
+         aae_range_tree/7, aae_range_clocks/5, aae_range_replkeys/5,
+         aae_find_keys/5, aae_find_tombs/5, aae_reap_tombs/6, aae_erase_keys/6,
+         aae_list_buckets/1, aae_list_buckets/2,
+         aae_object_stats/4,
          cs_bucket_fold/3,
          default_timeout/1,
          tunnel/4,
@@ -137,6 +140,7 @@
 -type modified_range() :: {ts(), ts()} | all.
 -type ts() :: pos_integer().
 -type hash_method() :: pre_hash | {rehash, non_neg_integer()}.
+-type change_method() :: {job, pos_integer()}|local|count.
 
 -type tree_size() :: xxsmall| xsmall| small| medium| large| xlarge.
 
@@ -188,7 +192,8 @@
                                % certificate authentication
                 ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
                                % documentation.
-                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer()}).
+                reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer(),
+                silence_terminate_crash = false :: boolean()}).
 
 -export_type([address/0, portnum/0]).
 
@@ -260,12 +265,12 @@ is_connected(Pid, Timeout) ->
 
 %% @doc Ping the server
 %% @equiv ping(Pid, default_timeout(ping_timeout))
--spec ping(pid()) -> pong.
+-spec ping(pid()) -> pong|{error, timeout}.
 ping(Pid) ->
     call_infinity(Pid, {req, rpbpingreq, default_timeout(ping_timeout)}).
 
 %% @doc Ping the server specifying timeout
--spec ping(pid(), timeout()) -> pong.
+-spec ping(pid(), timeout()) -> pong|{error, timeout}.
 ping(Pid, Timeout) ->
     call_infinity(Pid, {req, rpbpingreq, Timeout}).
 
@@ -331,6 +336,15 @@ get(Pid, Bucket, Key, Options, Timeout) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = get_options(Options, #rpbgetreq{type =T, bucket = B, key = Key}),
     call_infinity(Pid, {req, Req, Timeout}).
+
+%% @doc Fetch replicated objects from a queue
+-spec fetch(pid(), binary()) ->
+                {ok, queue_empty}|
+                {ok|crc_wonky, {deleted, term(), binary()}|binary()}.
+fetch(Pid, QueueName) ->
+    Req = #rpbfetchreq{queuename = QueueName},
+    call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
+
 
 %% @doc Put the metadata/value in the object under bucket/key
 %% @equiv put(Pid, Obj, [])
@@ -1508,6 +1522,55 @@ aae_range_clocks(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
                                                         last_mod_end = MRHigh},
                         Timeout}).
 
+
+%% @doc aae_range_repllkeys
+%% Fold over a range of keys and queue up those keys to be replicated to the
+%% other site.  Once the keys are replicated the objects will then be fetched,
+%% as long as a site is consuming from that replication queue.
+%% Will return the number of keys which have been queued for replication.
+-spec aae_range_replkeys(pid(), riakc_obj:bucket(),
+                            key_range(), modified_range(),
+                            atom()) ->
+                                {ok, non_neg_integer()} |
+                                    {error, any()}.
+aae_range_replkeys(Pid, BucketType, KeyRange, ModifiedRange, QueueName) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    QN = atom_to_binary(QueueName, utf8),
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldreplkeysreq{type = T,
+                                                bucket = B,
+                                                key_range = KR,
+                                                start_key = SK,
+                                                end_key = EK,
+                                                modified_range = MR,
+                                                last_mod_start = MRLow,
+                                                last_mod_end = MRHigh,
+                                                queuename = QN},
+                        Timeout}).
+
+
 %% @doc aae_find_keys folds over the tictacaae store to get
 %% operational information. `Rhc' is the client. `Bucket' is the
 %% bucket to fold over. `KeyRange' as before is a two tuple of
@@ -1572,6 +1635,224 @@ aae_find_keys(Pid, BucketType, KeyRange, ModifiedRange, Query) ->
                         Timeout}).
 
 
+%% @doc find_tombs will find tombstone keys in a given bucket and key_range
+%% returning the key and delete_hash, where the delete_hash is an integer that
+%% can be used in a reap request. The SegmentFilter is intended to be used as a
+%% mechanism for assiting in scheduling work - a way for splitting out the
+%% process of finding/reaping tombstones into batches without having
+%% inconsistencies within the AAE trees.
+-spec aae_find_tombs(pid(),
+                    riakc_obj:bucket(), key_range(),
+                    segment_filter(),
+                    modified_range()) ->
+                        {ok, {keys, list({riakc_obj:key(), pos_integer()})}} |
+                        {error, any()}.
+aae_find_tombs(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    {SF, SFL, FTS} =
+        case SegmentFilter of
+            all ->
+                {false, [], undefined};
+            {SFL0, FTS0} ->
+                {true, SFL0, FTS0}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldfindtombsreq{type = T,
+                                                bucket = B,
+                                                key_range = KR,
+                                                start_key = SK,
+                                                end_key = EK,
+                                                segment_filter = SF,
+                                                id_filter = SFL,
+                                                filter_tree_size = FTS,
+                                                modified_range = MR,
+                                                last_mod_start = MRLow,
+                                                last_mod_end = MRHigh
+                                                },
+                        Timeout}).
+
+%% @doc reap_tombs will find tombstone keys in a given bucket and key_range.
+%% The SegmentFilter is intended to be used as a mechanism for assiting in
+%% scheduling work - a way for splitting out the process of finding/reaping
+%% tombstones into batches without having inconsistencies within the AAE trees.
+%% reap_tombs can be passed a change_method of count if a count of matching
+%% tombstones is all that is required - this is an alternative to running
+%% find_tombs and taking the length of the list.  To actually reap either
+%% `local` of `{ob, ID}` should be passed as the change_method.  Using `local`
+%% will reap each tombstone from the node local to which it is discovered,
+%% whch will have the impact of distributing the reap load across the cluster
+%% and increasing parallelisation of reap activity.  Otherwise a job id can be
+%% passed an a specific reaper will be started on the co-ordinating node of the
+%% query only.  The Id will be a positive integer used to identify this reap
+%% task in logs. 
+-spec aae_reap_tombs(pid(),
+                    riakc_obj:bucket(), key_range(),
+                    segment_filter(),
+                    modified_range(),
+                    change_method()) ->
+                        {ok, non_neg_integer()} | {error, any()}.
+aae_reap_tombs(Pid,
+                BucketType, KeyRange,
+                SegmentFilter, ModifiedRange,
+                ChangeMethod) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    {SF, SFL, FTS} =
+        case SegmentFilter of
+            all ->
+                {false, [], undefined};
+            {SFL0, FTS0} ->
+                {true, SFL0, FTS0}
+        end,
+    {CM0, JobID} =
+        case ChangeMethod of
+            {job, ID} when is_integer(ID) ->
+                {job, ID};
+            count ->
+                {count, undefined};
+            local ->
+                {local, undefined}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldreaptombsreq{type = T,
+                                                bucket = B,
+                                                key_range = KR,
+                                                start_key = SK,
+                                                end_key = EK,
+                                                segment_filter = SF,
+                                                id_filter = SFL,
+                                                filter_tree_size = FTS,
+                                                modified_range = MR,
+                                                last_mod_start = MRLow,
+                                                last_mod_end = MRHigh,
+                                                change_method = CM0,
+                                                job_id = JobID
+                                                },
+                        Timeout}).
+
+%% @doc erase_keys will find keys in a given bucket and key_range.
+%% The SegmentFilter is intended to be used as a mechanism for assiting in
+%% scheduling work - a way for splitting out the process of finding/reaping
+%% tombstones into batches without having inconsistencies within the AAE trees.
+%% erase_keys can be passed a change_method of count if a count of matching
+%% keys is all that is required - this is an alternative to running
+%% find_keys and taking the length of the list.  To actually erase the object
+%% either `local` of `{ob, ID}` should be passed as the change_method.  Using
+%% `local` will delete each object from the node local to which it is
+%% discovered, which will have the impact of distributing the delete load
+%% across the cluster and increasing parallelisation of delete activity. 
+%% Otherwise a job id can be passed an a specific eraser process will be
+%% started on the co-ordinating node of the query only.  The Id will be a
+%% positive integer used to identify this erase task in logs. 
+-spec aae_erase_keys(pid(),
+                    riakc_obj:bucket(), key_range(),
+                    segment_filter(),
+                    modified_range(),
+                    change_method()) ->
+                        {ok, non_neg_integer()} | {error, any()}.
+aae_erase_keys(Pid,
+                BucketType, KeyRange,
+                SegmentFilter, ModifiedRange,
+                ChangeMethod) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    {SF, SFL, FTS} =
+        case SegmentFilter of
+            all ->
+                {false, [], undefined};
+            {SFL0, FTS0} ->
+                {true, SFL0, FTS0}
+        end,
+    {CM0, JobID} =
+        case ChangeMethod of
+            {job, ID} when is_integer(ID) ->
+                {job, ID};
+            count ->
+                {count, undefined};
+            local ->
+                {local, undefined}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefolderasekeysreq{type = T,
+                                                bucket = B,
+                                                key_range = KR,
+                                                start_key = SK,
+                                                end_key = EK,
+                                                segment_filter = SF,
+                                                id_filter = SFL,
+                                                filter_tree_size = FTS,
+                                                modified_range = MR,
+                                                last_mod_start = MRLow,
+                                                last_mod_end = MRHigh,
+                                                change_method = CM0,
+                                                job_id = JobID
+                                                },
+                        Timeout}).
+
 %% @doc aae_object_stats folds over the tictacaae store to get
 %% operational information. `Rhc' is the client. `Bucket' is the
 %% bucket to fold over. `KeyRange' as before is a two tuple of
@@ -1631,6 +1912,24 @@ aae_object_stats(Pid, BucketType, KeyRange, ModifiedRange) ->
                                                     last_mod_end = MRHigh},
                         Timeout}).
 
+%% @doc
+%% List all the buckets with references in the AAE store.  For reasonable 
+%% (e.g. < o(1000)) this should be quick and efficient unless using the
+%% leveled_so parallel store.  A minimum n_val can be passed if known.  If
+%% there are buckets (with keys) below the minimum n_val they may not be
+%% detecting in the query.  Will default to 1.
+-spec aae_list_buckets(pid()) -> list(riakc_obj:bucket()).
+aae_list_buckets(Pid) ->
+    Timeout = default_timeout(get_coverage_timeout),
+    call_infinity(Pid, {req, #rpbaaefoldlistbucketsreq{}, Timeout}).
+
+-spec aae_list_buckets(pid(), pos_integer()) -> list(riakc_obj:bucket()).
+aae_list_buckets(Pid, MinNVal) when is_integer(MinNVal), MinNVal > 0 ->
+    Timeout = default_timeout(get_coverage_timeout),
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldlistbucketsreq{n_val = MinNVal},
+                        Timeout}).
 
 %% ====================================================================
 %% gen_server callbacks
@@ -1645,7 +1944,12 @@ init([Address, Port, Options]) ->
                                           queue = queue:new()}),
     case connect(State) of
         {error, Reason} when State#state.auto_reconnect /= true ->
-            {stop, {tcp, Reason}};
+            case State#state.silence_terminate_crash of
+                true ->
+                    {stop, normal};
+                _ ->
+                    {stop, {tcp, Reason}}
+            end;
         {error, _Reason} ->
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {ok, State};
@@ -1820,7 +2124,9 @@ parse_options([{cacertfile, File}|Options], State) ->
 parse_options([{keyfile, File}|Options], State) ->
     parse_options(Options, State#state{keyfile=File});
 parse_options([{ssl_opts, Opts}|Options], State) ->
-    parse_options(Options, State#state{ssl_opts=Opts}).
+    parse_options(Options, State#state{ssl_opts=Opts});
+parse_options([{silence_terminate_crash,Bool}|Options], State) ->
+    parse_options(Options, State#state{silence_terminate_crash=Bool}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -2031,6 +2337,23 @@ process_response(#request{msg = #rpbgetreq{type = Type, bucket = Bucket, key = K
     Contents = riak_pb_kv_codec:decode_contents(RpbContents),
     B = maybe_make_bucket_type(Type, Bucket),
     {reply, {ok, riakc_obj:new_obj(B, Key, Vclock, Contents)}, State};
+
+%% rpbfetchreq
+process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchresp{queue_empty = true}, State) ->
+    {reply, {ok, queue_empty}, State};
+process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchresp{deleted = true, 
+                                crc_check = CRC,
+                                replencoded_object = ObjBin,
+                                deleted_vclock = VclockBin}, State) ->
+    {reply,
+        {crc_check(CRC,ObjBin), {deleted, VclockBin, ObjBin}},
+        State};
+process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchresp{crc_check = CRC,
+                                replencoded_object = ObjBin}, State) ->
+    {reply, {crc_check(CRC,ObjBin), ObjBin}, State};
 
 %% rpbputreq
 process_response(#request{msg = #rpbputreq{}},
@@ -2272,11 +2595,42 @@ process_response(#request{msg = #rpbaaefoldfindkeysreq{}},
     {reply,
         {ok, {keys, lists:map(fun unpack_keycount_fun/1, KeysCount)}},
         State};
+process_response(#request{msg = #rpbaaefoldfindtombsreq{}},
+                    #rpbaaefoldkeycountresp{keys_count = KeysDH},
+                    State) ->
+    %% In this case the integer value in each entry is not a count but a
+    %% delete hash
+    {reply,
+        {ok, {keys, lists:map(fun unpack_keycount_fun/1, KeysDH)}},
+        State};
+process_response(#request{msg = #rpbaaefoldreaptombsreq{}},
+                    #rpbaaefoldkeycountresp{response_type = ReapTag,
+                                            keys_count = [ReapCount]},
+                    State) ->
+    true = <<"reap_tombs">> == ReapTag,
+    true = <<"dispatched_count">> == ReapCount#rpbkeyscount.tag,
+    {reply, {ok, ReapCount#rpbkeyscount.count}, State};
+process_response(#request{msg = #rpbaaefolderasekeysreq{}},
+                    #rpbaaefoldkeycountresp{response_type = EraseTag,
+                                            keys_count = [ReapCount]},
+                    State) ->
+    true = <<"erase_keys">> == EraseTag,
+    true = <<"dispatched_count">> == ReapCount#rpbkeyscount.tag,
+    {reply, {ok, ReapCount#rpbkeyscount.count}, State};
+process_response(#request{msg = #rpbaaefoldreplkeysreq{}},
+                    #rpbaaefoldkeycountresp{keys_count = [DispatchCount]},
+                    State) ->
+    true = <<"dispatched_count">> == DispatchCount#rpbkeyscount.tag,
+    {reply, {ok, DispatchCount#rpbkeyscount.count}, State};
 process_response(#request{msg = #rpbaaefoldobjectstatsreq{}},
                     #rpbaaefoldkeycountresp{keys_count = KeysCount},
                     State) ->
     RawStats = lists:map(fun unpack_keycount_fun/1, KeysCount),
     {reply, {ok, {stats, stats_output(RawStats)}}, State};
+process_response(#request{msg = #rpbaaefoldlistbucketsreq{}},
+                    #rpbaaefoldlistbucketsresp{bucket_list = BucketList},
+                    State) ->
+    {reply, {ok, lists:map(fun unpack_bucket/1, BucketList)}, State};
 
 process_response(#request{msg = #dtfetchreq{}}, #dtfetchresp{}=Resp,
                  State) ->
@@ -2420,6 +2774,14 @@ response_type(true, _ReturnBody) ->
 response_type(_ReturnTerms, _ReturnBody) ->
     keys.
 
+
+unpack_bucket(RpbAaeFoldBucket) ->
+    case RpbAaeFoldBucket#rpbaaefoldbucket.type of
+        undefined ->
+            RpbAaeFoldBucket#rpbaaefoldbucket.bucket;
+        T ->
+            {T, RpbAaeFoldBucket#rpbaaefoldbucket.bucket}
+    end.
 
 unpack_keyclock_fun(RpbKeysClock) ->
     case RpbKeysClock#rpbkeysvalue.type of
@@ -2718,7 +3080,12 @@ disconnect(State) ->
             erlang:send_after(State#state.reconnect_interval, self(), reconnect),
             {noreply, increase_reconnect_interval(NewState)};
         false ->
-            {stop, disconnected, NewState}
+            case State#state.silence_terminate_crash of
+                true ->
+                    {stop, normal, NewState};
+                _ ->
+                    {stop, disconnected, NewState}
+            end
     end.
 
 %% Double the reconnect interval up to the maximum
@@ -2809,6 +3176,12 @@ remove_queued_request(Ref, State) ->
             {reply, Reply, NewState} = on_timeout(Req, State),
             _ = send_caller(Reply, Req),
             NewState#state{queue = queue:from_list(L2)}
+    end.
+
+crc_check(CRC, Bin) ->
+    case erlang:crc32(Bin) of
+        CRC -> ok;
+        _ -> crc_wonky
     end.
 
 %% @private
