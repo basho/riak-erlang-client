@@ -2172,6 +2172,9 @@ get_options([{n_val, N} | Rest], Req)
 get_options([{sloppy_quorum, Bool} | Rest], Req)
   when Bool == true; Bool == false ->
     get_options(Rest, Req#rpbgetreq{sloppy_quorum = Bool});
+get_options([{node_confirms, NodeConfirms} | Rest], Req) ->
+    NCOpt = riak_pb_kv_codec:encode_quorum(NodeConfirms),
+    get_options(Rest, Req#rpbgetreq{node_confirms = NCOpt});
 get_options([{_, _} | _Rest], _Req) ->
     erlang:error(badarg).
 
@@ -2285,6 +2288,9 @@ counter_val_options([{r, R} | Rest], Req) ->
     counter_val_options(Rest, Req#rpbcountergetreq{r=riak_pb_kv_codec:encode_quorum(R)});
 counter_val_options([{pr, PR} | Rest], Req) ->
     counter_val_options(Rest, Req#rpbcountergetreq{pr=riak_pb_kv_codec:encode_quorum(PR)});
+counter_val_options([{node_confirms, NodeConfirms} | Rest], Req) ->
+    NCOpt = riak_pb_kv_codec:encode_quorum(NodeConfirms),
+    counter_val_options(Rest, Req#rpbcountergetreq{node_confirms = NCOpt});
 counter_val_options([_ | _Rest], _Req) ->
     erlang:error(badarg).
 
