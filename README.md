@@ -602,7 +602,7 @@ As expected, the link information for `bob` is returned.
 
 Create a qfun that returns the size of the record and feed this into the existing reduce function `riak_kv_mapreduce:reduce_sum` to get total size.
 
-    6> RecSize = fun(G, _, _) -> [byte_size(riak_object:get_value(G))] end.
+    6> RecSize = fun(G, _, _) -> [byte_size(riakc_obj:get_value(G))] end.
     #Fun<erl_eval.18.82930912>
     7> {ok, [{N2, R2}]} = riakc_pb_socket:mapred(Pid,
                 {index, <<"mr">>, {integer_index, "age"}, 20, 30},
