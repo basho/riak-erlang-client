@@ -37,6 +37,7 @@
 -define(ENTRY, binary-unit:176).
 -define(RINGTOP, erlang:trunc(math:pow(2, 160) - 1)).
 
+-define(is_bucket(Bucket), is_binary(Bucket) orelse (is_tuple(Bucket) andalso is_binary(element(1, Bucket)) andalso is_binary(element(2, Bucket)))).
 -define(is_chashbin(Record), erlang:is_record(Record, chashbin)).
 
 %% ====================================================================
@@ -44,7 +45,7 @@
 %% ====================================================================
 -spec chash_key({Bucket :: binary(), Key :: binary()}) ->
     binary().
-chash_key({Bucket, Key}) when erlang:is_binary(Bucket) andalso erlang:is_binary(Key) ->
+chash_key({Bucket, Key}) when ?is_bucket(Bucket) andalso erlang:is_binary(Key) ->
     BinaryBucketKey = erlang:term_to_binary({Bucket, Key}),
     crypto:hash(sha, BinaryBucketKey).
 
