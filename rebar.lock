@@ -1,0 +1,8 @@
+[{<<"hamcrest">>,
+  {git,"https://github.com/basho/hamcrest-erlang.git",
+       {ref,"ad3dbab419762fc2d5821abb88b989da006b85c6"}},
+  1},
+ {<<"riak_pb">>,
+  {git,"https://github.com/basho/riak_pb",
+       {ref,"08771aba2ce4935b715d32d1b92555efdc3da994"}},
+  0}].

@@ -2236,6 +2236,7 @@ start_tls(State=#state{sock=Sock}) ->
     ok = gen_tcp:send(Sock, <<StartTLSCode:8>>),
     receive
         {tcp_error, Sock, Reason} ->
+            disconnect(State),
             {error, Reason};
         {tcp_closed, Sock} ->
             {error, closed};
@@ -2256,6 +2257,7 @@ start_tls(State=#state{sock=Sock}) ->
                             ok = ssl:setopts(SSLSock, [{active, once}]),
                             start_auth(State#state{sock=SSLSock, transport=ssl});
                         {error, Reason2} ->
+                            disconnect(State),
                             {error, Reason2}
                     end;
                 #rpberrorresp{} ->
@@ -2265,6 +2267,7 @@ start_tls(State=#state{sock=Sock}) ->
                     %% man-in-the-middle proxy that presents insecure
                     %% communication to the client, but does secure
                     %% communication to the server.
+                    disconnect(State),
                     {error, no_security}
             end
     end.
@@ -2274,6 +2277,7 @@ start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
                                                          password=Pass})),
     receive
         {ssl_error, Sock, Reason} ->
+            disconnect(State),
             {error, Reason};
         {ssl_closed, Sock} ->
             {error, closed};
@@ -2284,6 +2288,7 @@ start_auth(State=#state{credentials={User,Pass}, sock=Sock}) ->
                     ok = ssl:setopts(Sock, [{active, once}]),
                     {ok, State};
                 #rpberrorresp{} = Err ->
+                    disconnect(State),
                     fmt_err_msg(Err)
             end
     end.
