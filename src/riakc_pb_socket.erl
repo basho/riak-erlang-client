@@ -295,7 +295,11 @@ get_server_info(Pid, Timeout) ->
 %% @doc Get bucket/key from the server.
 %%      Will return {error, notfound} if the key is not on the server.
 %% @equiv get(Pid, Bucket, Key, [], default_timeout(get_timeout))
--spec get(pid(), bucket() | bucket_and_type(), key()) -> {ok, riakc_obj()} | {error, term()}.
+-spec get(pid(), bucket() | bucket_and_type(), key()) ->
+    {ok, riakc_obj()}
+    | {error, term()}
+    | {error, notfound, riakc_obj:vclock()}
+    | unchanged.
 get(Pid, Bucket, Key) ->
     get(Pid, Bucket, Key, [], default_timeout(get_timeout)).
 
@@ -303,7 +307,7 @@ get(Pid, Bucket, Key) ->
 %%      Will return {error, notfound} if the key is not on the server.
 %% @equiv get(Pid, Bucket, Key, Options, Timeout)
 -spec get(pid(), bucket() | bucket_and_type(), key(), TimeoutOrOptions::timeout() |  get_options()) ->
-                 {ok, riakc_obj()} | {error, term()} | unchanged.
+                 {ok, riakc_obj()} | {error, term()} | {error, notfound, riakc_obj:vclock()} | unchanged.
 get(Pid, Bucket, Key, Timeout) when is_integer(Timeout); Timeout =:= infinity ->
     get(Pid, Bucket, Key, [], Timeout);
 get(Pid, Bucket, Key, Options) ->
@@ -314,7 +318,7 @@ get(Pid, Bucket, Key, Options) ->
 %%      <code>{if_modified, Vclock}</code> option is specified and the
 %%      object is unchanged.
 -spec get(pid(), bucket() | bucket_and_type(), key(), get_options(), timeout()) ->
-                 {ok, riakc_obj()} | {error, term()} | unchanged.
+                 {ok, riakc_obj()} | {error, term()} | {error, notfound, riakc_obj:vclock()}  | unchanged.
 get(Pid, Bucket, Key, Options, Timeout) ->
     {T, B} = maybe_bucket_type(Bucket),
     Req = get_options(Options, #rpbgetreq{type =T, bucket = B, key = Key}),
