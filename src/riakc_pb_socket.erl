@@ -71,7 +71,8 @@
          search/3, search/4, search/5, search/6,
          get_index/4, get_index/5, get_index/6, get_index/7, %% @deprecated
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
-         aae_merge_root/2, aae_merge_branches/3, aae_fetch_clocks/3,
+         aae_merge_root/2, aae_merge_branches/3,
+         aae_fetch_clocks/3, aae_fetch_clocks/4,
          aae_range_tree/7, aae_range_clocks/5, aae_range_replkeys/5,
          aae_find_keys/5, aae_find_tombs/5, aae_reap_tombs/6, aae_erase_keys/6,
          aae_list_buckets/1, aae_list_buckets/2,
@@ -1191,12 +1192,21 @@ default_timeout(OpTimeout) ->
         {ok, EnvTimeout} ->
             EnvTimeout;
         undefined ->
-            case application:get_env(riakc, timeout) of
-                {ok, Timeout} ->
-                    Timeout;
-                undefined ->
-                    ?DEFAULT_PB_TIMEOUT
-            end
+            modified_default(OpTimeout)
+    end.
+
+%% @doc
+%% Change the default for those that will almost certainly require a longer
+%% timeout
+-spec modified_default(timeout_name()) -> timeout().
+modified_default(aaefold_timeout) ->
+    ?DEFAULT_AAEFOLD_TIMEOUT;
+modified_default(_) ->
+    case application:get_env(riakc, timeout) of
+        {ok, Timeout} ->
+            Timeout;
+        undefined ->
+            ?DEFAULT_PB_TIMEOUT
     end.
 
 %% @doc Send a pre-encoded msg over the protocol buffer connection
@@ -1346,7 +1356,7 @@ replace_coverage(Pid, Bucket, Cover, Other) ->
                             {ok, {root, binary()}} |
                             {error, any()}.
 aae_merge_root(Pid, NVal) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     call_infinity(Pid,
                     {req,
                         #rpbaaefoldmergerootnvalreq{n_val = NVal},
@@ -1361,7 +1371,7 @@ aae_merge_root(Pid, NVal) ->
                                 {ok, {branches, [{BranchId::integer(), Branch::binary()}]}} |
                                 {error, any()}.
 aae_merge_branches(Pid, NVal, Branches) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     call_infinity(Pid,
                     {req,
                         #rpbaaefoldmergebranchnvalreq{n_val = NVal,
@@ -1380,12 +1390,32 @@ aae_merge_branches(Pid, NVal, Branches) ->
                                         binary()}]}} |
                             {error, any()}.
 aae_fetch_clocks(Pid, NVal, Segments) ->
-    Timeout = default_timeout(get_coverage_timeout),
-    call_infinity(Pid,
-                    {req,
-                        #rpbaaefoldfetchclocksnvalreq{n_val = NVal,
-                                                        id_filter = Segments},
-                        Timeout}).
+    aae_fetch_clocks(Pid, NVal, Segments, all).
+
+-spec aae_fetch_clocks(pid(),
+                        NVal::pos_integer(),
+                        Segments::list(pos_integer()),
+                        ModifiedRange::modified_range()|all) ->
+                            {ok, {keysclocks,
+                                    [{{riakc_obj:bucket(),
+                                        riakc_obj:key()},
+                                        binary()}]}} |
+                            {error, any()}.
+aae_fetch_clocks(Pid, NVal, Segments, ModifiedRange) ->
+    Timeout = default_timeout(aaefold_timeout),
+    Req =
+        case ModifiedRange of
+            all ->
+                #rpbaaefoldfetchclocksnvalreq{n_val = NVal,
+                                                id_filter = Segments};
+            {MRL, MRH} ->
+                #rpbaaefoldfetchclocksnvalreq{n_val = NVal,
+                                                id_filter = Segments,
+                                                modified_range = true,
+                                                last_mod_start = MRL,
+                                                last_mod_end = MRH}
+        end,
+    call_infinity(Pid, {req, Req, Timeout}).
 
 %% @doc generate a tictac tree by folding over a range of keys
 %% in`Bucket'. The fold can be limited to the keys in `KeyRange' which
@@ -1414,7 +1444,7 @@ aae_fetch_clocks(Pid, NVal, Segments) ->
                             {ok, {tree, Tree::any()}} | {error, any()}.
 aae_range_tree(Pid, BucketType, KeyRange, TreeSize,
                 SegmentFilter, ModifiedRange, HashMethod) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1478,7 +1508,7 @@ aae_range_tree(Pid, BucketType, KeyRange, TreeSize,
                                         binary()}]}} |
                             {error, any()}.
 aae_range_clocks(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1534,7 +1564,7 @@ aae_range_clocks(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
                                 {ok, non_neg_integer()} |
                                     {error, any()}.
 aae_range_replkeys(Pid, BucketType, KeyRange, ModifiedRange, QueueName) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1597,7 +1627,7 @@ aae_range_replkeys(Pid, BucketType, KeyRange, ModifiedRange, QueueName) ->
                         {error, any()} when
                     Query :: {sibling_count, pos_integer()} | {object_size, pos_integer()}.
 aae_find_keys(Pid, BucketType, KeyRange, ModifiedRange, Query) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1648,7 +1678,7 @@ aae_find_keys(Pid, BucketType, KeyRange, ModifiedRange, Query) ->
                         {ok, {keys, list({riakc_obj:key(), pos_integer()})}} |
                         {error, any()}.
 aae_find_tombs(Pid, BucketType, KeyRange, SegmentFilter, ModifiedRange) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1717,7 +1747,7 @@ aae_reap_tombs(Pid,
                 BucketType, KeyRange,
                 SegmentFilter, ModifiedRange,
                 ChangeMethod) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1797,7 +1827,7 @@ aae_erase_keys(Pid,
                 BucketType, KeyRange,
                 SegmentFilter, ModifiedRange,
                 ChangeMethod) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1878,7 +1908,7 @@ aae_erase_keys(Pid,
                             {ok, {stats, list({Key::atom(), Val::atom() | list()})}} |
                             {error, any()}.
 aae_object_stats(Pid, BucketType, KeyRange, ModifiedRange) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     {KR, SK, EK} =
         case KeyRange of
             all ->
@@ -1920,12 +1950,12 @@ aae_object_stats(Pid, BucketType, KeyRange, ModifiedRange) ->
 %% detecting in the query.  Will default to 1.
 -spec aae_list_buckets(pid()) -> list(riakc_obj:bucket()).
 aae_list_buckets(Pid) ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     call_infinity(Pid, {req, #rpbaaefoldlistbucketsreq{}, Timeout}).
 
 -spec aae_list_buckets(pid(), pos_integer()) -> list(riakc_obj:bucket()).
 aae_list_buckets(Pid, MinNVal) when is_integer(MinNVal), MinNVal > 0 ->
-    Timeout = default_timeout(get_coverage_timeout),
+    Timeout = default_timeout(aaefold_timeout),
     call_infinity(Pid,
                     {req,
                         #rpbaaefoldlistbucketsreq{n_val = MinNVal},
