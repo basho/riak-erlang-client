@@ -190,7 +190,7 @@
         {fl, [binary()]} |           %% Return fields limit (for ids only, generally)
         {presort, binary()}.         %% Presor (key / score)
 
--type search_doc() :: [{binary(), binary()}].
+-type search_doc() :: {binary(), [{binary(), binary()}]}.
 -type search_maxscore() :: float().
 -type search_number_found() :: non_neg_integer().
 
