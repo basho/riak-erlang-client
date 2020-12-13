@@ -419,124 +419,6 @@ integration_tests() ->
                  ?assertEqual(pong, riakc_pb_socket:ping(Pid, undefined))
              end)},
 
-     {"javascript_source_map_test()",
-      ?_test(begin
-                 riakc_test_utils:reset_riak(),
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 B = <<"bucket">>,
-                 K = <<"foo">>,
-                 O=riakc_obj:new(B, K),
-                 riakc_pb_socket:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
-
-                 ?assertEqual({ok, [{0, [2]}]},
-                              riakc_pb_socket:mapred(Pid,
-                                             [{B, K}],
-                                             [{map, {jsanon, <<"function (v) { return [JSON.parse(v.values[0].data)]; }">>},
-                                               undefined, true}]))
-             end)},
-
-     {"javascript_named_map_test()",
-      ?_test(begin
-                 riakc_test_utils:reset_riak(),
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 B = <<"bucket">>,
-                 K = <<"foo">>,
-                 O=riakc_obj:new(B, K),
-                 riakc_pb_socket:put(Pid, riakc_obj:update_value(O, <<"99">>, "application/json")),
-
-                 ?assertEqual({ok, [{0, [99]}]},
-                              riakc_pb_socket:mapred(Pid,
-                                             [{B, K}],
-                                             [{map, {jsfun, <<"Riak.mapValuesJson">>},
-                                               undefined, true}]))
-             end)},
-
-     {"javascript_source_map_reduce_test()",
-      ?_test(begin
-                 riakc_test_utils:reset_riak(),
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 Store = fun({K,V}) ->
-                                 O=riakc_obj:new(<<"bucket">>, K),
-                                 riakc_pb_socket:put(Pid,riakc_obj:update_value(O, V, "application/json"))
-                         end,
-                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
-                                      {<<"bar">>, <<"3">>},
-                                      {<<"baz">>, <<"4">>}]],
-
-                 ?assertEqual({ok, [{1, [3]}]},
-                              riakc_pb_socket:mapred(Pid,
-                                             [{<<"bucket">>, <<"foo">>},
-                                              {<<"bucket">>, <<"bar">>},
-                                              {<<"bucket">>, <<"baz">>}],
-                                             [{map, {jsanon, <<"function (v) { return [1]; }">>},
-                                               undefined, false},
-                                              {reduce, {jsanon,
-                                                        <<"function(v) {
-                                                             total = v.reduce(
-                                                               function(prev,curr,idx,array) {
-                                                                 return prev+curr;
-                                                               }, 0);
-                                                             return [total];
-                                                           }">>},
-                                               undefined, true}]))
-             end)},
-
-     {"javascript_named_map_reduce_test()",
-      ?_test(begin
-                 riakc_test_utils:reset_riak(),
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 Store = fun({K,V}) ->
-                                 O=riakc_obj:new(<<"bucket">>, K),
-                                 riakc_pb_socket:put(Pid,riakc_obj:update_value(O, V, "application/json"))
-                         end,
-                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
-                                      {<<"bar">>, <<"3">>},
-                                      {<<"baz">>, <<"4">>}]],
-
-                 ?assertEqual({ok, [{1, [9]}]},
-                              riakc_pb_socket:mapred(Pid,
-                                             [{<<"bucket">>, <<"foo">>},
-                                              {<<"bucket">>, <<"bar">>},
-                                              {<<"bucket">>, <<"baz">>}],
-                                             [{map, {jsfun, <<"Riak.mapValuesJson">>}, undefined, false},
-                                              {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
-             end)},
-
-     {"javascript_bucket_map_reduce_test()",
-      ?_test(begin
-                 riakc_test_utils:reset_riak(),
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 Store = fun({K,V}) ->
-                                 O=riakc_obj:new(<<"bucket">>, K),
-                                 riakc_pb_socket:put(Pid,riakc_obj:update_value(O, V, "application/json"))
-                         end,
-                 [Store(KV) || KV <- [{<<"foo">>, <<"2">>},
-                                      {<<"bar">>, <<"3">>},
-                                      {<<"baz">>, <<"4">>}]],
-
-                 ?assertEqual({ok, [{1, [9]}]},
-                              riakc_pb_socket:mapred_bucket(Pid, <<"bucket">>,
-                                                    [{map, {jsfun, <<"Riak.mapValuesJson">>}, undefined, false},
-                                                     {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
-             end)},
-
-     {"javascript_arg_map_reduce_test()",
-      ?_test(begin
-                 riakc_test_utils:reset_riak(),
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 O=riakc_obj:new(<<"bucket">>, <<"foo">>),
-                 riakc_pb_socket:put(Pid, riakc_obj:update_value(O, <<"2">>, "application/json")),
-                 ?assertEqual({ok, [{1, [10]}]},
-                              riakc_pb_socket:mapred(Pid,
-                                             [{{<<"bucket">>, <<"foo">>}, 5},
-                                              {{<<"bucket">>, <<"foo">>}, 10},
-                                              {{<<"bucket">>, <<"foo">>}, 15},
-                                              {{<<"bucket">>, <<"foo">>}, -15},
-                                              {{<<"bucket">>, <<"foo">>}, -5}],
-                                             [{map, {jsanon, <<"function(v, arg) { return [arg]; }">>},
-                                               undefined, false},
-                                              {reduce, {jsfun, <<"Riak.reduceSum">>}, undefined, true}]))
-             end)},
      {"erlang_map_reduce_test()",
       ?_test(begin
                  riakc_test_utils:reset_riak(),
@@ -623,40 +505,6 @@ integration_tests() ->
                                                            reduce_set_union},
                                                   undefined, true}]),
                  [{1, [{error, notfound}|_]}] = Results end)},
-     {"missing_key_javascript_map_reduce_test()",
-      ?_test(begin
-                 riakc_test_utils:reset_riak(),
-                 {ok, Pid} = {ok, Pid} = riakc_test_utils:start_link(),
-                 {ok, Results} = riakc_pb_socket:mapred(Pid, [{<<"bucket">>, <<"foo">>},
-                                                      {<<"bucket">>, <<"bar">>},
-                                                      {<<"bucket">>, <<"baz">>}],
-                                                [{map, {jsfun, <<"Riak.mapValuesJson">>},
-                                                  undefined, false},
-                                                 {reduce, {jsfun, <<"Riak.reduceSort">>},
-                                                  undefined, true}]),
-                 [{1, [{not_found, {_, _},<<"undefined">>}|_]}] = Results end)},
-     {"map reduce bad inputs",
-      ?_test(begin
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 Res = riakc_pb_socket:mapred(Pid, undefined,
-                                             [{map, {jsfun, <<"Riak.mapValuesJson">>},
-                                               undefined, false},
-                                              {reduce, {jsfun, <<"Riak.reduceSum">>},
-                                               undefined, true}]),
-                 ?assertEqual({error, <<"{inputs,{\"Inputs must be a binary bucket, a tuple of bucket and key-filters, a list of target tuples, or a search, index, or modfun tuple:\",\n         undefined}}">>},
-                              Res )
-             end)},
-     {"map reduce bad input keys",
-      ?_test(begin
-                 {ok, Pid} = riakc_test_utils:start_link(),
-                 Res = riakc_pb_socket:mapred(Pid, [<<"b">>], % no {B,K} tuple
-                                      [{map, {jsfun, <<"Riak.mapValuesJson">>},
-                                        undefined, false},
-                                       {reduce, {jsfun, <<"Riak.reduceSum">>},
-                                        undefined, true}]),
-                 ?assertEqual({error,<<"{inputs,{\"Inputs target tuples must be {B,K} or {{B,K},KeyData}:\",[<<\"b\">>]}}">>},
-                              Res)
-             end)},
      {"map reduce bad query",
       ?_test(begin
                  {ok, Pid} = riakc_test_utils:start_link(),
@@ -870,135 +718,6 @@ integration_tests() ->
                  ok = riakc_pb_socket:counter_incr(Pid, Bucket, Key, -5, [{w, quorum}, {pw, one}, {dw, all}]),
                  ?assertEqual({ok, 5}, riakc_pb_socket:counter_val(Pid, Bucket, Key, [{pr, one}]))
              end)},
-     {"create a search index / get / list / delete with default timeout",
-     {timeout, 30, ?_test(begin
-                riakc_test_utils:reset_riak(),
-                {ok, Pid} = riakc_test_utils:start_link(),
-                riakc_test_utils:reset_solr(Pid),
-                Index = <<"indextest">>,
-                SchemaName = <<"_yz_default">>,
-                ?assertEqual(ok,
-                    riakc_pb_socket:create_search_index(Pid,
-                                                Index,
-                                                SchemaName,
-                                                [{n_val,2}])),
-                    case riakc_pb_socket:get_search_index(Pid, Index) of
-                        {ok, IndexData} ->
-                            ?assertEqual(proplists:get_value(
-                                         index, IndexData), Index),
-                            ?assertEqual(proplists:get_value(
-                                         schema, IndexData), SchemaName),
-                            ?assertEqual(proplists:get_value(
-                                         n_val, IndexData), 2);
-                        {error, <<"notfound">>} ->
-                            false
-                    end,
-                ?assertEqual({ok, [[{index,Index},
-                                    {schema,SchemaName},
-                                    {n_val,2}]]},
-                             riakc_pb_socket:list_search_indexes(Pid)),
-                ?assertEqual(ok, riakc_pb_socket:delete_search_index(Pid, Index))
-             end)}},
-     {"create a search index / get with user-set timeout",
-     {timeout, 30, ?_test(begin
-                riakc_test_utils:reset_riak(),
-                {ok, Pid} = riakc_test_utils:start_link(),
-                riakc_test_utils:reset_solr(Pid),
-                Index = <<"indexwithintimeouttest">>,
-                SchemaName = <<"_yz_default">>,
-                ?assertEqual(ok,
-                    riakc_pb_socket:create_search_index(Pid,
-                                                Index,
-                                                SchemaName,
-                                                20000)),
-                    case riakc_pb_socket:get_search_index(Pid, Index) of
-                        {ok, IndexData} ->
-                            ?assertEqual(proplists:get_value(
-                                         index, IndexData), Index),
-                            ?assertEqual(proplists:get_value(
-                                         schema, IndexData), SchemaName);
-                        {error, <<"notfound">>} ->
-                            false
-                    end
-             end)}},
-     {"create a search schema / get",
-      {timeout, 30, ?_test(begin
-                riakc_test_utils:reset_riak(),
-                {ok, Pid} = riakc_test_utils:start_link(),
-                riakc_test_utils:reset_solr(Pid),
-                Schema = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
-<schema name=\"test\" version=\"1.5\">
-<fields>
-   <field name=\"_yz_id\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" required=\"true\" multiValued=\"false\"/>
-   <field name=\"_yz_ed\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
-   <field name=\"_yz_pn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
-   <field name=\"_yz_fpn\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
-   <field name=\"_yz_vtag\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
-   <field name=\"_yz_rt\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
-   <field name=\"_yz_rk\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
-   <field name=\"_yz_rb\" type=\"_yz_str\" indexed=\"true\" stored=\"true\" multiValued=\"false\"/>
-   <field name=\"_yz_err\" type=\"_yz_str\" indexed=\"true\" stored=\"false\" multiValued=\"false\"/>
-</fields>
-<uniqueKey>_yz_id</uniqueKey>
-<types>
-    <fieldType name=\"_yz_str\" class=\"solr.StrField\" sortMissingLast=\"true\" />
-</types>
-</schema>">>,
-                Index = <<"schemaindex">>,
-                SchemaName = <<"myschema">>,
-                ?assertEqual(ok, riakc_pb_socket:create_search_schema(Pid, SchemaName, Schema)),
-                ?assertEqual(ok, riakc_pb_socket:create_search_index(Pid, Index, SchemaName, [])),
-                riakc_test_utils:wait_until( fun() ->
-                    case riakc_pb_socket:list_search_indexes(Pid) of
-                        {ok, []} ->
-                            false;
-                        {ok, [IndexData|_]} ->
-                            proplists:get_value(index, IndexData) == Index andalso
-                            proplists:get_value(schema, IndexData) == SchemaName andalso
-                            proplists:get_value(n_val, IndexData) == 3
-                    end
-                end, 20, 1000 ),
-                riakc_test_utils:wait_until( fun() ->
-                    case riakc_pb_socket:get_search_schema(Pid, SchemaName) of
-                        {ok, SchemaData} ->
-                            proplists:get_value(name, SchemaData) == SchemaName andalso
-                            proplists:get_value(content, SchemaData) == Schema;
-                        {error, <<"notefound">>} ->
-                            false
-                    end
-                end, 20, 1000 )
-         end)}},
-     {"create a search index and tie to a bucket",
-     {timeout, 30, ?_test(begin
-                riakc_test_utils:reset_riak(),
-                {ok, Pid} = riakc_test_utils:start_link(),
-                Index = <<"myindex">>,
-                Bucket = <<"mybucket">>,
-                ?assertEqual(ok, riakc_pb_socket:create_search_index(Pid, Index)),
-                ok = riakc_pb_socket:set_search_index(Pid, Bucket, Index),
-                PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"Freddy\"}">>, "application/json"),
-                {ok, _Obj} = riakc_pb_socket:put(Pid, PO, [return_head]),
-                riakc_test_utils:wait_until( fun() ->
-                    {ok, Result} = riakc_pb_socket:search(Pid, Index, <<"*:*">>),
-                    1 == Result#search_results.num_found
-                end, 20, 1000 )
-         end)}},
-     {"search utf8",
-     {timeout, 30, ?_test(begin
-                riakc_test_utils:reset_riak(),
-                {ok, Pid} = riakc_test_utils:start_link(),
-                riakc_test_utils:reset_solr(Pid),
-                Index = <<"myindex">>,
-                Bucket = <<"mybucket">>,
-                ?assertEqual(ok, riakc_pb_socket:create_search_index(Pid, Index)),
-                ok = riakc_pb_socket:set_search_index(Pid, Bucket, Index),
-                PO = riakc_obj:new(Bucket, <<"fred">>, <<"{\"name_s\":\"×Ö¸Ö¼×¨Ö¸×\"}"/utf8>>, "application/json"),
-                {ok, _Obj} = riakc_pb_socket:put(Pid, PO, [return_head]),
-                riakc_test_utils:wait_until( fun() ->
-                    {ok, Result} = riakc_pb_socket:search(Pid, Index, <<"name_s:×Ö¸Ö¼×¨Ö¸×"/utf8>>),
-                    1 == Result#search_results.num_found
-                end )
-         end)}},
      {"trivial set delete",
          ?_test(begin
                     riakc_test_utils:reset_riak(),
@@ -1398,6 +1117,38 @@ integration_tests() ->
              end)}
      ].
 
+
+create_and_activate_bucket_type(Type, DataType) ->
+    Node = riakc_test_utils:test_riak_node(),
+    StatusCheckFun =
+        fun(Status) ->
+            fun() ->
+                S = rpc:call(Node,
+                                riak_core_bucket_type,
+                                status,
+                                [Type]),
+                Status =:= S
+            end
+        end,
+    Create =
+        rpc:call(Node,
+                    riak_core_bucket_type,
+                    create,
+                    [Type,
+                        [{datatype, DataType},
+                            {allow_mult, true}]]),
+    case Create of
+        {error,already_active} ->
+            ok;
+        ok ->
+            ok = riakc_test_utils:wait_until(StatusCheckFun(ready)),
+            ok = rpc:call(Node,
+                            riak_core_bucket_type,
+                            activate,
+                            [Type]),
+            riakc_test_utils:wait_until(StatusCheckFun(active))
+    end.
+
 integration_test_() ->
     SetupFun = fun() ->
                    %% Grab the riakclient_pb.proto file
@@ -1407,10 +1158,15 @@ integration_test_() ->
     CleanupFun = fun(_) -> net_kernel:stop() end,
     GenFun = fun() ->
                  case catch net_adm:ping(riakc_test_utils:test_riak_node()) of
-                     pong -> integration_tests();
+                     pong ->
+                        create_and_activate_bucket_type(<<"sets">>, set),
+                        create_and_activate_bucket_type(<<"maps">>, map),
+                        create_and_activate_bucket_type(<<"gset_bucket">>, gset),
+                        create_and_activate_bucket_type(<<"hlls">>, hll),
+                        integration_tests();
                      _ ->
-                         ?debugMsg("Skipped - needs live server"),
-                         []
+                        ?debugMsg("Skipped - needs live server"),
+                        []
                  end
              end,
     {setup, SetupFun, CleanupFun, {generator, GenFun}}.

@@ -23,6 +23,7 @@
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
 -define(DEFAULT_PB_TIMEOUT, 60000).
+-define(DEFAULT_AAEFOLD_TIMEOUT, 3600000).
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
@@ -137,7 +138,7 @@
                         mapred_call_timeout | mapred_stream_timeout |
                         mapred_stream_call_timeout | mapred_bucket_timeout |
                         mapred_bucket_call_timeout | mapred_bucket_stream_call_timeout |
-                        search_timeout | search_call_timeout |
+                        search_timeout | search_call_timeout | aaefold_timeout |
                         timeout.
 
 -type continuation() :: 'undefined' | binary().
