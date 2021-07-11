@@ -284,7 +284,7 @@ update_content_type(Object=#riakc_obj{}, CT) when is_list(CT) ->
 update_value(Object=#riakc_obj{}, V) -> Object#riakc_obj{updatevalue=V}.
 
 %% @doc  Set the updated value of an object to V
--spec update_value(riakc_obj(), value(), content_type()) -> riakc_obj().
+-spec update_value(riakc_obj(), value(), content_type()|binary()) -> riakc_obj().
 update_value(Object=#riakc_obj{}, V, CT) -> 
     O1 = update_content_type(Object, CT),
     O1#riakc_obj{updatevalue=V}.
