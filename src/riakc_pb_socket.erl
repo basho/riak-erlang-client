@@ -49,7 +49,7 @@
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
          get/3, get/4, get/5,
-         fetch/2,
+         fetch/2, fetch/3,
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
@@ -338,12 +338,29 @@ get(Pid, Bucket, Key, Options, Timeout) ->
     Req = get_options(Options, #rpbgetreq{type =T, bucket = B, key = Key}),
     call_infinity(Pid, {req, Req, Timeout}).
 
+
 %% @doc Fetch replicated objects from a queue
 -spec fetch(pid(), binary()) ->
                 {ok, queue_empty}|
-                {ok|crc_wonky, {deleted, term(), binary()}|binary()}.
+                {ok|crc_wonky,
+                    {deleted, term(), binary()}|binary()}.
 fetch(Pid, QueueName) ->
     Req = #rpbfetchreq{queuename = QueueName},
+    call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
+
+
+%% @doc Fetch with specific format may also return segment ID and hash
+-spec fetch(pid(), binary(), internal|internal_aaehash) ->
+                {ok, queue_empty}|
+                {ok|crc_wonky,
+                    {deleted, term(), binary()}|
+                        binary()|
+                        {deleted, term(), binary(), non_neg_integer(), non_neg_integer()}|
+                        {binary(), non_neg_integer(), non_neg_integer()}}.
+fetch(Pid, QueueName, ObjectFormat)
+        when ObjectFormat =:= internal; ObjectFormat =:= internal_aaehash->
+    Req = #rpbfetchreq{queuename = QueueName,
+                        encoding = erlang:atom_to_binary(ObjectFormat, utf8)},
     call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
 
 
@@ -2382,14 +2399,35 @@ process_response(#request{msg = #rpbfetchreq{}},
                  #rpbfetchresp{deleted = true, 
                                 crc_check = CRC,
                                 replencoded_object = ObjBin,
-                                deleted_vclock = VclockBin}, State) ->
+                                deleted_vclock = VclockBin,
+                                segment_id = undefined,
+                                segment_hash = undefined}, State) ->
     {reply,
         {crc_check(CRC,ObjBin), {deleted, VclockBin, ObjBin}},
         State};
 process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchresp{deleted = true, 
+                                crc_check = CRC,
+                                replencoded_object = ObjBin,
+                                deleted_vclock = VclockBin,
+                                segment_id = SegID,
+                                segment_hash = SegHash}, State) ->
+    {reply,
+        {crc_check(CRC,ObjBin), {deleted, VclockBin, ObjBin, SegID, SegHash}},
+        State};
+process_response(#request{msg = #rpbfetchreq{}},
                  #rpbfetchresp{crc_check = CRC,
-                                replencoded_object = ObjBin}, State) ->
+                                replencoded_object = ObjBin,
+                                segment_id = undefined,
+                                segment_hash = undefined}, State) ->
     {reply, {crc_check(CRC,ObjBin), ObjBin}, State};
+process_response(#request{msg = #rpbfetchreq{}},
+                 #rpbfetchresp{crc_check = CRC,
+                                replencoded_object = ObjBin,
+                                segment_id = SegID,
+                                segment_hash = SegHash}, State) ->
+    {reply, {crc_check(CRC,ObjBin), {ObjBin, SegID, SegHash}}, State};
+
 
 %% rpbputreq
 process_response(#request{msg = #rpbputreq{}},
