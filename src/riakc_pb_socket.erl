@@ -2453,13 +2453,13 @@ process_response(#request{msg = #rpbpushreq{queuename = Q}},
                                     realt_length = RTL}, State) ->
     {reply,
         lists:flatten(
-            io_lib:format("Queue ~s: ~w ~w ~w", [Q, FL, FSL, RTL]))),
+            io_lib:format("Queue ~s: ~w ~w ~w", [Q, FL, FSL, RTL])),
         State};
 process_response(#request{msg = #rpbpushreq{queuename = Q}}, 
                     #rpbpushresp{queue_exists = false}, State) ->
     {reply,
         lists:flatten(
-            io_lib:format("No queue ~s", [Q]))),
+            io_lib:format("No queue ~s", [Q])),
         State};
 
 
