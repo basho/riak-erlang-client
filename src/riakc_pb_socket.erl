@@ -49,7 +49,7 @@
          set_client_id/2, set_client_id/3,
          get_server_info/1, get_server_info/2,
          get/3, get/4, get/5,
-         fetch/2, fetch/3,
+         fetch/2, fetch/3, push/3,
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
@@ -363,6 +363,22 @@ fetch(Pid, QueueName, ObjectFormat)
                         encoding = erlang:atom_to_binary(ObjectFormat, utf8)},
     call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
 
+%% @doc Push to nextgenrepl replication queue a list of Buckets/Keys/Clocks
+%% where the push will occur if the object is fetched an is currently at that
+%% clock
+-spec push(pid(),
+            binary(),
+            [{riakc_obj:bucket(), riakc_obj:key(), riakc_obj:vclock()}]) ->
+                {error, term()}|{ok, iolist()}.
+push(Pid, QueueName, BucketKeyClockList) ->
+    KeysValue = lists:map(fun make_keyvalue/1, BucketKeyClockList),
+    Req = #rpbpushreq{queuename = QueueName, keys_value = KeysValue},
+    call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
+
+make_keyvalue({{T, B}, K, C}) ->
+    #rpbkeysvalue{type = T, bucket = B, key = K, value = C};
+make_keyvalue({B, K, C}) ->
+    #rpbkeysvalue{bucket = B, key = K, value = C}.
 
 %% @doc Put the metadata/value in the object under bucket/key
 %% @equiv put(Pid, Obj, [])
@@ -2427,6 +2443,27 @@ process_response(#request{msg = #rpbfetchreq{}},
                                 segment_id = SegID,
                                 segment_hash = SegHash}, State) ->
     {reply, {crc_check(CRC,ObjBin), {ObjBin, SegID, SegHash}}, State};
+
+%% rpbpushreq
+process_response(#request{msg = #rpbpushreq{queuename = Q}}, 
+                    #rpbpushresp{queue_exists = true,
+                                    queuename = Q,
+                                    foldq_length = FL,
+                                    fsync_length = FSL,
+                                    realt_length = RTL}, State) ->
+    {reply,
+        list_to_binary(
+            lists:flatten(
+                io_lib:format("Queue ~w: ~w ~w ~w", [Q, FL, FSL, RTL]))),
+        State};
+process_response(#request{msg = #rpbpushreq{queuename = Q}}, 
+                    #rpbpushresp{queue_exists = false}, State) ->
+    {reply,
+        list_to_binary(
+            lists:flatten(
+                io_lib:format("No queue ~w", [Q]))),
+        State};
+
 
 
 %% rpbputreq
