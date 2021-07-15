@@ -345,9 +345,7 @@ get(Pid, Bucket, Key, Options, Timeout) ->
                 {ok|crc_wonky,
                     {deleted, term(), binary()}|binary()}.
 fetch(Pid, QueueName) ->
-    Req = #rpbfetchreq{queuename = QueueName},
-    call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
-
+    fetch(Pid, QueueName, internal).
 
 %% @doc Fetch with specific format may also return segment ID and hash
 -spec fetch(pid(), binary(), internal|internal_aaehash) ->
@@ -2453,17 +2451,14 @@ process_response(#request{msg = #rpbpushreq{queuename = Q}},
                                     realt_length = RTL}, State) ->
     {reply,
         {ok, 
-            list_to_binary(
-                lists:flatten(
-                    io_lib:format("Queue ~s: ~w ~w ~w", [Q, FL, FSL, RTL])))},
+            iolist_to_binary(
+                io_lib:format("Queue ~s: ~w ~w ~w", [Q, FL, FSL, RTL]))},
         State};
 process_response(#request{msg = #rpbpushreq{queuename = Q}}, 
                     #rpbpushresp{queue_exists = false}, State) ->
     {reply,
         {ok, 
-            list_to_binary(
-                lists:flatten(
-                    io_lib:format("No queue ~s", [Q])))},
+            iolist_to_binary(io_lib:format("No queue ~s", [Q]))},
         State};
 
 
