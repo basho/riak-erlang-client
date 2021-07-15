@@ -358,7 +358,7 @@ fetch(Pid, QueueName) ->
                         {deleted, term(), binary(), non_neg_integer(), non_neg_integer()}|
                         {binary(), non_neg_integer(), non_neg_integer()}}.
 fetch(Pid, QueueName, ObjectFormat)
-        when ObjectFormat =:= internal; ObjectFormat =:= internal_aaehash->
+        when ObjectFormat =:= internal; ObjectFormat =:= internal_aaehash ->
     Req = #rpbfetchreq{queuename = QueueName,
                         encoding = erlang:atom_to_binary(ObjectFormat, utf8)},
     call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
