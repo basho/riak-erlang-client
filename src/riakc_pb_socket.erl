@@ -194,7 +194,13 @@
                 ssl_opts = [], % Arbitrary SSL options, see the erlang SSL
                                % documentation.
                 reconnect_interval=?FIRST_RECONNECT_INTERVAL :: non_neg_integer(),
-                silence_terminate_crash = false :: boolean()}).
+                silence_terminate_crash = false :: boolean(),
+                % Determines the time-out, in seconds,
+                % for flushing unsent data in the close/1 socket call.
+                % The first component is if linger is enabled,
+                % the second component is the flushing time-out, in seconds.
+                % https://erlang.org/doc/man/inet.html#setopts-2
+                linger = {false, 0} :: {boolean(), non_neg_integer()}}).
 
 -export_type([address/0, portnum/0]).
 
@@ -2187,7 +2193,10 @@ parse_options([{keyfile, File}|Options], State) ->
 parse_options([{ssl_opts, Opts}|Options], State) ->
     parse_options(Options, State#state{ssl_opts=Opts});
 parse_options([{silence_terminate_crash,Bool}|Options], State) ->
-    parse_options(Options, State#state{silence_terminate_crash=Bool}).
+    parse_options(Options, State#state{silence_terminate_crash=Bool});
+parse_options([{linger, {Bool, Timeout}}|Options], State)
+  when Bool =:= true; Bool =:= false; Timeout>=0 ->
+  parse_options(Options, State#state{linger = {Bool, Timeout}}).
 
 maybe_reply({reply, Reply, State}) ->
     Request = State#state.active,
@@ -3086,6 +3095,7 @@ connect(State) when State#state.sock =:= undefined ->
     #state{address = Address, port = Port, connects = Connects} = State,
     case gen_tcp:connect(Address, Port,
                          [binary, {active, once}, {packet, 4},
+                          {linger, State#state.linger},
                           {keepalive, State#state.keepalive}],
                          State#state.connect_timeout) of
         {ok, Sock} ->
@@ -3138,6 +3148,7 @@ start_tls(State=#state{sock=Sock}) ->
                     %% man-in-the-middle proxy that presents insecure
                     %% communication to the client, but does secure
                     %% communication to the server.
+                    ensure_connection_closed(State),
                     {error, no_security}
             end
     end.
@@ -3173,16 +3184,8 @@ disconnect(State) ->
         end,
 
     %% Make sure the connection is really closed
-    case State#state.sock of
-        undefined ->
-            ok;
-        Sock ->
-            Transport = State#state.transport,
-            Transport:close(Sock)
-    end,
-
+    NewState = ensure_connection_closed(State),
     %% Decide whether to reconnect or exit
-    NewState = State#state{sock = undefined, active = undefined},
     case State#state.auto_reconnect of
         true ->
             %% Schedule the reconnect message and return state
@@ -3196,6 +3199,12 @@ disconnect(State) ->
                     {stop, disconnected, NewState}
             end
     end.
+
+ensure_connection_closed(#state{sock = undefined} = State) ->
+  State;
+ensure_connection_closed(#state{sock = Sock, transport = Transport} = State) ->
+  Transport:close(Sock),
+  State#state{sock = undefined, active = undefined}.
 
 %% Double the reconnect interval up to the maximum
 increase_reconnect_interval(State) ->
