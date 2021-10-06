@@ -73,7 +73,8 @@
          get_index_eq/4, get_index_range/5, get_index_eq/5, get_index_range/6,
          aae_merge_root/2, aae_merge_branches/3,
          aae_fetch_clocks/3, aae_fetch_clocks/4,
-         aae_range_tree/7, aae_range_clocks/5, aae_range_replkeys/5,
+         aae_range_tree/7, aae_range_clocks/5,
+         aae_range_replkeys/5, aae_range_repairkeys/4,
          aae_find_keys/5, aae_find_tombs/5, aae_reap_tombs/6, aae_erase_keys/6,
          aae_list_buckets/1, aae_list_buckets/2,
          aae_object_stats/4,
@@ -1637,6 +1638,47 @@ aae_range_replkeys(Pid, BucketType, KeyRange, ModifiedRange, QueueName) ->
                                                 queuename = QN},
                         Timeout}).
 
+%% @doc aae_range_repairkeys
+%% Fold over a range of keys and in batches prompt read repair of each key
+%% by fetching the key
+-spec aae_range_repairkeys(pid(), riakc_obj:bucket(),
+                            key_range(), modified_range()) ->
+                                {ok, non_neg_integer()} |
+                                    {error, any()}.
+aae_range_repairkeys(Pid, BucketType, KeyRange, ModifiedRange) ->
+    Timeout = default_timeout(aaefold_timeout),
+    {KR, SK, EK} =
+        case KeyRange of
+            all ->
+                {false, undefined, undefined};
+            {SK0, EK0} ->
+                {true, SK0, EK0}
+        end,
+    {MR, MRLow, MRHigh} =
+        case ModifiedRange of
+            all ->
+                {false, undefined, undefined};
+            {MRL, MRH} ->
+                {true, MRL, MRH}
+        end,
+    {T, B} =
+        case BucketType of
+            B0 when is_binary(B0) ->
+                {undefined, B0};
+            {T0, B0} ->
+                {T0, B0}
+        end,
+    call_infinity(Pid,
+                    {req,
+                        #rpbaaefoldrepairkeysreq{type = T,
+                                                    bucket = B,
+                                                    key_range = KR,
+                                                    start_key = SK,
+                                                    end_key = EK,
+                                                    modified_range = MR,
+                                                    last_mod_start = MRLow,
+                                                    last_mod_end = MRHigh},
+                        Timeout}).
 
 %% @doc aae_find_keys folds over the tictacaae store to get
 %% operational information. `Rhc' is the client. `Bucket' is the
@@ -2735,6 +2777,11 @@ process_response(#request{msg = #rpbaaefolderasekeysreq{}},
     true = <<"dispatched_count">> == ReapCount#rpbkeyscount.tag,
     {reply, {ok, ReapCount#rpbkeyscount.count}, State};
 process_response(#request{msg = #rpbaaefoldreplkeysreq{}},
+                    #rpbaaefoldkeycountresp{keys_count = [DispatchCount]},
+                    State) ->
+    true = <<"dispatched_count">> == DispatchCount#rpbkeyscount.tag,
+    {reply, {ok, DispatchCount#rpbkeyscount.count}, State};
+process_response(#request{msg = #rpbaaefoldrepairkeysreq{}},
                     #rpbaaefoldkeycountresp{keys_count = [DispatchCount]},
                     State) ->
     true = <<"dispatched_count">> == DispatchCount#rpbkeyscount.tag,
