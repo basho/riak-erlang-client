@@ -102,6 +102,17 @@ auto_reconnect_server_closes_socket_test() ->
     ?assertMatch({false, []}, riakc_pb_socket:is_connected(Pid)),
     riakc_pb_socket:stop(Pid).
 
+linger_closes_socket_test() ->
+  {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
+  {ok, Port} = inet:port(Listen),
+  {ok, Pid} = riakc_pb_socket:start_link("127.0.0.1", Port, [{linger, {true, 0}}]),
+  {ok, Sock} = gen_tcp:accept(Listen),
+  ?assertMatch(true, riakc_pb_socket:is_connected(Pid)),
+  riakc_pb_socket:stop(Pid),
+  {error, closed} = gen_tcp:recv(Sock, 0),
+  ok = gen_tcp:close(Sock),
+  ok = gen_tcp:close(Listen).
+
 dead_socket_pid_returns_to_caller_test() ->
     %% Set up a dummy socket to send requests on
     {ok, Listen} = gen_tcp:listen(0, [binary, {packet, 4}, {active, false}]),
