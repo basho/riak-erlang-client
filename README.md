@@ -5,16 +5,12 @@ This document assumes that you have already started your Riak cluster. For instr
 Build Status
 ============
 
-* Master: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=master)](https://travis-ci.org/basho/riak-erlang-client)
-* Develop: [![Build Status](https://travis-ci.org/basho/riak-erlang-client.svg?branch=develop)](https://travis-ci.org/basho/riak-erlang-client)
-
-
-This document assumes that you have already started your Riak cluster.  For instructions on that prerequisite, refer to [Installation and Setup](https://wiki.basho.com/Installation-and-Setup.html) in the [Riak Wiki](https://wiki.basho.com). You can also view the Riak Erlang Client EDocs [here](http://basho.github.com/riak-erlang-client/).
+[![Build Status](https://github.com/basho/riak-erlang-client/actions/workflows/erlang.yml/badge.svg?branch=develop-3.0)](https://github.com/basho/riak-erlang-client/actions)
 
 Dependencies
 ============
 
-To build the riak-erlang-client you will need Erlang OTP R15B01 or later, and Git.
+To build the riak-erlang-client you will need Erlang OTP 20.3 or later, and Git.
 
 Debian
 ------
