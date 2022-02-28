@@ -50,6 +50,7 @@
          get_server_info/1, get_server_info/2,
          get/3, get/4, get/5,
          fetch/2, fetch/3, push/3,
+         peer_discovery/1,
          put/2, put/3, put/4,
          delete/3, delete/4, delete/5,
          delete_vclock/4, delete_vclock/5, delete_vclock/6,
@@ -378,6 +379,12 @@ fetch(Pid, QueueName, ObjectFormat)
 push(Pid, QueueName, BucketKeyClockList) ->
     KeysValue = lists:map(fun make_keyvalue/1, BucketKeyClockList),
     Req = #rpbpushreq{queuename = QueueName, keys_value = KeysValue},
+    call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
+
+
+-spec peer_discovery(pid()) -> {error, term()}|{ok, iolist()}.
+peer_discovery(Pid) ->
+    Req = #rpbmembershipreq{},
     call_infinity(Pid, {req, Req, default_timeout(get_timeout)}).
 
 make_keyvalue({{T, B}, K, C}) ->
@@ -2505,12 +2512,17 @@ process_response(#request{msg = #rpbpushreq{queuename = Q}},
             iolist_to_binary(
                 io_lib:format("Queue ~s: ~w ~w ~w", [Q, FL, FSL, RTL]))},
         State};
+
+%% rpbmembershipreq
 process_response(#request{msg = #rpbpushreq{queuename = Q}}, 
                     #rpbpushresp{queue_exists = false}, State) ->
     {reply,
         {ok, 
             iolist_to_binary(io_lib:format("No queue ~s", [Q]))},
         State};
+process_response(#request{msg = #rpbmembershipreq{}},
+                    #rpbmembershipresp{up_nodes = UpNodeList}, State) ->
+    {reply, {ok, UpNodeList}, State};
 
 
 
