@@ -2512,19 +2512,17 @@ process_response(#request{msg = #rpbpushreq{queuename = Q}},
             iolist_to_binary(
                 io_lib:format("Queue ~s: ~w ~w ~w", [Q, FL, FSL, RTL]))},
         State};
-
-%% rpbmembershipreq
 process_response(#request{msg = #rpbpushreq{queuename = Q}}, 
                     #rpbpushresp{queue_exists = false}, State) ->
     {reply,
         {ok, 
             iolist_to_binary(io_lib:format("No queue ~s", [Q]))},
         State};
+
+%% rpbmembershipreq
 process_response(#request{msg = #rpbmembershipreq{}},
                     #rpbmembershipresp{up_nodes = UpNodeList}, State) ->
     {reply, {ok, UpNodeList}, State};
-
-
 
 %% rpbputreq
 process_response(#request{msg = #rpbputreq{}},
