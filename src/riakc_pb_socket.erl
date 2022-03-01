@@ -2522,7 +2522,13 @@ process_response(#request{msg = #rpbpushreq{queuename = Q}},
 %% rpbmembershipreq
 process_response(#request{msg = #rpbmembershipreq{}},
                     #rpbmembershipresp{up_nodes = UpNodeList}, State) ->
-    {reply, {ok, UpNodeList}, State};
+    ErlifiedInfo =
+        lists:map(
+            fun(ME) ->
+                {ME#rpbclustermemberentry.ip, ME#rpbclustermemberentry.port}
+            end,
+            UpNodeList),
+    {reply, {ok, ErlifiedInfo}, State};
 
 %% rpbputreq
 process_response(#request{msg = #rpbputreq{}},
