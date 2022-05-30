@@ -3366,11 +3366,7 @@ crc_check(CRC, Bin) ->
     end.
 
 %% @private
--ifdef(deprecated_19).
 mk_reqid() -> erlang:phash2(crypto:strong_rand_bytes(10)). % only has to be unique per-pid
--else.
-mk_reqid() -> erlang:phash2(crypto:rand_bytes(10)). % only has to be unique per-pid
--endif.
 
 %% @private
 wait_for_mapred(ReqId, Timeout) ->
