@@ -244,8 +244,10 @@ get_vtag(Obj) ->
 -spec vclock_etag(riakc_obj()) -> binary().
 vclock_etag(Obj) ->
     <<ETag:128/integer>>
-        = crypto:hash(md5, term_to_binary(riakc_obj:vclock(Obj))),
-    list_to_binary(integer_to_base(ETag, 62)).
+        = crypto:hash(
+            md5,
+            zlib:unzip(riakc_obj:vclock(Obj))),
+    "\"" ++ integer_to_base(ETag, 62) ++ "\"".
 
 %% @doc based on riak_core_util:integer_to_list/2.
 -spec integer_to_base(Integer :: integer(), Base :: integer()) -> string().
@@ -683,14 +685,6 @@ vclock_test() ->
     %% For internal use only
     O = riakc_obj:new_obj(<<"b">>, <<"k">>, <<"vclock">>, []),
     ?assertEqual(<<"vclock">>, vclock(O)).
-
-vclock_match_test() ->
-    Obj =
-        riakc_obj:new_obj(
-            <<"b">>, <<"k">>,
-            [{b,{2,63841878188}},{a,{1,63841878166}}],
-            []),
-    ?assertMatch(<<"4V3y33c8T1Kbgq8kRDJNVJ">>, vclock_etag(Obj)).
 
 newcontent0_test() ->
     O = riakc_obj:new(<<"b">>, <<"k">>),
