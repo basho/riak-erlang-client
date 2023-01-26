@@ -241,7 +241,7 @@ get_vtag(Obj) ->
             vclock_etag(Obj)
     end.
 
--spec vclock_etag(riakc_obj()) -> binary().
+-spec vclock_etag(riakc_obj()) -> string().
 vclock_etag(Obj) ->
     <<ETag:128/integer>>
         = crypto:hash(
