@@ -42,6 +42,7 @@
          get_content_types/1,
          get_value/1,
          get_values/1,
+         get_vtag/1,
          update_metadata/2,
          update_value/2,
          update_value/3,
@@ -225,6 +226,55 @@ get_metadata(O=#riakc_obj{}) ->
 -spec get_metadatas(Object::riakc_obj()) -> [metadata()].
 get_metadatas(#riakc_obj{contents=Contents}) ->
     [M || {M,_V} <- Contents].
+
+-spec get_vtag(riakc_obj()) -> binary().
+get_vtag(Obj) ->
+    case get_metadatas(Obj) of
+        [M] ->
+            case dict:find(?MD_VTAG, M) of
+                {ok, Vtag} ->
+                    Vtag;
+                _ ->
+                    throw(no_vtag)
+            end;
+        _Ms ->
+            vclock_etag(Obj)
+    end.
+
+-spec vclock_etag(riakc_obj()) -> string().
+vclock_etag(Obj) ->
+    <<ETag:128/integer>>
+        = crypto:hash(
+            md5,
+            zlib:unzip(riakc_obj:vclock(Obj))),
+    "\"" ++ integer_to_base(ETag, 62) ++ "\"".
+
+%% @doc based on riak_core_util:integer_to_list/2.
+-spec integer_to_base(Integer :: integer(), Base :: integer()) -> string().
+integer_to_base(I, Base)
+        when is_integer(I), is_integer(Base), Base >= 2, Base =< 62 ->
+    integer_to_base(I, Base, []).
+
+-spec integer_to_base(integer(), integer(), string()) -> string().
+integer_to_base(I0, Base, R0) ->
+    D = I0 rem Base,
+    I1 = I0 div Base,
+    R1 =
+        if 
+            D >= 36 ->
+                [D-36+$a|R0];
+            D >= 10 ->
+                [D-10+$A|R0];
+            true ->
+                [D+$0|R0]
+        end,
+    if 
+        I1 =:= 0 ->
+            R1;
+        true ->
+            integer_to_base(I1, Base, R1)
+    end.
+    
 
 %% @doc Return the content type of the value if there are no siblings.
 %% @see get_metadata/1
