@@ -2775,7 +2775,7 @@ process_response(#request{msg = #rpbaaefoldfindtombsreq{}},
                     State) ->
     KeysNClocks = Rsp#rpbaaefoldkeyvalueresp.keys_value,
     {reply,
-        {ok, {keys, lists:map(fun unpack_keycount_fun/1, KeysDH)}},
+        {ok, {keysclocks, lists:map(fun unpack_keyclock_fun/1, KeysNClocks)}},
         State};
 process_response(#request{msg = #rpbaaefoldreaptombsreq{}},
                     #rpbaaefoldkeycountresp{response_type = ReapTag,
