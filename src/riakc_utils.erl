@@ -24,6 +24,15 @@
 
 -export([wait_for_list/1, characters_to_unicode_binary/1]).
 
+%% OTP 25+ compatible random utilities
+random_seed() ->
+    _ = rand:seed(exsplus, {erlang:monotonic_time(), erlang:unique_integer([positive]), erlang:phash2(self())}),
+    ok.
+
+random_uniform(Max) ->
+    rand:uniform(Max).
+
+
 -spec wait_for_list(non_neg_integer()) -> {ok, list()} | {error, any()}.
 %% @doc Wait for the results of a listing operation
 wait_for_list(ReqId) ->

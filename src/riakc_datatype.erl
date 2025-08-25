@@ -45,10 +45,10 @@
 
 -export_type([datatype/0, update/1, context/0]).
 
--type maybe(T) :: T | undefined.
+-type maybe_binary() :: binary | undefined.
 -type datatype() :: term().
 -type typename() :: atom().
--type context() :: maybe(binary()).
+-type context() :: maybe_binary().
 -type update(T) :: maybe({typename(), T, context()}).
 
 %% Constructs a new, empty container for the type. Use this when
